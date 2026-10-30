@@ -1,7 +1,6 @@
-
 package com.tikit.seat.repository;
 
-import com.tikit.seat.entity.PerformanceSession;
+import com.tikit.performance.entity.PerformanceSession;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface PerformanceSessionRepository
