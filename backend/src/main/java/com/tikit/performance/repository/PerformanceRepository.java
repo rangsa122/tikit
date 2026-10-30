@@ -30,4 +30,6 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
             where p.id = :id
             """)
     Optional<Performance> findDetail(@Param("id") Long id);
+
+    boolean existsByKopisId(String kopisId);
 }

@@ -125,4 +125,18 @@ public class Performance {
         return p;
     }
 
+    public void update(Genre genre, String title, String venueName, String organizerName,
+                       String description, String posterUrl, LocalDate startDate, LocalDate endDate,
+                       Short bookingLimitPerMember) {
+        if (genre != null) this.genre = genre;
+        if (title != null) this.title = title;
+        if (venueName != null) this.venueName = venueName;
+        if (organizerName != null) this.organizerName = organizerName;
+        if (description != null) this.description = description;
+        if (posterUrl != null) this.posterUrl = posterUrl;
+        if (startDate != null) this.startDate = startDate;
+        if (endDate != null) this.endDate = endDate;
+        if (bookingLimitPerMember != null) this.bookingLimitPerMember = bookingLimitPerMember;
+    }
+
 }

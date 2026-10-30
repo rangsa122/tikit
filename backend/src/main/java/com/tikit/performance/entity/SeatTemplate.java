@@ -32,4 +32,12 @@ public class SeatTemplate {
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    public static SeatTemplate create(String name, int version, boolean active) {
+        SeatTemplate t = new SeatTemplate();
+        t.name = name;
+        t.version = version;
+        t.active = active;
+        return t;
+    }
 }
