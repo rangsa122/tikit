@@ -402,6 +402,40 @@ public class PaymentControllerDataTest {
         assertThat(attemptCount).isEqualTo(1L);
     }
 
+    @Test
+    @DisplayName("결제 기한이 지난 결제 대기 예매로 결제를 준비하면 409 BOOKING_EXPIRED를 반환")
+    void prepare_payment_attempt_expired_booking() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = dataHelper.createBooking(memberId, BookingStatus.PENDING_PAYMENT,
+                Instant.now().minus(1, ChronoUnit.MINUTES), AMOUNT);
+
+        // when
+        ResultActions resultActions = mvc.perform(
+                post("/api/v1/bookings/" + bookingId + "/payment-attempts")
+                        .header("Authorization", "Bearer " + accessTokenFor(memberId))
+        );
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        ErrorCode errorCode = ErrorCode.BOOKING_EXPIRED;
+
+        assertThat(httpStatusCode).isEqualTo(errorCode.getStatus().value());
+        resultActions.andExpect(jsonPath("$.code").value(errorCode.name()));
+
+        // 결제 시도가 만들어지지 않았는지 확인
+        Long attemptCount = entityManager.createQuery(
+                        "SELECT COUNT(pa) FROM PaymentAttempt pa WHERE pa.bookingId = :bookingId", Long.class)
+                .setParameter("bookingId", bookingId)
+                .getSingleResult();
+        assertThat(attemptCount).isEqualTo(0L);
+    }
+
     // DB에 넣은 회원 ID로 액세스 토큰 발급
     private String accessTokenFor(Long memberId) {
         Member member = Member.create("token-" + memberId + "@example.com", "encodedPassword", "tester", Role.MEMBER);
