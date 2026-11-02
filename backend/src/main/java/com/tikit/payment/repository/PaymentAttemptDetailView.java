@@ -1,6 +1,6 @@
 package com.tikit.payment.repository;
 
-import java.time.OffsetDateTime;
+import java.time.Instant;
 
 public interface PaymentAttemptDetailView {
 
@@ -22,7 +22,7 @@ public interface PaymentAttemptDetailView {
 
     String getBookingStatus();
 
-    OffsetDateTime getExpiresAt();
+    Instant getExpiresAt();
 
     String getPerformanceTitle();
 
