@@ -300,6 +300,42 @@ public class PaymentConfirmControllerDataTest {
         assertThat(attempt.getPaymentKey()).isNull();
     }
 
+    @Test
+    @DisplayName("결제 기한이 지난 예매의 결제를 승인 요청하면 Toss를 부르지 않고 409 BOOKING_EXPIRED를 반환")
+    void confirm_payment_booking_expired() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = dataHelper.createBooking(memberId, BookingStatus.PENDING_PAYMENT,
+                Instant.now().minus(1, ChronoUnit.MINUTES), AMOUNT);
+        Long paymentAttemptId = dataHelper.createPaymentAttempt(bookingId, PaymentAttemptStatus.READY, AMOUNT);
+        String orderId = entityManager.find(PaymentAttempt.class, paymentAttemptId).getOrderId();
+
+        // when
+        ResultActions resultActions = mvc.perform(
+                post("/api/v1/payment-attempts/" + paymentAttemptId + "/confirmation")
+                        .header("Authorization", "Bearer " + accessTokenFor(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(confirmRequestBody(orderId, AMOUNT))
+        );
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        ErrorCode errorCode = ErrorCode.BOOKING_EXPIRED;
+
+        assertThat(httpStatusCode).isEqualTo(errorCode.getStatus().value());
+        resultActions.andExpect(jsonPath("$.code").value(errorCode.name()));
+
+        then(tossPaymentClient).should(never()).confirmPayment(any(), any());
+
+        PaymentAttempt attempt = entityManager.find(PaymentAttempt.class, paymentAttemptId);
+        assertThat(attempt.getStatus()).isEqualTo(PaymentAttemptStatus.READY);
+    }
+
     // 승인 요청 본문 (paymentKey는 결제창 인증 후 Toss가 주는 값이라 테스트에서는 임의 값)
     private String confirmRequestBody(String orderId, Long amount) {
         return """
