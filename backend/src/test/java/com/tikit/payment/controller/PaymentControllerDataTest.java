@@ -367,6 +367,41 @@ public class PaymentControllerDataTest {
         resultActions.andExpect(jsonPath("$.code").value(errorCode.name()));
     }
 
+    @Test
+    @DisplayName("승인 처리 중인 결제 시도가 있는 예매로 결제를 준비하면 409 PAYMENT_IN_PROGRESS를 반환")
+    void prepare_payment_attempt_payment_in_progress() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = dataHelper.createBooking(memberId, BookingStatus.PENDING_PAYMENT,
+                Instant.now().plus(5, ChronoUnit.MINUTES), AMOUNT);
+        dataHelper.createPaymentAttempt(bookingId, PaymentAttemptStatus.PROCESSING, AMOUNT);
+
+        // when
+        ResultActions resultActions = mvc.perform(
+                post("/api/v1/bookings/" + bookingId + "/payment-attempts")
+                        .header("Authorization", "Bearer " + accessTokenFor(memberId))
+        );
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        ErrorCode errorCode = ErrorCode.PAYMENT_IN_PROGRESS;
+
+        assertThat(httpStatusCode).isEqualTo(errorCode.getStatus().value());
+        resultActions.andExpect(jsonPath("$.code").value(errorCode.name()));
+
+        // 새 결제 시도가 만들어지지 않았는지 확인
+        Long attemptCount = entityManager.createQuery(
+                        "SELECT COUNT(pa) FROM PaymentAttempt pa WHERE pa.bookingId = :bookingId", Long.class)
+                .setParameter("bookingId", bookingId)
+                .getSingleResult();
+        assertThat(attemptCount).isEqualTo(1L);
+    }
+
     // DB에 넣은 회원 ID로 액세스 토큰 발급
     private String accessTokenFor(Long memberId) {
         Member member = Member.create("token-" + memberId + "@example.com", "encodedPassword", "tester", Role.MEMBER);
