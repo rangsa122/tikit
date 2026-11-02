@@ -3,7 +3,6 @@ package com.tikit.performance.service;
 import com.tikit.auth.entity.Member;
 import com.tikit.auth.entity.MemberStatus;
 import com.tikit.auth.entity.Role;
-import com.tikit.auth.repository.MemberRepository;
 import com.tikit.common.ErrorCode;
 import com.tikit.performance.dto.PerformanceCreateRequestDTO;
 import com.tikit.performance.dto.PerformanceResponseDTO;
@@ -29,15 +28,15 @@ import java.time.LocalDate;
 @Transactional(readOnly = true)
 public class PerformanceService {
 
-    private static final int MAX_PAGE_SIZE = 50;
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final PerformanceRepository performanceRepository;
     private final GenreRepository genreRepository;
-    private final MemberRepository memberRepository;
+    private final PerformanceAccessChecker accessChecker;
 
     @Transactional
     public PerformanceResponseDTO create(Long memberId, PerformanceCreateRequestDTO request){
-        Member manager = getManager(memberId);
+        Member manager = accessChecker.requireManager(memberId);
         validateSource(request);
         validateDates(request.getStartDate(), request.getEndDate());
         Genre genre = findActiveGenre(request.getGenreCode());
@@ -63,7 +62,7 @@ public class PerformanceService {
 
     public Page<PerformanceResponseDTO> list(Long memberId, PublicationStatus status,
                                              int page, int size) {
-        getViewer(memberId);
+        accessChecker.requireViewer(memberId);
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), 100);
         return performanceRepository
@@ -72,14 +71,14 @@ public class PerformanceService {
     }
 
     public PerformanceResponseDTO get(Long memberId, Long performanceId) {
-        getViewer(memberId);
+        accessChecker.requireViewer(memberId);
         return PerformanceResponseDTO.from(findPerformance(performanceId));
     }
 
     @Transactional
     public PerformanceResponseDTO update(Long memberId, Long performanceId,
                                          PerformanceUpdateRequestDTO request) {
-        getManager(memberId);
+        accessChecker.requireManager(memberId);
         Performance performance = findPerformance(performanceId);
 
         if (performance.getPublicationStatus() != PublicationStatus.DRAFT) {
@@ -108,30 +107,6 @@ public class PerformanceService {
 
 
 
-
-    private Member getManager(Long memberId){
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(()->new PerformanceException(ErrorCode.ACCESS_DENIED));
-        if(member.getStatus() != MemberStatus.ACTIVE){
-            throw new PerformanceException(ErrorCode.ACCOUNT_RESTRICTED);
-        }
-        if(member.getRole() != Role.MANAGER){
-            throw new PerformanceException(ErrorCode.ACCESS_DENIED);
-        }
-        return member;
-    }
-
-    private Member getViewer(Long memberId){
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(()->new PerformanceException(ErrorCode.ACCESS_DENIED));
-        if(member.getStatus() != MemberStatus.ACTIVE){
-            throw new PerformanceException(ErrorCode.ACCOUNT_RESTRICTED);
-        }
-        if(member.getRole() != Role.MANAGER && member.getRole() != Role.ADMIN){
-            throw new PerformanceException(ErrorCode.ACCESS_DENIED);
-        }
-        return member;
-    }
 
     private Performance findPerformance(Long id){
         return performanceRepository.findDetail(id)

@@ -12,11 +12,11 @@ import com.tikit.performance.entity.*;
 import com.tikit.performance.exception.PerformanceException;
 import com.tikit.performance.repository.GenreRepository;
 import com.tikit.performance.repository.PerformanceRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -40,12 +40,17 @@ public class PerformanceServiceTest {
     @Mock
     MemberRepository memberRepository;
 
-    @InjectMocks
     PerformanceService service;
 
     private static final Long MEMBER_ID = 1L;
 
     private static final Long PERFORMANCE_ID = 10L;
+
+    @BeforeEach
+    void setUp() {
+        PerformanceAccessChecker accessChecker = new PerformanceAccessChecker(memberRepository);
+        service = new PerformanceService(performanceRepository, genreRepository, accessChecker);
+    }
 
     private Member member(Role role, MemberStatus status) {
         Member member = Member.create("test@test.com", "1234", "김철수", role);
