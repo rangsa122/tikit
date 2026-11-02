@@ -136,6 +136,62 @@ public class PaymentControllerDataTest {
         resultActions.andExpect(jsonPath("$.data.retryAllowed").value(false));
     }
 
+    @Test
+    @DisplayName("실패한 결제 시도를 결제 기한 안에 조회하면 retryAllowed가 true")
+    void get_payment_attempt_failed_within_deadline() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = dataHelper.createBooking(memberId, BookingStatus.PENDING_PAYMENT,
+                Instant.now().plus(5, ChronoUnit.MINUTES), AMOUNT);
+        Long paymentAttemptId = dataHelper.createPaymentAttempt(bookingId, PaymentAttemptStatus.FAILED, AMOUNT);
+
+        // when
+        ResultActions resultActions = mvc.perform(
+                get("/api/v1/payment-attempts/" + paymentAttemptId)
+                        .header("Authorization", "Bearer " + accessTokenFor(memberId))
+        );
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        assertThat(httpStatusCode).isEqualTo(200);
+        resultActions.andExpect(jsonPath("$.data.status").value("FAILED"));
+        resultActions.andExpect(jsonPath("$.data.failureCode").value(PaymentTestDataHelper.TEST_FAILURE_CODE));
+        resultActions.andExpect(jsonPath("$.data.retryAllowed").value(true));
+    }
+
+    @Test
+    @DisplayName("실패한 결제 시도를 결제 기한이 지난 뒤 조회하면 retryAllowed가 false")
+    void get_payment_attempt_failed_after_deadline() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = dataHelper.createBooking(memberId, BookingStatus.PENDING_PAYMENT,
+                Instant.now().minus(1, ChronoUnit.MINUTES), AMOUNT);
+        Long paymentAttemptId = dataHelper.createPaymentAttempt(bookingId, PaymentAttemptStatus.FAILED, AMOUNT);
+
+        // when
+        ResultActions resultActions = mvc.perform(
+                get("/api/v1/payment-attempts/" + paymentAttemptId)
+                        .header("Authorization", "Bearer " + accessTokenFor(memberId))
+        );
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        assertThat(httpStatusCode).isEqualTo(200);
+        resultActions.andExpect(jsonPath("$.data.status").value("FAILED"));
+        resultActions.andExpect(jsonPath("$.data.bookingStatus").value("PENDING_PAYMENT"));
+        resultActions.andExpect(jsonPath("$.data.retryAllowed").value(false));
+    }
+
     // DB에 넣은 회원 ID로 액세스 토큰 발급
     private String accessTokenFor(Long memberId) {
         Member member = Member.create("token-" + memberId + "@example.com", "encodedPassword", "tester", Role.MEMBER);
