@@ -10,6 +10,7 @@ import com.tikit.payment.dto.toss.TossPaymentResponseDTO;
 import com.tikit.payment.entity.PaymentAttempt;
 import com.tikit.payment.entity.PaymentAttemptStatus;
 import com.tikit.payment.exception.TossApiException;
+import com.tikit.payment.exception.TossResultUnknownException;
 import com.tikit.payment.support.PaymentTestDataHelper;
 import com.tikit.util.JWTProvider;
 import jakarta.persistence.EntityManager;
@@ -144,6 +145,43 @@ public class PaymentConfirmControllerDataTest {
         PaymentAttempt attempt = entityManager.find(PaymentAttempt.class, paymentAttemptId);
         assertThat(attempt.getStatus()).isEqualTo(PaymentAttemptStatus.FAILED);
         assertThat(attempt.getFailureCode()).isEqualTo(TOSS_REJECT_CODE);
+    }
+
+    @Test
+    @DisplayName("Toss 응답을 받지 못하면 202를 반환하고 RECONCILING을 저장")
+    void confirm_payment_result_unknown() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = dataHelper.createBooking(memberId, BookingStatus.PENDING_PAYMENT,
+                Instant.now().plus(5, ChronoUnit.MINUTES), AMOUNT);
+        Long paymentAttemptId = dataHelper.createPaymentAttempt(bookingId, PaymentAttemptStatus.READY, AMOUNT);
+        String orderId = entityManager.find(PaymentAttempt.class, paymentAttemptId).getOrderId();
+
+        given(tossPaymentClient.confirmPayment(any(), any()))
+                .willThrow(new TossResultUnknownException("Toss 응답 시간 초과"));
+
+        // when
+        ResultActions resultActions = mvc.perform(
+                post("/api/v1/payment-attempts/" + paymentAttemptId + "/confirmation")
+                        .header("Authorization", "Bearer " + accessTokenFor(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(confirmRequestBody(orderId, AMOUNT))
+        );
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        assertThat(httpStatusCode).isEqualTo(202);
+        resultActions.andExpect(jsonPath("$.data.status").value("RECONCILING"));
+        resultActions.andExpect(jsonPath("$.data.retryAllowed").value(false));
+
+        PaymentAttempt attempt = entityManager.find(PaymentAttempt.class, paymentAttemptId);
+        assertThat(attempt.getStatus()).isEqualTo(PaymentAttemptStatus.RECONCILING);
+        assertThat(attempt.getFailureCode()).isNull();
     }
 
     // 승인 요청 본문 (paymentKey는 결제창 인증 후 Toss가 주는 값이라 테스트에서는 임의 값)
