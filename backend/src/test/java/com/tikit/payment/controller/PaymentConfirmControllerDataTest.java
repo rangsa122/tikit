@@ -41,6 +41,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
@@ -220,6 +221,46 @@ public class PaymentConfirmControllerDataTest {
         PaymentAttempt attempt = entityManager.find(PaymentAttempt.class, paymentAttemptId);
         assertThat(attempt.getStatus()).isEqualTo(PaymentAttemptStatus.RECONCILING);
         assertThat(attempt.getFailureCode()).isNull();
+    }
+
+    @Test
+    @DisplayName("이미 승인된 결제를 다시 승인 요청하면 Toss를 부르지 않고 200과 APPROVED를 반환")
+    void confirm_payment_already_approved() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = dataHelper.createBooking(memberId, BookingStatus.PENDING_PAYMENT,
+                Instant.now().plus(5, ChronoUnit.MINUTES), AMOUNT);
+        Long paymentAttemptId = dataHelper.createPaymentAttempt(bookingId, PaymentAttemptStatus.APPROVED, AMOUNT);
+        PaymentAttempt approvedAttempt = entityManager.find(PaymentAttempt.class, paymentAttemptId);
+        String orderId = approvedAttempt.getOrderId();
+        Instant firstApprovedAt = approvedAttempt.getApprovedAt();
+
+        // 혹시 Toss가 불리더라도 흐름이 끝까지 가도록 성공 응답을 준비 (호출 여부는 아래에서 확인)
+        given(tossPaymentClient.confirmPayment(any(), any()))
+                .willReturn(tossApprovedResponse(orderId, AMOUNT, OffsetDateTime.now(ZoneOffset.ofHours(9))));
+
+        // when
+        ResultActions resultActions = mvc.perform(
+                post("/api/v1/payment-attempts/" + paymentAttemptId + "/confirmation")
+                        .header("Authorization", "Bearer " + accessTokenFor(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(confirmRequestBody(orderId, AMOUNT))
+        );
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        assertThat(httpStatusCode).isEqualTo(200);
+        resultActions.andExpect(jsonPath("$.data.status").value("APPROVED"));
+
+        then(tossPaymentClient).should(never()).confirmPayment(any(), any());
+
+        PaymentAttempt attempt = entityManager.find(PaymentAttempt.class, paymentAttemptId);
+        assertThat(attempt.getApprovedAt()).isEqualTo(firstApprovedAt);
     }
 
     // 승인 요청 본문 (paymentKey는 결제창 인증 후 Toss가 주는 값이라 테스트에서는 임의 값)
