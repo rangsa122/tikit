@@ -12,7 +12,7 @@ import java.time.LocalDate;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class PerformanceResponseDTO {
 
-    private Long id;
+    private Long performanceId;
     private String genreCode;
     private String genreName;
     private PerformanceSource source;
@@ -28,7 +28,7 @@ public class PerformanceResponseDTO {
     private Visibility visibility;
     private SalesStatus salesStatus;
     private short bookingLimitPerMember;
-    private Long createdById;
+    private Long createdBy;
     private Long version;
     private Instant createdAt;
     private Instant updatedAt;

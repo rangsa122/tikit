@@ -65,7 +65,7 @@ public class PerformanceService {
                                              int page, int size) {
         getViewer(memberId);
         int safePage = Math.max(page, 0);
-        int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
+        int safeSize = Math.min(Math.max(size, 1), 100);
         return performanceRepository
                 .findAllByStatus(status, PageRequest.of(safePage, safeSize))
                 .map(PerformanceResponseDTO::from);

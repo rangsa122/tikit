@@ -1,5 +1,6 @@
 package com.tikit.performance.controller;
 
+import com.tikit.common.dto.PageResponseDTO;
 import com.tikit.common.dto.ResponseDTO;
 import com.tikit.performance.dto.PerformanceCreateRequestDTO;
 import com.tikit.performance.dto.PerformanceResponseDTO;
@@ -8,7 +9,6 @@ import com.tikit.performance.entity.PublicationStatus;
 import com.tikit.performance.service.PerformanceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -30,12 +30,12 @@ public class PerformanceController {
     }
 
     @GetMapping
-    public ResponseEntity<ResponseDTO<Page<PerformanceResponseDTO>>> listManagerPerformances(
+    public ResponseEntity<ResponseDTO<PageResponseDTO<PerformanceResponseDTO>>> listManagerPerformances(
             @AuthenticationPrincipal String memberId, @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size, @RequestParam(required = false)PublicationStatus publicationStatus){
+            @RequestParam(defaultValue = "20") int size, @RequestParam(required = false)PublicationStatus publicationStatus){
         return  ResponseEntity.ok(ResponseDTO.success(
                 "공연 목록 조회에 성공했습니다",
-                service.list(Long.valueOf(memberId), publicationStatus, page, size)));
+                PageResponseDTO.from(service.list(Long.valueOf(memberId), publicationStatus, page, size))));
     }
 
     @GetMapping("/{performanceId}")
