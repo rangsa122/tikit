@@ -4,10 +4,12 @@ import com.tikit.auth.entity.Member;
 import com.tikit.auth.entity.MemberStatus;
 import com.tikit.auth.entity.Role;
 import com.tikit.booking.entity.BookingStatus;
+import com.tikit.common.ErrorCode;
 import com.tikit.payment.client.TossPaymentClient;
 import com.tikit.payment.dto.toss.TossPaymentResponseDTO;
 import com.tikit.payment.entity.PaymentAttempt;
 import com.tikit.payment.entity.PaymentAttemptStatus;
+import com.tikit.payment.exception.TossApiException;
 import com.tikit.payment.support.PaymentTestDataHelper;
 import com.tikit.util.JWTProvider;
 import jakarta.persistence.EntityManager;
@@ -48,6 +50,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 public class PaymentConfirmControllerDataTest {
 
     private static final Long AMOUNT = 55000L;
+    private static final String TOSS_REJECT_CODE = "REJECT_CARD_COMPANY";
 
     @Autowired
     private MockMvc mvc;
@@ -103,6 +106,44 @@ public class PaymentConfirmControllerDataTest {
         PaymentAttempt attempt = entityManager.find(PaymentAttempt.class, paymentAttemptId);
         assertThat(attempt.getApprovedAt()).isEqualTo(approvedAt.toInstant());
         then(tossPaymentClient).should().confirmPayment(any(), eq(attempt.getPgIdempotencyKey()));
+    }
+
+    @Test
+    @DisplayName("Toss가 거절하면 422 PAYMENT_DECLINED를 반환하고 FAILED와 실패 코드를 저장")
+    void confirm_payment_declined() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = dataHelper.createBooking(memberId, BookingStatus.PENDING_PAYMENT,
+                Instant.now().plus(5, ChronoUnit.MINUTES), AMOUNT);
+        Long paymentAttemptId = dataHelper.createPaymentAttempt(bookingId, PaymentAttemptStatus.READY, AMOUNT);
+        String orderId = entityManager.find(PaymentAttempt.class, paymentAttemptId).getOrderId();
+
+        given(tossPaymentClient.confirmPayment(any(), any()))
+                .willThrow(new TossApiException(400, TOSS_REJECT_CODE, "카드사에서 거절했습니다."));
+
+        // when
+        ResultActions resultActions = mvc.perform(
+                post("/api/v1/payment-attempts/" + paymentAttemptId + "/confirmation")
+                        .header("Authorization", "Bearer " + accessTokenFor(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(confirmRequestBody(orderId, AMOUNT))
+        );
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        ErrorCode errorCode = ErrorCode.PAYMENT_DECLINED;
+
+        assertThat(httpStatusCode).isEqualTo(errorCode.getStatus().value());
+        resultActions.andExpect(jsonPath("$.code").value(errorCode.name()));
+
+        PaymentAttempt attempt = entityManager.find(PaymentAttempt.class, paymentAttemptId);
+        assertThat(attempt.getStatus()).isEqualTo(PaymentAttemptStatus.FAILED);
+        assertThat(attempt.getFailureCode()).isEqualTo(TOSS_REJECT_CODE);
     }
 
     // 승인 요청 본문 (paymentKey는 결제창 인증 후 Toss가 주는 값이라 테스트에서는 임의 값)
