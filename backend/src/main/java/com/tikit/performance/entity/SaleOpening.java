@@ -33,4 +33,11 @@ public class SaleOpening {
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    public static SaleOpening create(Performance performance, Instant opensAt) {
+        SaleOpening o = new SaleOpening();
+        o.performance = performance;
+        o.opensAt = opensAt;
+        return o;
+    }
 }

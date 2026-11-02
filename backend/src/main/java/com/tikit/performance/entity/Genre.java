@@ -30,5 +30,15 @@ public class Genre {
     @Column(nullable = false)
     private boolean active;
 
+    public static Genre create(String code, String name, String kopisCode, int sortOrder, boolean active) {
+        Genre g = new Genre();
+        g.code = code;
+        g.name = name;
+        g.kopisCode = kopisCode;
+        g.sortOrder = sortOrder;
+        g.active = active;
+        return g;
+    }
+
 
 }
