@@ -8,6 +8,7 @@ import com.tikit.booking.entity.BookingStatus;
 import com.tikit.common.ErrorCode;
 import com.tikit.payment.dto.request.PaymentConfirmRequestDTO;
 import com.tikit.payment.entity.PaymentAttempt;
+import com.tikit.payment.entity.PaymentAttemptStatus;
 import com.tikit.payment.exception.PaymentException;
 import com.tikit.payment.repository.PaymentAttemptRepository;
 import lombok.RequiredArgsConstructor;
@@ -97,6 +98,92 @@ public class PaymentConfirmTxService {
         log.info("payment confirmation started: paymentAttemptId={}, bookingId={}", paymentAttemptId, bookingId);
 
         return toResult(ConfirmationStartStatus.STARTED, attempt);
+    }
+
+    // 승인 2차 트랜잭션 (Toss 승인 성공): 예매 -> 결제 순으로 잠그고 APPROVED 저장
+    @Transactional
+    public void completeApproval(Long paymentAttemptId, Long memberId, Instant approvedAt) {
+        String detail = "paymentAttemptId=" + paymentAttemptId + ", memberId=" + memberId;
+
+        // 1. 예매 잠금 -> 결제 시도 잠금 (1차와 같은 순서, 회원은 다시 볼 필요 없어 생략)
+        Booking booking = lockBooking(paymentAttemptId, memberId, detail);
+        PaymentAttempt attempt = lockAttempt(paymentAttemptId, detail);
+
+        // 2. 복구 작업이 먼저 승인 처리했으면 이미 끝난 일이므로 넘어감
+        if (attempt.isApproved()) {
+            log.info("payment already approved: {}", detail);
+            return;
+        }
+
+        // 3. 승인 완료 (FAILED에서 오면 엔티티가 예외 -> 롤백, 지휘 서비스가 결과 확인 중으로 처리)
+        attempt.approve(approvedAt);
+
+        // TODO Y-06(11/11): A파트 예매 확정 메서드 호출 (예매 CONFIRMED, 좌석 SOLD, 티켓 발급)
+
+        log.info("payment approved: {}, bookingId={}", detail, booking.getId());
+    }
+
+    // 승인 2차 트랜잭션 (Toss 거절): FAILED 저장, 예매와 좌석은 유지 (기한 안이면 새 시도로 재결제)
+    @Transactional
+    public void recordFailure(Long paymentAttemptId, Long memberId, String failureCode) {
+        String detail = "paymentAttemptId=" + paymentAttemptId + ", memberId=" + memberId;
+
+        // 1. 예매 잠금 -> 결제 시도 잠금
+        lockBooking(paymentAttemptId, memberId, detail);
+        PaymentAttempt attempt = lockAttempt(paymentAttemptId, detail);
+
+        // 2. 이미 승인된 결제는 실패로 바꾸지 않음 (돈이 나간 결제, 관리자 확인 필요)
+        if (attempt.isApproved()) {
+            log.error("approved payment cannot be failed: {}, failureCode={}", detail, failureCode);
+            return;
+        }
+
+        // 3. 이미 실패로 기록됐으면 넘어감
+        if (attempt.getStatus() == PaymentAttemptStatus.FAILED) {
+            log.info("payment already failed: {}", detail);
+            return;
+        }
+
+        // 4. 실패 기록
+        attempt.fail(failureCode);
+
+        log.info("payment failed: {}, failureCode={}", detail, failureCode);
+    }
+
+    // 승인 2차 트랜잭션 (Toss 응답 없음 또는 승인 후 DB 반영 실패): RECONCILING 저장, 복구 작업이 확정
+    @Transactional
+    public void recordReconciling(Long paymentAttemptId, Long memberId) {
+        String detail = "paymentAttemptId=" + paymentAttemptId + ", memberId=" + memberId;
+
+        // 1. 예매 잠금 -> 결제 시도 잠금
+        lockBooking(paymentAttemptId, memberId, detail);
+        PaymentAttempt attempt = lockAttempt(paymentAttemptId, detail);
+
+        // 2. 그 사이 복구 작업이 확정했으면 되돌리지 않음 (PROCESSING일 때만 변경)
+        if (attempt.getStatus() != PaymentAttemptStatus.PROCESSING) {
+            log.info("payment not in processing, skip reconciling: {}, status={}", detail, attempt.getStatus());
+            return;
+        }
+
+        // 3. 결과 확인 중 기록
+        attempt.markReconciling();
+
+        log.warn("payment result unknown, reconciling: {}", detail);
+    }
+
+    // 2차 트랜잭션용 예매 잠금 (1차를 통과한 결제라 없으면 데이터 이상 -> 404가 아닌 IllegalStateException)
+    private Booking lockBooking(Long paymentAttemptId, Long memberId, String detail) {
+        Long bookingId = paymentAttemptRepository.findBookingIdById(paymentAttemptId)
+                .orElseThrow(() -> new IllegalStateException("payment attempt missing in second transaction: " + detail));
+
+        return paymentAttemptRepository.findOwnedBookingForUpdate(bookingId, memberId)
+                .orElseThrow(() -> new IllegalStateException("booking missing in second transaction: " + detail));
+    }
+
+    // 2차 트랜잭션용 결제 시도 잠금 (반드시 lockBooking 다음에 호출)
+    private PaymentAttempt lockAttempt(Long paymentAttemptId, String detail) {
+        return paymentAttemptRepository.findByIdForUpdate(paymentAttemptId)
+                .orElseThrow(() -> new IllegalStateException("payment attempt missing in second transaction: " + detail));
     }
 
     // 엔티티에서 Toss 호출에 필요한 값만 꺼내 결과로 반환
