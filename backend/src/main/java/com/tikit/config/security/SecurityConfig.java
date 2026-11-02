@@ -75,6 +75,7 @@ public class SecurityConfig {
                                         "/api/v1/sessions/*/seats"
                                 )
                                 .permitAll()
+                                .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                                 .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtCheckFilter, UsernamePasswordAuthenticationFilter.class);

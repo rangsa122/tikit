@@ -1,5 +1,7 @@
 package com.tikit.auth.entity;
 
+import com.tikit.auth.exception.MemberStatusChangeException;
+import com.tikit.common.ErrorCode;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
@@ -76,6 +78,25 @@ public class Member {
     // 회원 이름 변경
     public void changeName(String newName){
         this.name = newName;
+    }
+
+    public void suspend() {
+        validateStatusChange(MemberStatus.ACTIVE);
+        this.status = MemberStatus.SUSPENDED;
+    }
+
+    public void resume() {
+        validateStatusChange(MemberStatus.SUSPENDED);
+        this.status = MemberStatus.ACTIVE;
+    }
+
+    private void validateStatusChange(MemberStatus expectedStatus) {
+        if (role == Role.ADMIN) {
+            throw new MemberStatusChangeException(ErrorCode.ADMIN_ACCOUNT_PROTECTED);
+        }
+        if (status != expectedStatus) {
+            throw new MemberStatusChangeException(ErrorCode.STATE_CONFLICT);
+        }
     }
 
 }
