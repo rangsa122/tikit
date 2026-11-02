@@ -12,7 +12,7 @@ public interface GenreRepository extends JpaRepository<Genre, String> {
     @Query("""
             select g
             from Genre g
-            where g.code = : code and g.active = true
+            where g.code = :code and g.active = true
             """)
     Optional<Genre> findActive(@Param("code") String code);
 }
