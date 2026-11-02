@@ -4,15 +4,14 @@ import com.tikit.auth.entity.Member;
 import com.tikit.auth.entity.MemberStatus;
 import com.tikit.auth.entity.Role;
 
-import java.time.Instant;
-
+// API 명세의 AdminMember (목록 항목과 상태 변경 응답)
 public record AdminMemberSummaryResponseDTO(
-        Long id,
+        Long memberId,
         String email,
         String name,
         Role role,
-        MemberStatus status,
-        Instant createdAt
+        MemberStatus accountStatus,
+        Long version
 ) {
     public static AdminMemberSummaryResponseDTO from(Member member) {
         return new AdminMemberSummaryResponseDTO(
@@ -21,7 +20,7 @@ public record AdminMemberSummaryResponseDTO(
                 member.getName(),
                 member.getRole(),
                 member.getStatus(),
-                member.getCreatedAt()
+                member.getVersion()
         );
     }
 }

@@ -6,13 +6,11 @@ import org.springframework.data.domain.Page;
 import java.util.List;
 
 public record AdminMemberListResponseDTO(
-        List<AdminMemberSummaryResponseDTO> content,
+        List<AdminMemberSummaryResponseDTO> items,
         int page,
         int size,
         long totalElements,
-        int totalPages,
-        boolean first,
-        boolean last
+        int totalPages
 ) {
     public static AdminMemberListResponseDTO from(Page<Member> members) {
         return new AdminMemberListResponseDTO(
@@ -22,9 +20,7 @@ public record AdminMemberListResponseDTO(
                 members.getNumber(),
                 members.getSize(),
                 members.getTotalElements(),
-                members.getTotalPages(),
-                members.isFirst(),
-                members.isLast()
+                members.getTotalPages()
         );
     }
 }

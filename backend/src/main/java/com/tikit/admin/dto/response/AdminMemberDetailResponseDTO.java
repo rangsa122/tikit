@@ -7,11 +7,12 @@ import com.tikit.auth.entity.Role;
 import java.time.Instant;
 
 public record AdminMemberDetailResponseDTO(
-        Long id,
+        Long memberId,
         String email,
         String name,
         Role role,
-        MemberStatus status,
+        MemberStatus accountStatus,
+        Long version,
         Instant createdAt,
         Instant updatedAt,
         Instant withdrawnAt
@@ -23,6 +24,7 @@ public record AdminMemberDetailResponseDTO(
                 member.getName(),
                 member.getRole(),
                 member.getStatus(),
+                member.getVersion(),
                 member.getCreatedAt(),
                 member.getUpdatedAt(),
                 member.getWithdrawnAt()
