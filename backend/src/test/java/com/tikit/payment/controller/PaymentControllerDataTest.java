@@ -82,6 +82,60 @@ public class PaymentControllerDataTest {
         resultActions.andExpect(jsonPath("$.data.orderName").value(PaymentTestDataHelper.PERFORMANCE_TITLE));
     }
 
+    @Test
+    @DisplayName("승인 처리 중인 결제 시도를 조회하면 PROCESSING을 그대로 반환")
+    void get_payment_attempt_processing() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = dataHelper.createBooking(memberId, BookingStatus.PENDING_PAYMENT,
+                Instant.now().plus(5, ChronoUnit.MINUTES), AMOUNT);
+        Long paymentAttemptId = dataHelper.createPaymentAttempt(bookingId, PaymentAttemptStatus.PROCESSING, AMOUNT);
+
+        // when
+        ResultActions resultActions = mvc.perform(
+                get("/api/v1/payment-attempts/" + paymentAttemptId)
+                        .header("Authorization", "Bearer " + accessTokenFor(memberId))
+        );
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        assertThat(httpStatusCode).isEqualTo(200);
+        resultActions.andExpect(jsonPath("$.data.status").value("PROCESSING"));
+        resultActions.andExpect(jsonPath("$.data.retryAllowed").value(false));
+    }
+
+    @Test
+    @DisplayName("결과 확인 중인 결제 시도를 조회하면 RECONCILING을 그대로 반환")
+    void get_payment_attempt_reconciling() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = dataHelper.createBooking(memberId, BookingStatus.PENDING_PAYMENT,
+                Instant.now().plus(5, ChronoUnit.MINUTES), AMOUNT);
+        Long paymentAttemptId = dataHelper.createPaymentAttempt(bookingId, PaymentAttemptStatus.RECONCILING, AMOUNT);
+
+        // when
+        ResultActions resultActions = mvc.perform(
+                get("/api/v1/payment-attempts/" + paymentAttemptId)
+                        .header("Authorization", "Bearer " + accessTokenFor(memberId))
+        );
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        assertThat(httpStatusCode).isEqualTo(200);
+        resultActions.andExpect(jsonPath("$.data.status").value("RECONCILING"));
+        resultActions.andExpect(jsonPath("$.data.retryAllowed").value(false));
+    }
+
     // DB에 넣은 회원 ID로 액세스 토큰 발급
     private String accessTokenFor(Long memberId) {
         Member member = Member.create("token-" + memberId + "@example.com", "encodedPassword", "tester", Role.MEMBER);
