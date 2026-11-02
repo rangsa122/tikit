@@ -1,5 +1,8 @@
 package com.tikit.payment.service;
 
+import com.tikit.auth.entity.MemberStatus;
+import com.tikit.auth.entity.Role;
+import com.tikit.booking.entity.BookingStatus;
 import com.tikit.common.ErrorCode;
 import com.tikit.payment.dto.response.PaymentAttemptResponseDTO;
 import com.tikit.payment.entity.PaymentAttempt;
@@ -26,10 +29,7 @@ import java.util.UUID;
 public class PaymentService {
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
-    private static final String BOOKING_PENDING_PAYMENT = "PENDING_PAYMENT";
     private static final int ORDER_NAME_MAX_LENGTH = 100;
-    private static final String MEMBER_ACTIVE = "ACTIVE";
-    private static final String ROLE_MEMBER = "MEMBER";
     private static final String ORDER_ID_PREFIX = "TIKIT_";
     private static final List<PaymentAttemptStatus> IN_PROGRESS_STATUSES =
             List.of(PaymentAttemptStatus.PROCESSING, PaymentAttemptStatus.RECONCILING);
@@ -47,14 +47,14 @@ public class PaymentService {
                 .orElseThrow(() -> new PaymentException(ErrorCode.RESOURCE_NOT_FOUND, detail));
 
         // 토큰이 아닌 현재 DB 기준으로 회원 상태와 역할 확인
-        if (!MEMBER_ACTIVE.equals(booking.getMemberStatus())) {
+        if (!MemberStatus.ACTIVE.name().equals(booking.getMemberStatus())) {
             throw new PaymentException(ErrorCode.ACCOUNT_RESTRICTED, detail);
         }
-        if (!ROLE_MEMBER.equals(booking.getMemberRole())) {
+        if (!Role.MEMBER.name().equals(booking.getMemberRole())) {
             throw new PaymentException(ErrorCode.ACCESS_DENIED, detail);
         }
 
-        if (!BOOKING_PENDING_PAYMENT.equals(booking.getStatus())) {
+        if (!BookingStatus.PENDING_PAYMENT.name().equals(booking.getStatus())) {
             throw new PaymentException(ErrorCode.INVALID_BOOKING_STATE, detail);
         }
 
@@ -97,6 +97,7 @@ public class PaymentService {
         OffsetDateTime now = OffsetDateTime.now(SEOUL);
         OffsetDateTime expiresAt = view.getExpiresAt().atZoneSameInstant(SEOUL).toOffsetDateTime();
         PaymentAttemptStatus status = PaymentAttemptStatus.valueOf(view.getStatus());
+        BookingStatus bookingStatus = BookingStatus.valueOf(view.getBookingStatus());
 
         return PaymentAttemptResponseDTO.builder()
                 .paymentAttemptId(view.getPaymentAttemptId())
@@ -107,19 +108,19 @@ public class PaymentService {
                 .amount(view.getAmount())
                 .currency(view.getCurrency())
                 .status(status)
-                .bookingStatus(view.getBookingStatus())
+                .bookingStatus(bookingStatus)
                 .expiresAt(expiresAt)
-                .retryAllowed(isRetryAllowed(status, view.getBookingStatus(), expiresAt, now))
+                .retryAllowed(isRetryAllowed(status, bookingStatus, expiresAt, now))
                 .failureCode(view.getFailureCode())
                 .serverTime(now)
                 .build();
     }
 
     // 최종 실패이고, 예매가 결제 대기 중이며, 결제 기한 안일 때만 새 결제 시도 가능
-    private boolean isRetryAllowed(PaymentAttemptStatus status, String bookingStatus,
+    private boolean isRetryAllowed(PaymentAttemptStatus status, BookingStatus bookingStatus,
                                    OffsetDateTime expiresAt, OffsetDateTime now) {
         return status == PaymentAttemptStatus.FAILED
-                && BOOKING_PENDING_PAYMENT.equals(bookingStatus)
+                && bookingStatus == BookingStatus.PENDING_PAYMENT
                 && now.isBefore(expiresAt);
     }
 
