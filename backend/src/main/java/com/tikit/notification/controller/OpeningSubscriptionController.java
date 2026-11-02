@@ -50,17 +50,18 @@ public class OpeningSubscriptionController {
 
     // 공연별 예매 시작 알림 <<해제>>
     @DeleteMapping("/opening-subscriptions/{performanceId}")
-    public ResponseEntity<ResponseDTO<Void>> unsubscribe(
+    public ResponseEntity<Void> unsubscribe(
             @AuthenticationPrincipal String accountId,
             @PathVariable Long performanceId
     ) {
+        // 로그인 회원 ID 확인
         Long memberId = getMemberId(accountId);
 
+        // 신청 기록 삭제 (없으면 정상 종료)
         subscriptionService.unsubscribe(memberId, performanceId);
 
-        return ResponseEntity.ok(
-                ResponseDTO.success("알림 신청 해제 성공")
-        );
+        // 204 No Content 반환
+        return ResponseEntity.noContent().build();
     }
 
     // 공연별 알림 신청 목록 조회

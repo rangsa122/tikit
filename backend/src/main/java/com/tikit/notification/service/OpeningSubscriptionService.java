@@ -55,18 +55,10 @@ public class OpeningSubscriptionService {
     @Transactional
     public void unsubscribe(Long memberId, Long performanceId) {
 
-        OpeningSubscriptionId id =
-                new OpeningSubscriptionId(memberId, performanceId);
+        OpeningSubscriptionId id = new OpeningSubscriptionId(memberId, performanceId);
 
-        OpeningSubscription subscription =
-                subscriptionRepository.findById(id)
-                        .orElseThrow(() ->
-                                new NoSuchElementException(
-                                        "알림 신청 내역이 없습니다."
-                                )
-                        );
-
-        subscriptionRepository.delete(subscription);
+        subscriptionRepository.findById(id)
+                .ifPresent(subscriptionRepository::delete);
     }
 
     // 회원별 알림 신청 목록 페이지네이션 조회
