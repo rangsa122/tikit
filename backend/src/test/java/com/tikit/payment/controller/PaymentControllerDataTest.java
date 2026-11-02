@@ -1,5 +1,6 @@
 package com.tikit.payment.controller;
 
+import com.jayway.jsonpath.JsonPath;
 import com.tikit.auth.entity.Member;
 import com.tikit.auth.entity.MemberStatus;
 import com.tikit.auth.entity.Role;
@@ -429,6 +430,77 @@ public class PaymentControllerDataTest {
         resultActions.andExpect(jsonPath("$.code").value(errorCode.name()));
 
         // 결제 시도가 만들어지지 않았는지 확인
+        Long attemptCount = entityManager.createQuery(
+                        "SELECT COUNT(pa) FROM PaymentAttempt pa WHERE pa.bookingId = :bookingId", Long.class)
+                .setParameter("bookingId", bookingId)
+                .getSingleResult();
+        assertThat(attemptCount).isEqualTo(0L);
+    }
+
+    @Test
+    @DisplayName("이전 결제가 실패했고 기한 안이면 새 결제 시도를 만들고 201을 반환")
+    void prepare_payment_attempt_after_failed() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = dataHelper.createBooking(memberId, BookingStatus.PENDING_PAYMENT,
+                Instant.now().plus(5, ChronoUnit.MINUTES), AMOUNT);
+        Long failedAttemptId = dataHelper.createPaymentAttempt(bookingId, PaymentAttemptStatus.FAILED, AMOUNT);
+
+        // when
+        ResultActions resultActions = mvc.perform(
+                post("/api/v1/bookings/" + bookingId + "/payment-attempts")
+                        .header("Authorization", "Bearer " + accessTokenFor(memberId))
+        );
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        assertThat(httpStatusCode).isEqualTo(201);
+        resultActions.andExpect(jsonPath("$.data.status").value("READY"));
+
+        Long newAttemptId = ((Number) JsonPath.read(responseBody, "$.data.paymentAttemptId")).longValue();
+        assertThat(newAttemptId).isNotEqualTo(failedAttemptId);
+
+        // 실패한 결제 시도는 그대로 두고 새 결제 시도가 하나 더 생겼는지 확인
+        Long attemptCount = entityManager.createQuery(
+                        "SELECT COUNT(pa) FROM PaymentAttempt pa WHERE pa.bookingId = :bookingId", Long.class)
+                .setParameter("bookingId", bookingId)
+                .getSingleResult();
+        assertThat(attemptCount).isEqualTo(2L);
+    }
+
+    @Test
+    @DisplayName("다른 회원의 예매로 결제를 준비하면 404를 반환")
+    void prepare_payment_attempt_other_member_booking() throws Exception {
+        // given
+        Long ownerId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long otherMemberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = dataHelper.createBooking(ownerId, BookingStatus.PENDING_PAYMENT,
+                Instant.now().plus(5, ChronoUnit.MINUTES), AMOUNT);
+
+        // when
+        ResultActions resultActions = mvc.perform(
+                post("/api/v1/bookings/" + bookingId + "/payment-attempts")
+                        .header("Authorization", "Bearer " + accessTokenFor(otherMemberId))
+        );
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        ErrorCode errorCode = ErrorCode.RESOURCE_NOT_FOUND;
+
+        assertThat(httpStatusCode).isEqualTo(errorCode.getStatus().value());
+        resultActions.andExpect(jsonPath("$.code").value(errorCode.name()));
+
+        // 남의 예매에 결제 시도가 만들어지지 않았는지 확인
         Long attemptCount = entityManager.createQuery(
                         "SELECT COUNT(pa) FROM PaymentAttempt pa WHERE pa.bookingId = :bookingId", Long.class)
                 .setParameter("bookingId", bookingId)
