@@ -286,6 +286,33 @@ public class PaymentControllerDataTest {
         assertThat(attemptCount).isEqualTo(1L);
     }
 
+    @Test
+    @DisplayName("정지된 회원이 결제를 준비하면 403 ACCOUNT_RESTRICTED를 반환")
+    void prepare_payment_attempt_suspended_member() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.SUSPENDED, Role.MEMBER);
+        Long bookingId = dataHelper.createBooking(memberId, BookingStatus.PENDING_PAYMENT,
+                Instant.now().plus(5, ChronoUnit.MINUTES), AMOUNT);
+
+        // when
+        ResultActions resultActions = mvc.perform(
+                post("/api/v1/bookings/" + bookingId + "/payment-attempts")
+                        .header("Authorization", "Bearer " + accessTokenFor(memberId))
+        );
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        ErrorCode errorCode = ErrorCode.ACCOUNT_RESTRICTED;
+
+        assertThat(httpStatusCode).isEqualTo(errorCode.getStatus().value());
+        resultActions.andExpect(jsonPath("$.code").value(errorCode.name()));
+    }
+
     // DB에 넣은 회원 ID로 액세스 토큰 발급
     private String accessTokenFor(Long memberId) {
         Member member = Member.create("token-" + memberId + "@example.com", "encodedPassword", "tester", Role.MEMBER);
