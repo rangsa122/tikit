@@ -26,7 +26,9 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 // 예매 데이터가 필요한 결제 통합 테스트 (테스트마다 롤백되어 DB에 데이터가 남지 않음)
@@ -220,6 +222,34 @@ public class PaymentControllerDataTest {
 
         assertThat(httpStatusCode).isEqualTo(errorCode.getStatus().value());
         resultActions.andExpect(jsonPath("$.code").value(errorCode.name()));
+    }
+
+    @Test
+    @DisplayName("결제 시도가 없는 결제 대기 예매로 결제를 준비하면 201과 새 READY 결제 시도를 반환")
+    void prepare_payment_attempt_created() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = dataHelper.createBooking(memberId, BookingStatus.PENDING_PAYMENT,
+                Instant.now().plus(5, ChronoUnit.MINUTES), AMOUNT);
+
+        // when
+        ResultActions resultActions = mvc.perform(
+                post("/api/v1/bookings/" + bookingId + "/payment-attempts")
+                        .header("Authorization", "Bearer " + accessTokenFor(memberId))
+        );
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        assertThat(httpStatusCode).isEqualTo(201);
+        resultActions.andExpect(jsonPath("$.data.bookingId").value(bookingId));
+        resultActions.andExpect(jsonPath("$.data.status").value("READY"));
+        resultActions.andExpect(jsonPath("$.data.amount").value(AMOUNT));
+        resultActions.andExpect(jsonPath("$.data.orderId").value(startsWith("TIKIT_")));
     }
 
     // DB에 넣은 회원 ID로 액세스 토큰 발급
