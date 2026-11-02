@@ -313,6 +313,33 @@ public class PaymentControllerDataTest {
         resultActions.andExpect(jsonPath("$.code").value(errorCode.name()));
     }
 
+    @Test
+    @DisplayName("역할이 MEMBER가 아닌 회원이 결제를 준비하면 403 ACCESS_DENIED를 반환")
+    void prepare_payment_attempt_not_member_role() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MANAGER);
+        Long bookingId = dataHelper.createBooking(memberId, BookingStatus.PENDING_PAYMENT,
+                Instant.now().plus(5, ChronoUnit.MINUTES), AMOUNT);
+
+        // when
+        ResultActions resultActions = mvc.perform(
+                post("/api/v1/bookings/" + bookingId + "/payment-attempts")
+                        .header("Authorization", "Bearer " + accessTokenFor(memberId))
+        );
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        ErrorCode errorCode = ErrorCode.ACCESS_DENIED;
+
+        assertThat(httpStatusCode).isEqualTo(errorCode.getStatus().value());
+        resultActions.andExpect(jsonPath("$.code").value(errorCode.name()));
+    }
+
     // DB에 넣은 회원 ID로 액세스 토큰 발급
     private String accessTokenFor(Long memberId) {
         Member member = Member.create("token-" + memberId + "@example.com", "encodedPassword", "tester", Role.MEMBER);
