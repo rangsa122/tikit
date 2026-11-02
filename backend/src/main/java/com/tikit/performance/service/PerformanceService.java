@@ -37,8 +37,7 @@ public class PerformanceService {
 
     @Transactional
     public PerformanceResponseDTO create(Long memberId, PerformanceCreateRequestDTO request){
-        Member manager = memberRepository.findById(memberId)
-                .orElseThrow(()->new PerformanceException(ErrorCode.ACCESS_DENIED));
+        Member manager = getManager(memberId);
         validateSource(request);
         validateDates(request.getStartDate(), request.getEndDate());
         Genre genre = findActiveGenre(request.getGenreCode());
@@ -64,7 +63,7 @@ public class PerformanceService {
 
     public Page<PerformanceResponseDTO> list(Long memberId, PublicationStatus status,
                                              int page, int size) {
-        getManager(memberId);
+        getViewer(memberId);
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
         return performanceRepository
@@ -73,7 +72,7 @@ public class PerformanceService {
     }
 
     public PerformanceResponseDTO get(Long memberId, Long performanceId) {
-        getManager(memberId);
+        getViewer(memberId);
         return PerformanceResponseDTO.from(findPerformance(performanceId));
     }
 
