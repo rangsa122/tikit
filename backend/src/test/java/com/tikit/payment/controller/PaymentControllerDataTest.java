@@ -4,6 +4,7 @@ import com.tikit.auth.entity.Member;
 import com.tikit.auth.entity.MemberStatus;
 import com.tikit.auth.entity.Role;
 import com.tikit.booking.entity.BookingStatus;
+import com.tikit.common.ErrorCode;
 import com.tikit.payment.entity.PaymentAttemptStatus;
 import com.tikit.payment.support.PaymentTestDataHelper;
 import com.tikit.util.JWTProvider;
@@ -190,6 +191,35 @@ public class PaymentControllerDataTest {
         resultActions.andExpect(jsonPath("$.data.status").value("FAILED"));
         resultActions.andExpect(jsonPath("$.data.bookingStatus").value("PENDING_PAYMENT"));
         resultActions.andExpect(jsonPath("$.data.retryAllowed").value(false));
+    }
+
+    @Test
+    @DisplayName("다른 회원의 결제 시도를 조회하면 404를 반환")
+    void get_payment_attempt_other_member() throws Exception {
+        // given
+        Long ownerId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long otherMemberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = dataHelper.createBooking(ownerId, BookingStatus.PENDING_PAYMENT,
+                Instant.now().plus(5, ChronoUnit.MINUTES), AMOUNT);
+        Long paymentAttemptId = dataHelper.createPaymentAttempt(bookingId, PaymentAttemptStatus.READY, AMOUNT);
+
+        // when
+        ResultActions resultActions = mvc.perform(
+                get("/api/v1/payment-attempts/" + paymentAttemptId)
+                        .header("Authorization", "Bearer " + accessTokenFor(otherMemberId))
+        );
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        ErrorCode errorCode = ErrorCode.RESOURCE_NOT_FOUND;
+
+        assertThat(httpStatusCode).isEqualTo(errorCode.getStatus().value());
+        resultActions.andExpect(jsonPath("$.code").value(errorCode.name()));
     }
 
     // DB에 넣은 회원 ID로 액세스 토큰 발급
