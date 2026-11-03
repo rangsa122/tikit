@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 // 회원 엔티티 조회 및 응답 DTO 변환
-
 @Service
 @RequiredArgsConstructor
 public class MemberProfileService {
@@ -47,5 +46,4 @@ public class MemberProfileService {
         member.changeName(newName);
         return MemberProfileResponseDTO.from(member);
     }
-
 }
