@@ -6,6 +6,8 @@ const MOCK_DELAY_MS = 300
 
 // 가짜 예매 시간의 기준 (웹을 연 시간, 새로고침하면 다시 정해짐)
 const OPENED_AT_MS = Date.now()
+
+// 서버 시계가 PC보다 빠른 예매 (예매 번호: 몇 초 빠른지)
 const SERVER_CLOCK_SKEW_SECONDS: Record<number, number> = {9: 120}
 
 const mockSeats: BookedSeat[] = [
@@ -37,6 +39,7 @@ const baseBooking: Booking = {
  * 주소창에 /bookings/{bookingId}/payment 입력해서 확인
  * 1 결제 전 / 2 READY / 3 FAILED / 4 PROCESSING(10초 후 0) / 5 RECONCILING(기한 지남)
  * 6 APPROVED / 7 결제 전(15초 후 시간 초과) / 8 만료된 예매
+ * 9 서버 시계가 PC보다 2분 빠름 (타이머가 05:00부터 시작해야 정상)
  */
 export const mockBookings: Booking[] = [
     {...baseBooking, bookingId: 1},
@@ -54,11 +57,12 @@ export const mockBookings: Booking[] = [
  * 가짜 예매 상세 조회
  *
  * 실제 서버처럼 serverTime만 부를 때마다 현재 시각으로 바꿔서 반환
+ * (서버 시계가 빠른 예매는 그만큼 더한 시각)
  */
 export async function getMockBooking(bookingId: string): Promise<Booking> {
     await new Promise(resolve => setTimeout(resolve, MOCK_DELAY_MS))
 
-    const booking = mockBookings.find(item => item.bookingId == Number(bookingId))
+    const booking = mockBookings.find(item => item.bookingId === Number(bookingId))
 
     if (!booking) {
         throw new Error('예매 정보를 찾을 수 없습니다.')
