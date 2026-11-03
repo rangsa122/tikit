@@ -7,6 +7,7 @@ import MyPage from '../pages/mypage/MyPage'
 import MemberProfilePage from '../pages/mypage/MemberProfilePage'
 import CategoryPage from '../pages/CategoryPage'
 import PerformanceDetailPage from '../pages/PerformanceDetailPage'
+import PaymentPage from '../pages/payment/PaymentPage'
 
 const router = createBrowserRouter([
   {
@@ -19,6 +20,7 @@ const router = createBrowserRouter([
       {path: '/signup', element: <SignupPage />},
       {path: '/mypage', element: <MyPage />},
       {path: '/mypage/profile', element: <MemberProfilePage />},
+      {path: '/bookings/:bookingId/payment', element: <PaymentPage />},
     ],
   },
 ])
