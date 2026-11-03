@@ -80,4 +80,19 @@ public interface SeatHoldRepository extends Repository<SessionSeat, Long> {
     int releaseSeats(@Param("seatIds") Collection<Long> seatIds,
                      @Param("bookingId") Long bookingId,
                      @Param("now") Instant now);
+
+    // 이 예매가 선점한 좌석만 SOLD로 변경, 변경된 좌석 수 반환
+    @Modifying(flushAutomatically = true)
+    @Query("""
+            update SessionSeat s
+            set s.status = com.tikit.performance.entity.SeatStatus.SOLD,
+                s.version = s.version + 1,
+                s.updatedAt = :now
+            where s.id in :seatIds
+              and s.currentBookingId = :bookingId
+              and s.status = com.tikit.performance.entity.SeatStatus.HELD
+            """)
+    int sellSeats(@Param("seatIds") Collection<Long> seatIds,
+                  @Param("bookingId") Long bookingId,
+                  @Param("now") Instant now);
 }
