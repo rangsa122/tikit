@@ -2,8 +2,8 @@ import type {ReactNode} from 'react'
 import {Link, useNavigate, useParams} from 'react-router'
 import type {Booking} from '../../api/bookingApi'
 import Button from '../../components/common/Button'
-import BookingStepHeader from '../../components/payment/BookingStepHeader'
-import type {TimerPillProps} from '../../components/payment/BookingStepHeader'
+import BookingStepHeader from '../../components/booking/BookingStepHeader.tsx'
+import type {TimerPillProps} from '../../components/booking/BookingStepHeader.tsx'
 import PaymentForm from '../../components/payment/PaymentForm'
 import {
     AlertIcon,
