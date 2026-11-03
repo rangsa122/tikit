@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -63,7 +64,7 @@ public class PaymentService {
             throw new PaymentException(ErrorCode.PAYMENT_IN_PROGRESS, detail);
         }
 
-        if (!OffsetDateTime.now(SEOUL).isBefore(booking.getExpiresAt())) {
+        if (!Instant.now().isBefore(booking.getExpiresAt())) {
             throw new PaymentException(ErrorCode.BOOKING_EXPIRED, detail);
         }
 
@@ -95,7 +96,7 @@ public class PaymentService {
                         "paymentAttemptId=" + paymentAttemptId + ", memberId=" + memberId));
 
         OffsetDateTime now = OffsetDateTime.now(SEOUL);
-        OffsetDateTime expiresAt = view.getExpiresAt().atZoneSameInstant(SEOUL).toOffsetDateTime();
+        OffsetDateTime expiresAt = view.getExpiresAt().atZone(SEOUL).toOffsetDateTime();
         PaymentAttemptStatus status = PaymentAttemptStatus.valueOf(view.getStatus());
         BookingStatus bookingStatus = BookingStatus.valueOf(view.getBookingStatus());
 
