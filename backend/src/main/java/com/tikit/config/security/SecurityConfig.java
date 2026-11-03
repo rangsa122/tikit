@@ -72,6 +72,7 @@ public class SecurityConfig {
                                 .permitAll()
                                 .requestMatchers(
                                         HttpMethod.GET,
+                                        "/api/v1/auth/email-availability",
                                         "/api/v1/sessions/*/seats"
                                 )
                                 .permitAll()
