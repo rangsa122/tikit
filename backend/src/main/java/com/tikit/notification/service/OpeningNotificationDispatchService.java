@@ -70,6 +70,7 @@ public class OpeningNotificationDispatchService {
                 JOIN members m ON m.id = s.member_id
                 WHERE s.performance_id = ?
                   AND m.notification_enabled = TRUE
+                  AND m.status = 'ACTIVE'
                 ON CONFLICT (member_id, opening_id, type)
                 DO NOTHING
                 """;
