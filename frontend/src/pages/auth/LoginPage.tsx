@@ -32,6 +32,8 @@ export default function LoginPage() {
     // 오류 알림과 함께 빨간 테두리로 표시할 입력칸
     const [fieldErrors, setFieldErrors] = useState(INIT_FIELD_ERRORS);
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+    // 둘 다 입력하면 버튼 색을 바꿈. 회색일 때도 누르면 무엇이 빠졌는지 알림으로 안내
+    const isFormFilled = !!loginForm.email.trim() && !!loginForm.password;
 
     function handleChange(e: ChangeEvent<HTMLInputElement>) {
         const {name, value} = e.currentTarget;
@@ -172,7 +174,9 @@ export default function LoginPage() {
             <button
                 type="submit"
                 disabled={isSubmitting}
-                className="h-[54px] w-full rounded-xl bg-indigo-700 text-[17px] leading-[normal] font-bold text-white transition-colors hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-60">
+                className={`h-[54px] w-full rounded-xl text-[17px] leading-[normal] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${isFormFilled
+                    ? 'bg-indigo-700 text-white hover:bg-indigo-800'
+                    : 'bg-[#e4e6eb] text-[#5b616e]'}`}>
                 {isSubmitting ? '로그인 중...' : '로그인'}
             </button>
             <button
