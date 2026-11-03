@@ -4,8 +4,9 @@ const SECOND_MS = 1000
 const SEOUL_OFFSET_MS = 9 * 60 * 60 * SECOND_MS
 const MOCK_DELAY_MS = 300
 
-// 가짜 예매 시간의 기준 (웹을 연 시간, 새로고침하면 다시 정해짐)
-const OPENED_AT_MS = Date.now()
+// 가짜 예매 시간의 기준 (처음 연 시각을 탭에 저장 → 새로고침해도 유지, 탭을 닫으면 다시 정해짐)
+const OPENED_AT_KEY = 'tikit-mock-opened-at'
+const OPENED_AT_MS = getOpenedAtMs()
 
 // 서버 시계가 PC보다 빠른 예매 (예매 번호: 몇 초 빠른지)
 const SERVER_CLOCK_SKEW_SECONDS: Record<number, number> = {9: 120}
@@ -71,6 +72,23 @@ export async function getMockBooking(bookingId: string): Promise<Booking> {
     const skewSeconds = SERVER_CLOCK_SKEW_SECONDS[booking.bookingId] ?? 0
 
     return {...booking, serverTime: toSeoulIsoString(Date.now() + skewSeconds * SECOND_MS)}
+}
+
+// 처음 연 시각을 sessionStorage에서 꺼냄 (없으면 지금 시각을 저장)
+function getOpenedAtMs(): number {
+    try {
+        const saved = Number(sessionStorage.getItem(OPENED_AT_KEY))
+
+        if (saved > 0) {
+            return saved
+        }
+
+        const now = Date.now()
+        sessionStorage.setItem(OPENED_AT_KEY, String(now))
+        return now
+    } catch {
+        return Date.now()
+    }
 }
 
 // 기준 시각에서 몇 초 뒤를 한국 시간 문자열로 (음수면 이미 지난 시각)
