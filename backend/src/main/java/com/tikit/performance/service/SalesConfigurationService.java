@@ -11,6 +11,7 @@ import com.tikit.performance.repository.SaleOpeningRepository;
 import com.tikit.performance.repository.SeatTemplateRepository;
 import com.tikit.seat.repository.PerformanceSessionRepository;
 import com.tikit.seat.repository.SessionGradePriceRepository;
+import com.tikit.seat.repository.SessionSeatRepository;
 import com.tikit.seat.repository.TemplateSeatRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -37,6 +38,7 @@ public class SalesConfigurationService {
     private final SessionGradePriceRepository sessionGradePriceRepository;
 
     private static final ZoneOffset KST = ZoneOffset.ofHours(9);
+    private final SessionSeatRepository sessionSeatRepository;
 
 
     @Transactional(readOnly = true)
@@ -127,6 +129,10 @@ public class SalesConfigurationService {
 
         List<PerformanceSession> existing = performanceSessionRepository.findByPerformance(performanceId);
         Set<Long> existingIds = existing.stream().map(PerformanceSession::getId).collect(Collectors.toSet());
+
+        if (!existingIds.isEmpty() && sessionSeatRepository.existsTaken(existingIds)) {
+            throw new PerformanceException(ErrorCode.PERFORMANCE_EDIT_LOCKED);
+        }
 
         SalesConfigurationValidator.validate(request, performance.getStartDate(), performance.getEndDate(),
                 existingIds, loadTemplateGrades(request));

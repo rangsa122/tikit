@@ -16,6 +16,7 @@ import com.tikit.performance.repository.SaleOpeningRepository;
 import com.tikit.performance.repository.SeatTemplateRepository;
 import com.tikit.seat.repository.PerformanceSessionRepository;
 import com.tikit.seat.repository.SessionGradePriceRepository;
+import com.tikit.seat.repository.SessionSeatRepository;
 import com.tikit.seat.repository.TemplateSeatRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -35,6 +36,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 
 
@@ -56,13 +58,16 @@ class SalesConfigurationServiceTest {
     @Mock
     SessionGradePriceRepository sessionGradePriceRepository;
 
+    @Mock
+    SessionSeatRepository sessionSeatRepository;
+
     SalesConfigurationService service;
 
     @BeforeEach
     void setUp() {
         PerformanceAccessChecker checker = new PerformanceAccessChecker(memberRepository);
         service = new SalesConfigurationService(checker, seatTemplateRepository, templateSeatRepository, performanceRepository,
-                performanceSessionRepository, saleOpeningRepository, sessionGradePriceRepository);
+                performanceSessionRepository, saleOpeningRepository, sessionGradePriceRepository, sessionSeatRepository);
     }
 
     private Member member(Role role) {
@@ -268,5 +273,20 @@ class SalesConfigurationServiceTest {
         assertFails(() -> service.saveSalesConfiguration(1L, 10L, saveRequest(5L)),
                 ErrorCode.VERSION_CONFLICT);
         verify(performanceSessionRepository, never()).findByPerformance(any());
+    }
+
+    @Test
+    @DisplayName("선점·예매된 좌석이 있으면 저장할 수 없다")
+    void save_takenSeat_locked() {
+        Member manager = member(Role.MANAGER);
+        given(memberRepository.findById(1L)).willReturn(Optional.of(manager));          // ① 권한
+        Performance performance = performance(manager);                                  // DRAFT, id 10, version 3
+        given(performanceRepository.findForSave(10L)).willReturn(Optional.of(performance)); // ②
+        given(performanceSessionRepository.findByPerformance(10L)).willReturn(List.of(session(performance, 100L, 1L, Instant.parse("2026-12-10T05:00:00Z"))));
+        given(sessionSeatRepository.existsTaken(any())).willReturn(true);
+
+        assertFails(
+                () -> service.saveSalesConfiguration(1L, 10L, saveRequest(3L)),
+                ErrorCode.PERFORMANCE_EDIT_LOCKED);
     }
 }
