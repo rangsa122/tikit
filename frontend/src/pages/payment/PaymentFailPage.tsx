@@ -1,6 +1,6 @@
 import {useNavigate, useParams, useSearchParams} from 'react-router'
 import Button from '../../components/common/Button'
-import {AlertIcon, Notice, StatusCard} from '../../components/payment/PaymentUi'
+import {AlertIcon, CenterColumn, Notice, StatusCard} from '../../components/payment/PaymentUi'
 
 // 회원이 결제창에서 직접 취소했을 때 토스가 보내는 코드
 const USER_CANCELED_CODE = 'PAY_PROCESS_CANCELED'
@@ -22,7 +22,7 @@ export default function PaymentFailPage() {
 
     return (
         <main className="mx-auto max-w-[1320px] px-5 py-8">
-            <div className="mx-auto flex max-w-[560px] flex-col gap-4 pt-6 pb-10">
+            <CenterColumn>
                 <StatusCard
                     icon={<AlertIcon />}
                     title={isUserCanceled ? '결제를 취소했어요' : '결제가 완료되지 않았어요'}
@@ -38,7 +38,7 @@ export default function PaymentFailPage() {
                     <p className="text-center text-xs text-gray-400">오류 코드 {code}</p>
                 )}
                 <Button onClick={() => navigate(paymentPath, {replace: true})}>결제 화면으로</Button>
-            </div>
+            </CenterColumn>
         </main>
     )
 }

@@ -12,6 +12,7 @@ import PaymentForm from '../../components/payment/PaymentForm'
 import {
     AlertIcon,
     Card,
+    CenterColumn,
     CheckIcon,
     ClockIcon,
     Notice,
@@ -262,10 +263,6 @@ function PageMessage({message, showHomeLink}: {message: string; showHomeLink?: b
             )}
         </main>
     )
-}
-
-function CenterColumn({children}: {children: ReactNode}) {
-    return <div className="mx-auto flex max-w-[560px] flex-col gap-4 pt-6 pb-10">{children}</div>
 }
 
 // 버튼 두 개를 반씩 나란히

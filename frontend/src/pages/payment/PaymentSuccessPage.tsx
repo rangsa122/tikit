@@ -5,7 +5,15 @@ import type {PaymentAttemptStatus} from '../../api/bookingApi'
 import {confirmPayment, getPaymentAttempt} from '../../api/paymentApi'
 import type {PaymentAttempt} from '../../api/paymentApi'
 import Button from '../../components/common/Button'
-import {AlertIcon, CheckIcon, ClockIcon, Notice, SpinnerIcon, StatusCard} from '../../components/payment/PaymentUi'
+import {
+    AlertIcon,
+    CenterColumn,
+    CheckIcon,
+    ClockIcon,
+    Notice,
+    SpinnerIcon,
+    StatusCard,
+} from '../../components/payment/PaymentUi'
 import {formatWon} from '../../utils/bookingFormat'
 
 type SuccessView = 'confirming' | 'checking' | 'approved' | 'failed' | 'expired' | 'error'
@@ -70,7 +78,7 @@ export default function PaymentSuccessPage() {
 
     return (
         <main className="mx-auto max-w-[1320px] px-5 py-8">
-            <div className="mx-auto flex max-w-[560px] flex-col gap-4 pt-6 pb-10">
+            <CenterColumn>
                 {view === 'confirming' && (
                     <StatusCard icon={<SpinnerIcon />} title="결제를 승인하고 있어요">
                         잠시만 기다려 주세요. 보통 몇 초 안에 끝나요.
@@ -131,7 +139,7 @@ export default function PaymentSuccessPage() {
                         <Button onClick={() => navigate(paymentPath, {replace: true})}>결제 화면으로</Button>
                     </>
                 )}
-            </div>
+            </CenterColumn>
         </main>
     )
 }
