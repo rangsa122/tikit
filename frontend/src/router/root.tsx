@@ -1,3 +1,4 @@
+
 import {createBrowserRouter} from 'react-router'
 import MainLayout from '../layouts/MainLayout'
 import HomePage from '../pages/HomePage'
@@ -5,6 +6,7 @@ import LoginPage from '../pages/auth/LoginPage'
 import SignupPage from '../pages/auth/SignupPage'
 import MyPage from '../pages/mypage/MyPage'
 import MemberProfilePage from '../pages/mypage/MemberProfilePage'
+import FavoritePerformancesPage from '../pages/mypage/FavoritePerformancesPage'
 import CategoryPage from '../pages/CategoryPage'
 import PerformanceDetailPage from '../pages/PerformanceDetailPage'
 import PaymentPage from '../pages/payment/PaymentPage'
@@ -20,6 +22,7 @@ const router = createBrowserRouter([
       {path: '/signup', element: <SignupPage />},
       {path: '/mypage', element: <MyPage />},
       {path: '/mypage/profile', element: <MemberProfilePage />},
+      {path: '/mypage/favorites', element: <FavoritePerformancesPage />},
       {path: '/bookings/:bookingId/payment', element: <PaymentPage />},
     ],
   },
