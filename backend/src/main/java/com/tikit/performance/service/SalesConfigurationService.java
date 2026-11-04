@@ -20,6 +20,7 @@ import java.time.ZoneOffset;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -124,7 +125,31 @@ public class SalesConfigurationService {
             throw new PerformanceException(ErrorCode.VERSION_CONFLICT);
         }
 
+        List<PerformanceSession> existing = performanceSessionRepository.findByPerformance(performanceId);
+        Set<Long> existingIds = existing.stream().map(PerformanceSession::getId).collect(Collectors.toSet());
+
+        SalesConfigurationValidator.validate(request, performance.getStartDate(), performance.getEndDate(),
+                existingIds, loadTemplateGrades(request));
+
         return buildResponse(performance, performanceSessionRepository.findByPerformance(performanceId));
+    }
+
+    private Map<Long, Set<String>> loadTemplateGrades(SalesConfigurationSaveRequestDTO request) {
+        Set<Long> templateIds = request.sessions().stream()
+                .map(SessionConfigurationDTO::seatTemplateId)
+                .collect(Collectors.toSet());
+
+        Set<Long> activeIds = seatTemplateRepository.findAllById(templateIds).stream()
+                .filter(SeatTemplate::isActive)
+                .map(SeatTemplate::getId)
+                .collect(Collectors.toSet());
+        if (activeIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return templateSeatRepository.findByTemplateIdIn(activeIds).stream()
+                .collect(Collectors.groupingBy(s -> s.getTemplate().getId(),
+                        Collectors.mapping(TemplateSeat::getGrade, Collectors.toSet())));
     }
 
 }
