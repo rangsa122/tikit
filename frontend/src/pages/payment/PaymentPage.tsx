@@ -1,6 +1,10 @@
+import {useState} from 'react'
 import type {ReactNode} from 'react'
+import {isAxiosError} from 'axios'
 import {Link, useNavigate, useParams} from 'react-router'
 import type {Booking} from '../../api/bookingApi'
+import {preparePaymentAttempt} from '../../api/paymentApi'
+import {requestTossPayment} from '../../api/tossPayment'
 import Button from '../../components/common/Button'
 import BookingStepHeader from '../../components/booking/BookingStepHeader.tsx'
 import type {TimerPillProps} from '../../components/booking/BookingStepHeader.tsx'
@@ -32,8 +36,10 @@ const URGENT_SECONDS = 60
 export default function PaymentPage() {
     const {bookingId} = useParams()
     const navigate = useNavigate()
-    const {data, isLoading, isError} = useBookingDetail(bookingId)
+    const {data, isLoading, isError, refetch} = useBookingDetail(bookingId)
     const countdown = usePaymentCountdown(data?.booking.expiresAt, data?.clockOffsetMs ?? 0)
+    const [isPaying, setIsPaying] = useState(false)
+    const [payError, setPayError] = useState<string | null>(null)
 
     if (isLoading) {
         return <PageMessage message="예매 정보를 불러오는 중이에요." />
@@ -47,9 +53,29 @@ export default function PaymentPage() {
     const view = getPaymentView(booking, countdown.isExpired)
     const performancePath = `/performances/${booking.performanceId}`
 
-    function handlePay() {
-        // TODO 다음 이슈: 결제 준비 API(POST /bookings/{bookingId}/payment-attempts) → Toss 결제창
-        window.alert('결제창 연동은 다음 작업에서 연결돼요.')
+    // 결제 준비(주문 번호·금액 발급) → 토스 결제창 열기
+    // 결제창에서 인증이 끝나면 토스가 성공·실패 페이지로 이동시키므로 여기서 결제 완료를 판단하지 않음
+    async function handlePay() {
+        if (!bookingId || isPaying) {
+            return
+        }
+
+        setIsPaying(true)
+        setPayError(null)
+
+        try {
+            const attempt = await preparePaymentAttempt(bookingId)
+            await requestTossPayment(bookingId, attempt)
+        } catch (error) {
+            if (isTossUserCancel(error)) {
+                return
+            }
+
+            setPayError(getPayErrorMessage(error))
+            void refetch()
+        } finally {
+            setIsPaying(false)
+        }
     }
 
     return (
@@ -63,6 +89,12 @@ export default function PaymentPage() {
             />
 
             <main className="mx-auto max-w-[1320px] px-5 py-8">
+                {payError && (view === 'payment' || view === 'failed') && (
+                    <div className="mb-4">
+                        <Notice>{payError}</Notice>
+                    </div>
+                )}
+
                 {view === 'payment' && <PaymentForm booking={booking} onPay={handlePay} />}
 
                 {view === 'processing' && (
@@ -121,7 +153,9 @@ export default function PaymentPage() {
                             <Button variant="secondary" disabled>
                                 좌석 다시 선택
                             </Button>
-                            <Button onClick={handlePay}>다시 결제하기</Button>
+                            <Button onClick={handlePay} disabled={isPaying}>
+                                다시 결제하기
+                            </Button>
                         </ButtonRow>
                     </CenterColumn>
                 )}
@@ -180,6 +214,24 @@ function getPaymentView(booking: Booking, isTimeOver: boolean): PaymentView {
     }
 
     return booking.paymentStatus === 'FAILED' ? 'failed' : 'payment'
+}
+
+// 회원이 토스 결제창을 닫은 경우 (실패가 아니므로 안내 없이 결제 화면 유지)
+function isTossUserCancel(error: unknown): boolean {
+    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'USER_CANCEL'
+}
+
+// 결제창을 열기까지의 오류 안내 (서버 오류는 서버 message, 토스·설정 오류는 Error message)
+function getPayErrorMessage(error: unknown): string {
+    if (isAxiosError<{code: string, message: string}>(error)) {
+        return error.response?.data?.message ?? '서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.'
+    }
+
+    if (error instanceof Error && error.message) {
+        return error.message
+    }
+
+    return '결제창을 열지 못했어요. 다시 시도해 주세요.'
 }
 
 function getTimerPill(view: PaymentView, countdown: PaymentCountdown): TimerPillProps | null {
