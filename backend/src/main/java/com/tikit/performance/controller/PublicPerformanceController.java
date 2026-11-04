@@ -2,8 +2,8 @@
 package com.tikit.performance.controller;
 
 import com.tikit.common.dto.ResponseDTO;
-import com.tikit.performance.dto.PerformanceResponseDTO;
-import com.tikit.performance.dto.PerformanceSessionResponseDTO;
+import com.tikit.performance.dto.PublicPerformanceDetailDTO;
+import com.tikit.performance.dto.PerformanceSessionListDTO;
 import com.tikit.performance.service.PerformanceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -12,11 +12,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
-
-/**
- * 일반 사용자용 공연 조회 API
- */
 @RestController
 @RequestMapping("/api/v1/performances")
 @RequiredArgsConstructor
@@ -26,14 +21,13 @@ public class PublicPerformanceController {
 
     /**
      * 공개 공연 상세 조회
-     *
      * GET /api/v1/performances/{performanceId}
      */
     @GetMapping("/{performanceId}")
-    public ResponseEntity<ResponseDTO<PerformanceResponseDTO>> getPerformanceDetail(
-            @PathVariable Long performanceId
-    ) {
-        PerformanceResponseDTO data =
+    public ResponseEntity<ResponseDTO<PublicPerformanceDetailDTO>>
+    getPerformanceDetail(@PathVariable Long performanceId) {
+
+        PublicPerformanceDetailDTO data =
                 performanceService.getPublicDetail(performanceId);
 
         return ResponseEntity.ok(
@@ -46,14 +40,13 @@ public class PublicPerformanceController {
 
     /**
      * 공개 공연 회차 목록 조회
-     *
      * GET /api/v1/performances/{performanceId}/sessions
      */
     @GetMapping("/{performanceId}/sessions")
-    public ResponseEntity<ResponseDTO<List<PerformanceSessionResponseDTO>>> getPerformanceSessions(
-            @PathVariable Long performanceId
-    ) {
-        List<PerformanceSessionResponseDTO> data =
+    public ResponseEntity<ResponseDTO<PerformanceSessionListDTO>>
+    getPerformanceSessions(@PathVariable Long performanceId) {
+
+        PerformanceSessionListDTO data =
                 performanceService.getPublicSessions(performanceId);
 
         return ResponseEntity.ok(

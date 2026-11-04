@@ -1,7 +1,8 @@
 
 package com.tikit.performance.controller;
 
-import com.tikit.performance.dto.PerformanceResponseDTO;
+import com.tikit.performance.dto.PerformanceSessionListDTO;
+import com.tikit.performance.dto.PublicPerformanceDetailDTO;
 import com.tikit.performance.service.PerformanceService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -9,6 +10,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.mockito.Mockito.*;
@@ -24,59 +26,63 @@ class PublicPerformanceControllerTest {
     void setUp() {
         performanceService = mock(PerformanceService.class);
 
-        PublicPerformanceController controller =
-                new PublicPerformanceController(performanceService);
-
         mockMvc = MockMvcBuilders
-                .standaloneSetup(controller)
+                .standaloneSetup(
+                        new PublicPerformanceController(performanceService)
+                )
                 .build();
     }
 
     @Test
-    void getPerformanceDetail_returns200() throws Exception {
-        // given
-        Long performanceId = 1L;
+    void getPerformanceDetail_success() throws Exception {
+        PublicPerformanceDetailDTO response =
+                new PublicPerformanceDetailDTO(
+                        "10",
+                        "테스트 공연",
+                        "THEATER",
+                        "테스트 공연장",
+                        null,
+                        LocalDate.of(2026, 12, 1),
+                        LocalDate.of(2026, 12, 31),
+                        50000L,
+                        "ENABLED",
+                        null,
+                        "공연 설명",
+                        null,
+                        List.of(),
+                        4,
+                        "공연 취소 정책"
+                );
 
-        PerformanceResponseDTO response =
-                mock(PerformanceResponseDTO.class);
-
-        when(performanceService.getPublicDetail(performanceId))
+        when(performanceService.getPublicDetail(10L))
                 .thenReturn(response);
 
-        // when & then
-        mockMvc.perform(get(
-                        "/api/v1/performances/{performanceId}",
-                        performanceId
-                ).accept(MediaType.APPLICATION_JSON))
+        mockMvc.perform(get("/api/v1/performances/10")
+                        .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith(
-                        MediaType.APPLICATION_JSON
-                ));
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.performanceId").value("10"))
+                .andExpect(jsonPath("$.data.title").value("테스트 공연"))
+                .andExpect(jsonPath("$.data.minPrice").value(50000))
+                .andExpect(jsonPath("$.data.saleOpenings").isArray())
+                .andExpect(jsonPath("$.data.bookingLimitPerMember").value(4))
+                .andExpect(jsonPath("$.data.createdBy").doesNotExist());
 
-        verify(performanceService)
-                .getPublicDetail(performanceId);
+        verify(performanceService).getPublicDetail(10L);
     }
 
     @Test
-    void getPerformanceSessions_returns200() throws Exception {
-        // given
-        Long performanceId = 1L;
+    void getPerformanceSessions_empty() throws Exception {
+        when(performanceService.getPublicSessions(10L))
+                .thenReturn(new PerformanceSessionListDTO(List.of()));
 
-        when(performanceService.getPublicSessions(performanceId))
-                .thenReturn(List.of());
-
-        // when & then
-        mockMvc.perform(get(
-                        "/api/v1/performances/{performanceId}/sessions",
-                        performanceId
-                ).accept(MediaType.APPLICATION_JSON))
+        mockMvc.perform(get("/api/v1/performances/10/sessions")
+                        .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith(
-                        MediaType.APPLICATION_JSON
-                ))
-                .andExpect(jsonPath("$.data").isArray());
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items").isEmpty());
 
-        verify(performanceService)
-                .getPublicSessions(performanceId);
+        verify(performanceService).getPublicSessions(10L);
     }
 }
