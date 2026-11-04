@@ -6,6 +6,7 @@ import com.tikit.booking.dto.request.BookingCreateRequestDTO;
 import com.tikit.booking.dto.response.BookingResponseDTO;
 import com.tikit.booking.entity.BookingStatus;
 import com.tikit.booking.exception.BookingException;
+import com.tikit.booking.service.BookingHoldCancelService;
 import com.tikit.booking.service.BookingResult;
 import com.tikit.booking.service.BookingService;
 import com.tikit.common.ErrorCode;
@@ -55,6 +56,9 @@ class BookingControllerTest {
 
     @MockitoBean
     private BookingService bookingService;
+
+    @MockitoBean
+    private BookingHoldCancelService bookingHoldCancelService;
 
     @Test
     @DisplayName("토큰 없이 요청하면 401")
@@ -174,6 +178,59 @@ class BookingControllerTest {
                 """);
     }
 
+    @Test
+    @DisplayName("선점을 해제하면 200과 현재 예매 상태")
+    void cancelHold_success() throws Exception {
+        given(bookingHoldCancelService.cancelHold(MEMBER_ID, 100L))
+                .willReturn(response(BookingStatus.CANCELED));
+
+        mvc.perform(post("/api/v1/bookings/100/hold-cancellation")
+                        .header("Authorization", "Bearer " + accessToken())
+                        .header("Idempotency-Key", ADMISSION_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.bookingId").value(100))
+                .andExpect(jsonPath("$.data.status").value("CANCELED"));
+    }
+
+    @Test
+    @DisplayName("선점 해제는 토큰 없이 요청하면 401")
+    void cancelHold_withoutToken() throws Exception {
+        mvc.perform(post("/api/v1/bookings/100/hold-cancellation"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(ErrorCode.AUTHENTICATION_REQUIRED.name()));
+
+        then(bookingHoldCancelService).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("없거나 다른 회원의 예매면 404")
+    void cancelHold_notFound() throws Exception {
+        assertCancelHoldError(ErrorCode.RESOURCE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("결제 처리 중이면 409")
+    void cancelHold_paymentInProgress() throws Exception {
+        assertCancelHoldError(ErrorCode.PAYMENT_IN_PROGRESS);
+    }
+
+    @Test
+    @DisplayName("확정된 예매면 409")
+    void cancelHold_confirmed() throws Exception {
+        assertCancelHoldError(ErrorCode.BOOKING_ALREADY_CONFIRMED);
+    }
+
+    private void assertCancelHoldError(ErrorCode errorCode) throws Exception {
+        given(bookingHoldCancelService.cancelHold(MEMBER_ID, 100L))
+                .willThrow(new BookingException(errorCode));
+
+        mvc.perform(post("/api/v1/bookings/100/hold-cancellation")
+                        .header("Authorization", "Bearer " + accessToken()))
+                .andExpect(status().is(errorCode.getStatus().value()))
+                .andExpect(jsonPath("$.code").value(errorCode.name()));
+    }
+
     private void assertBadRequest(String body) throws Exception {
         mvc.perform(post("/api/v1/bookings")
                         .header("Authorization", "Bearer " + accessToken())
@@ -192,7 +249,11 @@ class BookingControllerTest {
     }
 
     private BookingResponseDTO response() {
-        return new BookingResponseDTO(100L, 10L, 5L, "테스트 공연", null, BookingStatus.PENDING_PAYMENT,
+        return response(BookingStatus.PENDING_PAYMENT);
+    }
+
+    private BookingResponseDTO response(BookingStatus status) {
+        return new BookingResponseDTO(100L, 10L, 5L, "테스트 공연", null, status,
                 List.of(), 250_000L, null, null, null, null, null, null, null);
     }
 }

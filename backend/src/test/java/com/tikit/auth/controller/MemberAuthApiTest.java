@@ -71,6 +71,54 @@ class MemberAuthApiTest {
     }
 
     @Test
+    @DisplayName("가입되지 않은 이메일은 로그인 없이 중복 확인하면 available true")
+    void emailAvailability_newEmail() throws Exception {
+        mvc.perform(get("/api/v1/auth/email-availability")
+                        .param("email", "new-email-test@example.com"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.available").value(true));
+    }
+
+    @Test
+    @DisplayName("대소문자만 다른 가입 이메일은 중복 확인하면 available false")
+    void emailAvailability_registeredEmail() throws Exception {
+        saveMember("taken-email-test@example.com", Role.MEMBER, MemberStatus.ACTIVE);
+
+        mvc.perform(get("/api/v1/auth/email-availability")
+                        .param("email", "Taken-Email-Test@example.com"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.available").value(false));
+    }
+
+    @Test
+    @DisplayName("탈퇴 회원의 이메일도 중복 확인하면 available false")
+    void emailAvailability_withdrawnMember() throws Exception {
+        saveMember("withdrawn-email-test@example.com", Role.MEMBER, MemberStatus.WITHDRAWN);
+
+        mvc.perform(get("/api/v1/auth/email-availability")
+                        .param("email", "withdrawn-email-test@example.com"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.available").value(false));
+    }
+
+    @Test
+    @DisplayName("이메일 형식이 아니면 중복 확인 400 VALIDATION_ERROR")
+    void emailAvailability_invalidEmail() throws Exception {
+        mvc.perform(get("/api/v1/auth/email-availability")
+                        .param("email", "not-an-email"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    @DisplayName("이메일 없이 중복 확인하면 400 VALIDATION_ERROR")
+    void emailAvailability_missingEmail() throws Exception {
+        mvc.perform(get("/api/v1/auth/email-availability"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
     @DisplayName("이미 가입된 이메일이면 회원가입 409 EMAIL_ALREADY_EXISTS")
     void signup_duplicateEmail() throws Exception {
         saveMember("duplicate-test@example.com", Role.MEMBER, MemberStatus.ACTIVE);

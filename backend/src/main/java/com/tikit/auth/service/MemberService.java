@@ -71,6 +71,12 @@ public class MemberService {
 
     }
 
+    // 탈퇴 회원의 이메일도 행이 남아 있으므로 사용 중으로 판단
+    @Transactional(readOnly = true)
+    public boolean isEmailAvailable(String email) {
+        return !memberRepository.existsByEmail(email.trim().toLowerCase(Locale.ROOT));
+    }
+
     @Transactional(readOnly = true)
     public JwtTokenResponseDTO login(MemberLoginRequestDTO dto) {
 
