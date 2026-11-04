@@ -6,10 +6,16 @@ import com.tikit.auth.entity.Role;
 import com.tikit.auth.repository.MemberRepository;
 import com.tikit.common.ErrorCode;
 import com.tikit.performance.dto.SeatTemplateListResponseDTO;
-import com.tikit.performance.entity.SeatTemplate;
-import com.tikit.performance.entity.TemplateSeat;
+import com.tikit.performance.dto.SessionConfigurationDTO;
+import com.tikit.performance.dto.request.SalesConfigurationSaveRequestDTO;
+import com.tikit.performance.dto.response.SalesConfigurationResponseDTO;
+import com.tikit.performance.entity.*;
 import com.tikit.performance.exception.PerformanceException;
+import com.tikit.performance.repository.PerformanceRepository;
+import com.tikit.performance.repository.SaleOpeningRepository;
 import com.tikit.performance.repository.SeatTemplateRepository;
+import com.tikit.seat.repository.PerformanceSessionRepository;
+import com.tikit.seat.repository.SessionGradePriceRepository;
 import com.tikit.seat.repository.TemplateSeatRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -20,6 +26,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -38,13 +47,22 @@ class SalesConfigurationServiceTest {
     SeatTemplateRepository seatTemplateRepository;
     @Mock
     TemplateSeatRepository templateSeatRepository;
+    @Mock
+    PerformanceRepository performanceRepository;
+    @Mock
+    PerformanceSessionRepository performanceSessionRepository;
+    @Mock
+    SaleOpeningRepository saleOpeningRepository;
+    @Mock
+    SessionGradePriceRepository sessionGradePriceRepository;
 
     SalesConfigurationService service;
 
     @BeforeEach
     void setUp() {
         PerformanceAccessChecker checker = new PerformanceAccessChecker(memberRepository);
-        service = new SalesConfigurationService(checker, seatTemplateRepository, templateSeatRepository);
+        service = new SalesConfigurationService(checker, seatTemplateRepository, templateSeatRepository, performanceRepository,
+                performanceSessionRepository, saleOpeningRepository, sessionGradePriceRepository);
     }
 
     private Member member(Role role) {
@@ -71,6 +89,38 @@ class SalesConfigurationServiceTest {
         ReflectionTestUtils.setField(s, "x", 0);
         ReflectionTestUtils.setField(s, "y", 0);
         return s;
+    }
+
+    private Performance performance(Member manager) {
+        Genre genre = Genre.create("THEATER", "테스트연극", null, 1, true);
+        Performance p = Performance.createManual(manager, genre, "제목", "장소", null, "소개", null,
+                LocalDate.of(2026, 12, 1), LocalDate.of(2026, 12, 31), null);
+        ReflectionTestUtils.setField(p, "id", 10L);
+        ReflectionTestUtils.setField(p, "version", 3L);
+        return p;
+    }
+
+    private PerformanceSession session(Performance p, Long id, Long openingId, Instant startsAt) {
+        PerformanceSession s = PerformanceSession.create(p, openingId, 1L, startsAt,
+                startsAt.minusSeconds(3600), startsAt.minusSeconds(86400), "v1", "취소 규정");
+        ReflectionTestUtils.setField(s, "id", id);
+        return s;
+    }
+
+    private SaleOpening opening(Performance p, Long id, Instant opensAt) {
+        SaleOpening o = SaleOpening.create(p, opensAt);
+        ReflectionTestUtils.setField(o, "id", id);
+        return o;
+    }
+
+    private SalesConfigurationSaveRequestDTO saveRequest(Long expectedVersion) {
+        return new SalesConfigurationSaveRequestDTO(expectedVersion, 4, List.of());
+    }
+
+    private void assertFails(Runnable action, ErrorCode expected) {
+        assertThatThrownBy(action::run)
+                .isInstanceOf(PerformanceException.class)
+                .extracting("errorCode").isEqualTo(expected);
     }
 
     @Test
@@ -111,5 +161,112 @@ class SalesConfigurationServiceTest {
         assertThatThrownBy(() -> service.listSeatTemplate(1L))
                 .isInstanceOf(PerformanceException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.ACCESS_DENIED);
+    }
+
+    @Test
+    @DisplayName("회차의 판매 시작 시각과 등급별 가격이 함께 조회된다")
+    void get_success() {
+        Member manager = member(Role.MANAGER);
+        Performance performance = performance(manager);
+        Instant startsAt = Instant.parse("2026-12-10T05:00:00Z");              // 한국 시간 14:00
+        PerformanceSession session = session(performance, 100L, 5L, startsAt);
+        SaleOpening opening = opening(performance, 5L, Instant.parse("2026-11-20T01:00:00Z"));
+        SessionGradePrice r = SessionGradePrice.create(session, "R", 50000L);  // session의 id를 먼저 넣은 뒤에 만들어야 해요
+        SessionGradePrice s = SessionGradePrice.create(session, "S", 30000L);
+
+        when(memberRepository.findById(1L)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findById(10L)).thenReturn(Optional.of(performance));
+        when(performanceSessionRepository.findByPerformance(10L)).thenReturn(List.of(session));
+        when(saleOpeningRepository.findAllById(List.of(5L))).thenReturn(List.of(opening));
+        when(sessionGradePriceRepository.findBySessions(List.of(100L))).thenReturn(List.of(s, r));
+
+        SalesConfigurationResponseDTO result = service.getSalesConfiguration(1L, 10L);
+
+        assertThat(result.version()).isEqualTo(3L);
+        assertThat(result.bookingLimitPerMember()).isEqualTo(4);               // 기본값
+        SessionConfigurationDTO dto = result.sessions().get(0);
+        assertThat(dto.sessionId()).isEqualTo(100L);
+        assertThat(dto.startsAt()).isEqualTo(OffsetDateTime.parse("2026-12-10T14:00:00+09:00"));
+        assertThat(dto.salesOpenAt()).isEqualTo(OffsetDateTime.parse("2026-11-20T10:00:00+09:00"));
+        assertThat(dto.gradePrices()).extracting("grade").containsExactly("R", "S");   // 등급 순 정렬
+    }
+
+    @Test
+    @DisplayName("회차가 없는 공연은 빈 회차 목록을 돌려준다")
+    void get_noSessions() {
+        Member manager = member(Role.MANAGER);
+        when(memberRepository.findById(1L)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findById(10L)).thenReturn(Optional.of(performance(manager)));
+        when(performanceSessionRepository.findByPerformance(10L)).thenReturn(List.of());
+
+        assertThat(service.getSalesConfiguration(1L, 10L).sessions()).isEmpty();
+        verify(saleOpeningRepository, never()).findAllById(any());
+    }
+
+    @Test
+    @DisplayName("없는 공연이면 RESOURCE_NOT_FOUND")
+    void get_performanceNotFound() {
+        when(memberRepository.findById(1L)).thenReturn(Optional.of(member(Role.MANAGER)));
+        when(performanceRepository.findById(10L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getSalesConfiguration(1L, 10L))
+                .isInstanceOf(PerformanceException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("일반 회원은 판매 설정을 조회할 수 없다")
+    void get_memberDenied() {
+        when(memberRepository.findById(1L)).thenReturn(Optional.of(member(Role.MEMBER)));
+
+        assertThatThrownBy(() -> service.getSalesConfiguration(1L, 10L))
+                .isInstanceOf(PerformanceException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.ACCESS_DENIED);
+    }
+
+    @Test
+    @DisplayName("ADMIN은 판매설정을 저장할 수 없다")
+    void save_adminDenied(){
+        when(memberRepository.findById(1L)).thenReturn(Optional.of(member(Role.ADMIN)));
+
+        assertFails(()-> service.saveSalesConfiguration(1L, 10L, saveRequest(3L)),
+                ErrorCode.ACCESS_DENIED);
+        verify(performanceRepository, never()).findForSave(any());
+    }
+
+    @Test
+    @DisplayName("없는 공연이면 RESOURCE_NOT_FOUND")
+    void save_performanceNotFound(){
+        when(memberRepository.findById(1L)).thenReturn(Optional.of(member(Role.MANAGER)));
+        when(performanceRepository.findForSave(10L)).thenReturn(Optional.empty());
+
+        assertFails(()->service.saveSalesConfiguration(1L, 10L, saveRequest(3L)),
+                ErrorCode.RESOURCE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("게시된 공연은 판매 설정을 저장 할 수 없다")
+    void save_publishedLocked(){
+        Member manager = member(Role.MANAGER);
+        Performance performance = performance(manager);
+        ReflectionTestUtils.setField(performance, "publicationStatus", PublicationStatus.PUBLISHED);
+        when(memberRepository.findById(1L)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findForSave(10L)).thenReturn(Optional.of(performance));
+
+        assertFails(()-> service.saveSalesConfiguration(1L, 10L, saveRequest(3L)),
+                ErrorCode.PERFORMANCE_EDIT_LOCKED);
+        verify(performanceSessionRepository, never()).findByPerformance(any());
+    }
+
+    @Test
+    @DisplayName("expectedVersion이 공연버전과 다르면 VERSION_CONFLICT")
+    void save_versionConflict(){
+        Member manager = member(Role.MANAGER);
+        when(memberRepository.findById(1L)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findForSave(10L)).thenReturn(Optional.of(performance(manager)));
+
+        assertFails(() -> service.saveSalesConfiguration(1L, 10L, saveRequest(5L)),
+                ErrorCode.VERSION_CONFLICT);
+        verify(performanceSessionRepository, never()).findByPerformance(any());
     }
 }

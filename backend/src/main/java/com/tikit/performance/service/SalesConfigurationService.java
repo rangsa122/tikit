@@ -2,6 +2,7 @@ package com.tikit.performance.service;
 
 import com.tikit.common.ErrorCode;
 import com.tikit.performance.dto.*;
+import com.tikit.performance.dto.request.SalesConfigurationSaveRequestDTO;
 import com.tikit.performance.dto.response.SalesConfigurationResponseDTO;
 import com.tikit.performance.entity.*;
 import com.tikit.performance.exception.PerformanceException;
@@ -106,6 +107,24 @@ public class SalesConfigurationService {
 
         return new SalesConfigurationResponseDTO(performance.getId(), performance.getVersion(),
                 (int)performance.getBookingLimitPerMember(), sessionDtos);
+    }
+
+    @Transactional
+    public SalesConfigurationResponseDTO saveSalesConfiguration(Long memberId, Long performanceId,
+                                                                SalesConfigurationSaveRequestDTO request) {
+        accessChecker.requireManager(memberId);
+
+        Performance performance = performanceRepository.findForSave(performanceId)
+                .orElseThrow(() -> new PerformanceException(ErrorCode.RESOURCE_NOT_FOUND));
+
+        if (performance.getPublicationStatus() != PublicationStatus.DRAFT) {
+            throw new PerformanceException(ErrorCode.PERFORMANCE_EDIT_LOCKED);
+        }
+        if (!performance.getVersion().equals(request.expectedVersion())) {
+            throw new PerformanceException(ErrorCode.VERSION_CONFLICT);
+        }
+
+        return buildResponse(performance, performanceSessionRepository.findByPerformance(performanceId));
     }
 
 }

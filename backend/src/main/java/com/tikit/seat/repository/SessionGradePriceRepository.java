@@ -3,6 +3,7 @@ package com.tikit.seat.repository;
 import com.tikit.performance.entity.SessionGradePrice;
 import com.tikit.performance.entity.SessionGradePriceId;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -16,4 +17,8 @@ public interface SessionGradePriceRepository
 
     @Query("select p from SessionGradePrice p where p.id.sessionId in :sessionIds")
     List<SessionGradePrice> findBySessions(@Param("sessionIds") Collection<Long> sessionIds);
+
+    @Modifying
+    @Query("delete from SessionGradePrice p where p.id.sessionId in :sessionIds")
+    void deleteBySessions(@Param("sessionIds") Collection<Long> sessionIds);
 }
