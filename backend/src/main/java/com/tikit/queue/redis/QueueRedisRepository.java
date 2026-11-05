@@ -93,7 +93,7 @@ public class QueueRedisRepository {
                 end
             end
 
-            -- id, status, position, admissionId, admissionExpiresAt, memberId, sessionId
+            -- id, status, position, admissionId, admissionExpiresAt, memberId, sessionId, waitingCount
             local function view(sid, id)
                 local f = redis.call('HMGET', ek(id), 'status', 'admissionId', 'admissionExpiresAt', 'memberId')
                 local position = ''
@@ -103,7 +103,8 @@ public class QueueRedisRepository {
                 elseif f[1] == 'ADMITTED' then
                     position = '0'
                 end
-                return {id, f[1], position, f[2] or '', f[3] or '', f[4], sid}
+                local waitingCount = redis.call('ZCARD', qk(sid, 'waiting'))
+                return {id, f[1], position, f[2] or '', f[3] or '', f[4], sid, tostring(waitingCount)}
             end
 
             local function uuidArgs(from)
