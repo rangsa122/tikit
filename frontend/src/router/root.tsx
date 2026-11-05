@@ -8,6 +8,7 @@ import MemberProfilePage from '../pages/mypage/MemberProfilePage'
 import CategoryPage from '../pages/CategoryPage'
 import PerformanceDetailPage from '../pages/PerformanceDetailPage'
 import PaymentPage from '../pages/payment/PaymentPage'
+import QueuePage from '../pages/queue/QueuePage'
 
 const router = createBrowserRouter([
   {
@@ -23,6 +24,8 @@ const router = createBrowserRouter([
       {path: '/bookings/:bookingId/payment', element: <PaymentPage />},
     ],
   },
+  // 대기열은 피그마 Header/Minimal만 쓰므로 사이트 메뉴 없이 따로 둠
+  {path: '/sessions/:sessionId/queue', element: <QueuePage />},
 ])
 
 export default router

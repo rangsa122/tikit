@@ -1,6 +1,7 @@
 
 import {useState} from 'react'
-import {Link, useParams} from 'react-router'
+import {Link, useNavigate, useParams} from 'react-router'
+import type {QueuePageState} from './queue/QueuePage'
 import {mockPerformances} from '../mocks/performances'
 import SessionSelector from '../components/performance/SessionSelector'
 import type {PerformanceSession} from '../components/performance/SessionSelector'
@@ -74,6 +75,7 @@ function createMockSessions(period: string): PerformanceSession[] {
 
 export default function PerformanceDetailPage() {
   const {performanceId} = useParams()
+  const navigate = useNavigate()
 
   const [selectedSession, setSelectedSession] =
     useState<PerformanceSession | null>(null)
@@ -274,7 +276,20 @@ export default function PerformanceDetailPage() {
             <button
               type="button"
               disabled={!selectedSession}
-              onClick={() => setBookingNotice(true)}
+              onClick={() => {
+                // 목업 회차는 실제 회차 ID가 아니라서 대기열로 보내지 않음
+                if (!USE_REAL_API || !selectedSession) {
+                  setBookingNotice(true)
+                  return
+                }
+                const queueState: QueuePageState = {
+                  performanceId,
+                  performanceTitle: performance.title,
+                  sessionStartsAt: `${selectedSession.date}T${selectedSession.time}:00+09:00`,
+                  venue: performance.venue,
+                }
+                navigate(`/sessions/${selectedSession.id}/queue`, {state: queueState})
+              }}
               className="mt-5 w-full rounded-xl bg-blue-600 px-5 py-4 font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
             >
               예매하기
