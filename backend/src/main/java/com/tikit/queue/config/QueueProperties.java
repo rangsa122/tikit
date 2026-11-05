@@ -20,7 +20,7 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "tikit.queue")
 public record QueueProperties(
         @DefaultValue("100") int capacity,
-        @DefaultValue("10m") Duration admissionTtl,
+        @DefaultValue("5m") Duration admissionTtl,
         @DefaultValue("2m") Duration waitingTimeout,
         @DefaultValue("2s") Duration pollInterval,
         @DefaultValue("20") int maxAdmitPerCall,

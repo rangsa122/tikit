@@ -38,7 +38,7 @@ class QueueRedisRepositoryIntegrationTest {
 
     private static final Instant NOW = Instant.parse("2026-11-20T05:00:00Z");
     private static final QueueLimits LIMITS = new QueueLimits(
-            2, Duration.ofMinutes(10), Duration.ofSeconds(30), 20, Duration.ofMinutes(10));
+            2, Duration.ofMinutes(5), Duration.ofSeconds(30), 20, Duration.ofMinutes(10));
 
     @Autowired
     private QueueRedisRepository repository;
@@ -78,7 +78,7 @@ class QueueRedisRepositoryIntegrationTest {
         assertThat(first.status()).isEqualTo(QueueEntryStatus.ADMITTED);
         assertThat(first.position()).isZero();
         assertThat(first.admissionId()).isNotNull();
-        assertThat(first.admissionExpiresAt()).isEqualTo(NOW.plus(Duration.ofMinutes(10)));
+        assertThat(first.admissionExpiresAt()).isEqualTo(NOW.plus(Duration.ofMinutes(5)));
         assertThat(second.status()).isEqualTo(QueueEntryStatus.ADMITTED);
         assertThat(third.status()).isEqualTo(QueueEntryStatus.WAITING);
         assertThat(third.position()).isEqualTo(1);
@@ -144,7 +144,7 @@ class QueueRedisRepositoryIntegrationTest {
         QueueEntrySnapshot first = join(1L, NOW);
         join(2L, NOW);
         QueueEntrySnapshot third = join(3L, NOW);
-        Instant later = NOW.plus(Duration.ofMinutes(10)).plusSeconds(1);
+        Instant later = NOW.plus(Duration.ofMinutes(5)).plusSeconds(1);
 
         // 대기자는 계속 조회하고 있었다고 침
         find(third, 3L, later.minusSeconds(5));

@@ -10,7 +10,7 @@ import type {SessionOpening} from '../../hooks/useQueueEntry'
 import {formatDateTime} from '../../utils/bookingFormat'
 
 // 백엔드 입장 권한 유지 시간(tikit.queue.admission-ttl)과 맞춤
-const ADMISSION_MINUTES = 10
+const ADMISSION_MINUTES = 5
 // 입장 순서가 되면 이 초만큼 보여 준 뒤 좌석 선택으로 이동
 const ENTER_DELAY_SECONDS = 3
 

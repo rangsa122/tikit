@@ -7,7 +7,7 @@ import type {SessionOpening} from '../hooks/useQueueEntry'
  * 예매 오픈 8초 전에서 시작 → 오픈 후 줄을 서면 37번부터 몇 명씩 줄다가 0이 되면 입장 허용
  */
 
-const ADMISSION_MINUTES = 10
+const ADMISSION_MINUTES = 5
 const OPENS_IN_MS = 8000
 let mockPosition = 37
 let mockWaitingCount = 9_000

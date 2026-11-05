@@ -37,7 +37,7 @@ class QueueServiceTest {
     private static final UUID ENTRY_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final UUID ADMISSION_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private static final QueueProperties PROPERTIES = new QueueProperties(
-            100, Duration.ofMinutes(10), Duration.ofSeconds(30), Duration.ofSeconds(2), 20, Duration.ofHours(6), true);
+            100, Duration.ofMinutes(5), Duration.ofSeconds(30), Duration.ofSeconds(2), 20, Duration.ofHours(6), true);
 
     private QueueRedisRepository queueRedisRepository;
     private QueueSaleValidator queueSaleValidator;
@@ -101,7 +101,7 @@ class QueueServiceTest {
         assertThat(result.created()).isFalse();
         assertThat(result.entry().position()).isZero();
         assertThat(result.entry().admissionId()).isEqualTo(ADMISSION_ID.toString());
-        assertThat(result.entry().admissionExpiresAt().toInstant()).isEqualTo(NOW.plus(Duration.ofMinutes(10)));
+        assertThat(result.entry().admissionExpiresAt().toInstant()).isEqualTo(NOW.plus(Duration.ofMinutes(5)));
         assertThat(result.entry().pollAfterSeconds()).isEqualTo(5);
     }
 
@@ -168,7 +168,7 @@ class QueueServiceTest {
 
     private QueueEntrySnapshot admitted(boolean created) {
         return new QueueEntrySnapshot(ENTRY_ID, SESSION_ID, MEMBER_ID, QueueEntryStatus.ADMITTED,
-                0, 40, ADMISSION_ID, NOW.plus(Duration.ofMinutes(10)), created);
+                0, 40, ADMISSION_ID, NOW.plus(Duration.ofMinutes(5)), created);
     }
 
     private void assertRejected(ThrowingCallable call, ErrorCode expected) {

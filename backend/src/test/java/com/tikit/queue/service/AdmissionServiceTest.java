@@ -98,7 +98,7 @@ class AdmissionServiceTest {
 
     private AdmissionService service(boolean required) {
         return new AdmissionService(queueRedisRepository, new QueueProperties(
-                100, Duration.ofMinutes(10), Duration.ofSeconds(30), Duration.ofSeconds(2), 20,
+                100, Duration.ofMinutes(5), Duration.ofSeconds(30), Duration.ofSeconds(2), 20,
                 Duration.ofHours(6), required));
     }
 
