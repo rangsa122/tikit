@@ -1,3 +1,4 @@
+
 package com.tikit.performance.service;
 
 import com.tikit.auth.entity.Member;
@@ -5,16 +6,15 @@ import com.tikit.auth.entity.MemberStatus;
 import com.tikit.auth.entity.Role;
 import com.tikit.auth.repository.MemberRepository;
 import com.tikit.common.ErrorCode;
-import com.tikit.performance.dto.PerformanceCreateRequestDTO;
-import com.tikit.performance.dto.PerformanceResponseDTO;
-import com.tikit.performance.dto.PerformanceUpdateRequestDTO;
-import com.tikit.performance.entity.Genre;
-import com.tikit.performance.entity.Performance;
-import com.tikit.performance.entity.PerformanceSource;
-import com.tikit.performance.entity.PublicationStatus;
+import com.tikit.performance.dto.*;
+import com.tikit.performance.entity.*;
 import com.tikit.performance.exception.PerformanceException;
 import com.tikit.performance.repository.GenreRepository;
 import com.tikit.performance.repository.PerformanceRepository;
+import com.tikit.performance.repository.SaleOpeningRepository;
+import com.tikit.seat.repository.PerformanceSessionRepository;
+import com.tikit.seat.repository.SessionGradePriceRepository;
+import com.tikit.seat.repository.SessionSeatRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -22,143 +22,515 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class PerformanceService {
 
-    private static final int MAX_PAGE_SIZE = 50;
+    private static final ZoneId RESPONSE_ZONE = ZoneId.of("Asia/Seoul");
 
     private final PerformanceRepository performanceRepository;
     private final GenreRepository genreRepository;
     private final MemberRepository memberRepository;
+    private final PerformanceSessionRepository performanceSessionRepository;
+    private final SaleOpeningRepository saleOpeningRepository;
+    private final SessionGradePriceRepository sessionGradePriceRepository;
+    private final SessionSeatRepository sessionSeatRepository;
 
+    /**
+     * 관리자용 공연 등록
+     */
     @Transactional
-    public PerformanceResponseDTO create(Long memberId, PerformanceCreateRequestDTO request){
+    public PerformanceResponseDTO create(
+            Long memberId,
+            PerformanceCreateRequestDTO request
+    ) {
         Member manager = getManager(memberId);
+
         validateSource(request);
         validateDates(request.getStartDate(), request.getEndDate());
+
         Genre genre = findActiveGenre(request.getGenreCode());
 
         Performance performance;
-        if(request.getSource() == PerformanceSource.MANUAL){
-            performance = Performance.createManual(manager, genre, request.getTitle(),
-                    request.getVenueName(), request.getOrganizerName(), request.getDescription(),
-                    request.getPosterUrl(), request.getStartDate(), request.getEndDate(),
-                    request.getBookingLimitPerMember());
-        }else {
+
+        if (request.getSource() == PerformanceSource.MANUAL) {
+            performance = Performance.createManual(
+                    manager,
+                    genre,
+                    request.getTitle(),
+                    request.getVenueName(),
+                    request.getOrganizerName(),
+                    request.getDescription(),
+                    request.getPosterUrl(),
+                    request.getStartDate(),
+                    request.getEndDate(),
+                    request.getBookingLimitPerMember()
+            );
+        } else {
             if (performanceRepository.existsByKopisId(request.getKopisId())) {
-                throw new PerformanceException(ErrorCode.KOPIS_ALREADY_REGISTERED);
+                throw new PerformanceException(
+                        ErrorCode.KOPIS_ALREADY_REGISTERED
+                );
             }
-            performance = Performance.createFromKopis(manager, genre, request.getKopisId(),
-                    request.getTitle(), request.getVenueName(), request.getOrganizerName(),
-                    request.getDescription(), request.getPosterUrl(), request.getStartDate(),
-                    request.getEndDate(), request.getBookingLimitPerMember());
+
+            performance = Performance.createFromKopis(
+                    manager,
+                    genre,
+                    request.getKopisId(),
+                    request.getTitle(),
+                    request.getVenueName(),
+                    request.getOrganizerName(),
+                    request.getDescription(),
+                    request.getPosterUrl(),
+                    request.getStartDate(),
+                    request.getEndDate(),
+                    request.getBookingLimitPerMember()
+            );
         }
+
         performanceRepository.save(performance);
+
         return PerformanceResponseDTO.from(performance);
     }
 
-    public Page<PerformanceResponseDTO> list(Long memberId, PublicationStatus status,
-                                             int page, int size) {
+    /**
+     * 관리자용 공연 목록 조회
+     */
+    public Page<PerformanceResponseDTO> list(
+            Long memberId,
+            PublicationStatus status,
+            int page,
+            int size
+    ) {
         getViewer(memberId);
+
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), 100);
+
         return performanceRepository
-                .findAllByStatus(status, PageRequest.of(safePage, safeSize))
+                .findAllByStatus(
+                        status,
+                        PageRequest.of(safePage, safeSize)
+                )
                 .map(PerformanceResponseDTO::from);
     }
 
-    public PerformanceResponseDTO get(Long memberId, Long performanceId) {
+    /**
+     * 관리자용 공연 상세 조회
+     */
+    public PerformanceResponseDTO get(
+            Long memberId,
+            Long performanceId
+    ) {
         getViewer(memberId);
-        return PerformanceResponseDTO.from(findPerformance(performanceId));
+
+        return PerformanceResponseDTO.from(
+                findPerformance(performanceId)
+        );
     }
 
+    /**
+     * 일반 사용자용 공개 공연 상세 조회
+     */
+    public PublicPerformanceDetailDTO getPublicDetail(Long performanceId) {
+        Performance performance = findPublicPerformance(performanceId);
+
+        List<PerformanceSession> sessions =
+                performanceSessionRepository
+                        .findByPerformance_IdOrderByStartsAtAsc(performanceId);
+
+        List<SaleOpening> openings =
+                saleOpeningRepository
+                        .findByPerformance_IdOrderByOpensAtAsc(performanceId);
+
+        List<Long> sessionIds = sessions.stream()
+                .map(PerformanceSession::getId)
+                .toList();
+
+        List<SessionGradePrice> prices = sessionIds.isEmpty()
+                ? List.of()
+                : sessionGradePriceRepository.findBySessionIdIn(sessionIds);
+
+        Long minPrice = prices.stream()
+                .map(SessionGradePrice::getPrice)
+                .min(Long::compareTo)
+                .orElseThrow(() ->
+                        new PerformanceException(ErrorCode.RESOURCE_NOT_FOUND)
+                );
+
+        Instant now = Instant.now();
+
+        OffsetDateTime nextSalesOpenAt = openings.stream()
+                .map(SaleOpening::getOpensAt)
+                .filter(time -> time.isAfter(now))
+                .min(Instant::compareTo)
+                .map(this::toOffsetDateTime)
+                .orElse(null);
+
+        List<PublicPerformanceDetailDTO.SaleOpeningItem> saleOpeningItems =
+                openings.stream()
+                        .map(opening ->
+                                new PublicPerformanceDetailDTO.SaleOpeningItem(
+                                        opening.getId().toString(),
+                                        toOffsetDateTime(opening.getOpensAt()),
+                                        opening.getNotificationProcessedAt() != null
+                                )
+                        )
+                        .toList();
+
+        String cancellationPolicy = sessions.stream()
+                .map(PerformanceSession::getCancellationPolicy)
+                .filter(Objects::nonNull)
+                .distinct()
+                .reduce((first, second) -> {
+                    throw new IllegalStateException(
+                            "회차별 취소 정책이 서로 다릅니다."
+                    );
+                })
+                .orElseThrow(() ->
+                        new PerformanceException(ErrorCode.RESOURCE_NOT_FOUND)
+                );
+
+        return new PublicPerformanceDetailDTO(
+                performance.getId().toString(),
+                performance.getTitle(),
+                performance.getGenre().getCode(),
+                performance.getVenueName(),
+                performance.getPosterUrl(),
+                performance.getStartDate(),
+                performance.getEndDate(),
+                minPrice,
+                performance.getSalesStatus().name(),
+                nextSalesOpenAt,
+                performance.getDescription(),
+                performance.getKopisId(),
+                saleOpeningItems,
+                (int) performance.getBookingLimitPerMember(),
+                cancellationPolicy
+        );
+    }
+
+    /**
+     * 일반 사용자용 공개 공연 회차 목록 조회
+     */
+    public PerformanceSessionListDTO getPublicSessions(Long performanceId) {
+        Performance performance = findPublicPerformance(performanceId);
+
+        List<PerformanceSession> sessions =
+                performanceSessionRepository
+                        .findByPerformance_IdOrderByStartsAtAsc(performanceId);
+
+        if (sessions.isEmpty()) {
+            return new PerformanceSessionListDTO(List.of());
+        }
+
+        List<SaleOpening> openings =
+                saleOpeningRepository
+                        .findByPerformance_IdOrderByOpensAtAsc(performanceId);
+
+        Map<Long, SaleOpening> openingMap = openings.stream()
+                .collect(Collectors.toMap(
+                        SaleOpening::getId,
+                        Function.identity()
+                ));
+
+        List<Long> sessionIds = sessions.stream()
+                .map(PerformanceSession::getId)
+                .toList();
+
+        Map<Long, List<SessionGradePrice>> priceMap =
+                sessionGradePriceRepository
+                        .findBySessionIdIn(sessionIds)
+                        .stream()
+                        .collect(Collectors.groupingBy(
+                                price -> price.getId().getSessionId()
+                        ));
+
+        Instant now = Instant.now();
+        OffsetDateTime serverTime = toOffsetDateTime(now);
+
+        List<PerformanceSessionResponseDTO> items = sessions.stream()
+                .map(session -> {
+                    SaleOpening opening = openingMap.get(session.getOpeningId());
+
+                    if (opening == null) {
+                        throw new PerformanceException(
+                                ErrorCode.RESOURCE_NOT_FOUND
+                        );
+                    }
+
+                    List<PerformanceSessionResponseDTO.GradePrice> gradePrices =
+                            priceMap.getOrDefault(
+                                            session.getId(),
+                                            List.of()
+                                    )
+                                    .stream()
+                                    .sorted(Comparator.comparing(
+                                            price -> price.getId().getGrade()
+                                    ))
+                                    .map(price ->
+                                            new PerformanceSessionResponseDTO.GradePrice(
+                                                    price.getId().getGrade(),
+                                                    price.getPrice()
+                                            )
+                                    )
+                                    .toList();
+
+                    String bookingAvailability =
+                            calculateBookingAvailability(
+                                    performance,
+                                    session,
+                                    opening,
+                                    now
+                            );
+
+                    return new PerformanceSessionResponseDTO(
+                            session.getId().toString(),
+                            performance.getId().toString(),
+                            toOffsetDateTime(session.getStartsAt()),
+                            toOffsetDateTime(opening.getOpensAt()),
+                            toOffsetDateTime(session.getSalesCloseAt()),
+                            toOffsetDateTime(session.getCancellationDeadline()),
+                            bookingAvailability,
+                            gradePrices,
+                            serverTime
+                    );
+                })
+                .toList();
+
+        return new PerformanceSessionListDTO(items);
+    }
+
+    /**
+     * 예매 가능 상태 계산
+     */
+    private String calculateBookingAvailability(
+            Performance performance,
+            PerformanceSession session,
+            SaleOpening opening,
+            Instant now
+    ) {
+        if (performance.getSalesStatus() == SalesStatus.STOPPED) {
+            return "STOPPED";
+        }
+
+        if (now.isBefore(opening.getOpensAt())) {
+            return "NOT_OPEN";
+        }
+
+        if (!now.isBefore(session.getSalesCloseAt())) {
+            return "CLOSED";
+        }
+
+        long available = sessionSeatRepository
+                .countBySessionIdAndStatus(
+                        session.getId(),
+                        SeatStatus.AVAILABLE
+                );
+
+        if (available > 0) {
+            return "OPEN";
+        }
+
+        long held = sessionSeatRepository
+                .countBySessionIdAndStatus(
+                        session.getId(),
+                        SeatStatus.HELD
+                );
+
+        if (held > 0) {
+            return "OPEN";
+        }
+
+        long sold = sessionSeatRepository
+                .countBySessionIdAndStatus(
+                        session.getId(),
+                        SeatStatus.SOLD
+                );
+
+        if (sold > 0) {
+            return "SOLD_OUT";
+        }
+
+        throw new PerformanceException(ErrorCode.RESOURCE_NOT_FOUND);
+    }
+
+    /**
+     * 관리자용 공연 수정
+     */
     @Transactional
-    public PerformanceResponseDTO update(Long memberId, Long performanceId,
-                                         PerformanceUpdateRequestDTO request) {
+    public PerformanceResponseDTO update(
+            Long memberId,
+            Long performanceId,
+            PerformanceUpdateRequestDTO request
+    ) {
         getManager(memberId);
+
         Performance performance = findPerformance(performanceId);
 
         if (performance.getPublicationStatus() != PublicationStatus.DRAFT) {
-            throw new PerformanceException(ErrorCode.PERFORMANCE_EDIT_LOCKED);
+            throw new PerformanceException(
+                    ErrorCode.PERFORMANCE_EDIT_LOCKED
+            );
         }
+
         if (!performance.getVersion().equals(request.getExpectedVersion())) {
-            throw new PerformanceException(ErrorCode.VERSION_CONFLICT);
+            throw new PerformanceException(
+                    ErrorCode.VERSION_CONFLICT
+            );
         }
 
         LocalDate newStart = request.getStartDate() != null
-                ? request.getStartDate() : performance.getStartDate();
+                ? request.getStartDate()
+                : performance.getStartDate();
+
         LocalDate newEnd = request.getEndDate() != null
-                ? request.getEndDate() : performance.getEndDate();
+                ? request.getEndDate()
+                : performance.getEndDate();
+
         validateDates(newStart, newEnd);
 
         Genre genre = request.getGenreCode() == null
-                ? null : findActiveGenre(request.getGenreCode());
+                ? null
+                : findActiveGenre(request.getGenreCode());
 
-        performance.update(genre, request.getTitle(), request.getVenueName(),
-                request.getOrganizerName(), request.getDescription(), request.getPosterUrl(),
-                request.getStartDate(), request.getEndDate(), request.getBookingLimitPerMember());
+        performance.update(
+                genre,
+                request.getTitle(),
+                request.getVenueName(),
+                request.getOrganizerName(),
+                request.getDescription(),
+                request.getPosterUrl(),
+                request.getStartDate(),
+                request.getEndDate(),
+                request.getBookingLimitPerMember()
+        );
 
-        performanceRepository.flush();   // 새 version, updatedAt이 응답에 반영되도록
+        performanceRepository.flush();
+
         return PerformanceResponseDTO.from(performance);
     }
 
+    /**
+     * 공개 공연 조회 공통 메서드
+     */
+    private Performance findPublicPerformance(Long performanceId) {
+        return performanceRepository
+                .findPublicDetail(
+                        performanceId,
+                        PublicationStatus.PUBLISHED,
+                        Visibility.PUBLIC
+                )
+                .orElseThrow(() ->
+                        new PerformanceException(
+                                ErrorCode.RESOURCE_NOT_FOUND
+                        )
+                );
+    }
 
-
-
-    private Member getManager(Long memberId){
+    /**
+     * 관리자 권한 확인
+     */
+    private Member getManager(Long memberId) {
         Member member = memberRepository.findById(memberId)
-                .orElseThrow(()->new PerformanceException(ErrorCode.ACCESS_DENIED));
-        if(member.getStatus() != MemberStatus.ACTIVE){
+                .orElseThrow(() ->
+                        new PerformanceException(ErrorCode.ACCESS_DENIED)
+                );
+
+        if (member.getStatus() != MemberStatus.ACTIVE) {
             throw new PerformanceException(ErrorCode.ACCOUNT_RESTRICTED);
         }
-        if(member.getRole() != Role.MANAGER){
+
+        if (member.getRole() != Role.MANAGER) {
             throw new PerformanceException(ErrorCode.ACCESS_DENIED);
         }
+
         return member;
     }
 
-    private Member getViewer(Long memberId){
+    /**
+     * 관리자 또는 운영자 권한 확인
+     */
+    private Member getViewer(Long memberId) {
         Member member = memberRepository.findById(memberId)
-                .orElseThrow(()->new PerformanceException(ErrorCode.ACCESS_DENIED));
-        if(member.getStatus() != MemberStatus.ACTIVE){
+                .orElseThrow(() ->
+                        new PerformanceException(ErrorCode.ACCESS_DENIED)
+                );
+
+        if (member.getStatus() != MemberStatus.ACTIVE) {
             throw new PerformanceException(ErrorCode.ACCOUNT_RESTRICTED);
         }
-        if(member.getRole() != Role.MANAGER && member.getRole() != Role.ADMIN){
+
+        if (member.getRole() != Role.MANAGER
+                && member.getRole() != Role.ADMIN) {
             throw new PerformanceException(ErrorCode.ACCESS_DENIED);
         }
+
         return member;
     }
 
-    private Performance findPerformance(Long id){
+    /**
+     * 공연 상세 조회
+     */
+    private Performance findPerformance(Long id) {
         return performanceRepository.findDetail(id)
-                .orElseThrow(()->new PerformanceException(ErrorCode.RESOURCE_NOT_FOUND));
+                .orElseThrow(() ->
+                        new PerformanceException(ErrorCode.RESOURCE_NOT_FOUND)
+                );
     }
 
+    /**
+     * 활성화된 장르 조회
+     */
     private Genre findActiveGenre(String code) {
         return genreRepository.findActive(code)
-                .orElseThrow(() -> new PerformanceException(ErrorCode.VALIDATION_ERROR));
+                .orElseThrow(() ->
+                        new PerformanceException(ErrorCode.VALIDATION_ERROR)
+                );
     }
 
+    /**
+     * 공연 날짜 검증
+     */
     private void validateDates(LocalDate start, LocalDate end) {
         if (end.isBefore(start)) {
             throw new PerformanceException(ErrorCode.VALIDATION_ERROR);
         }
     }
 
-    private void validateSource(PerformanceCreateRequestDTO request){
+    /**
+     * 공연 등록 출처 검증
+     */
+    private void validateSource(PerformanceCreateRequestDTO request) {
         boolean hasKopisId = StringUtils.hasText(request.getKopisId());
-        if(request.getSource() == PerformanceSource.MANUAL && hasKopisId){
+
+        if (request.getSource() == PerformanceSource.MANUAL
+                && hasKopisId) {
             throw new PerformanceException(ErrorCode.VALIDATION_ERROR);
         }
-        if(request.getSource() == PerformanceSource.KOPIS && !hasKopisId){
+
+        if (request.getSource() == PerformanceSource.KOPIS
+                && !hasKopisId) {
             throw new PerformanceException(ErrorCode.VALIDATION_ERROR);
         }
     }
 
-
-
+    /**
+     * 한국 시간대 변환
+     */
+    private OffsetDateTime toOffsetDateTime(Instant instant) {
+        return instant.atZone(RESPONSE_ZONE).toOffsetDateTime();
+    }
 }

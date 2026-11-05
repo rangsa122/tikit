@@ -2,21 +2,8 @@
 import {Link} from 'react-router'
 import {useEffect, useState} from 'react'
 import {getMyProfile, type MemberProfile} from '../../api/memberApi'
+import MyPageSidebar from './MyPageSidebar'
 import axios from 'axios'
-
-// 사이드바 메뉴
-const bookingMenus = [
-  '예매 내역',
-  '취소/환불 내역',
-  '관심 공연',
-]
-
-const accountMenus = [
-  '내 정보 조회',
-  '비밀번호 변경',
-  '알림 설정',
-  '로그아웃',
-]
 
 // <<임시>> 공연 데이터
 const bookings = [
@@ -87,63 +74,7 @@ export default function MyPage() {
       </h1>
 
       <div className="mt-8 flex flex-col gap-10 md:flex-row">
-        <aside className="w-full shrink-0 md:w-[190px]">
-          <div>
-            <h2 className="mb-5 text-[15px] font-semibold">
-              나의 예매 정보
-            </h2>
-
-            <nav className="flex flex-col gap-4">
-              {bookingMenus.map((menu) =>
-                menu === '관심 공연' ? (
-                  <Link
-                    key={menu}
-                    to="/mypage/favorites"
-                    className="text-[14px] text-[#555] hover:text-black"
-                  >
-                    {menu}
-                  </Link>
-                ) : (
-                  <span
-                    key={menu}
-                    className="text-[14px] text-[#555]"
-                  >
-                    {menu}
-                  </span>
-                ),
-              )}
-            </nav>
-          </div>
-
-          <div className="my-8 border-t border-[#ddd]" />
-
-          <div>
-            <h2 className="mb-5 text-[15px] font-semibold">
-              계정 관리
-            </h2>
-
-            <nav className="flex flex-col gap-4">
-              {accountMenus.map((menu) =>
-                menu === '내 정보 조회' ? (
-                  <Link
-                    key={menu}
-                    to="/mypage/profile"
-                    className="text-[14px] text-[#555] hover:text-black"
-                  >
-                    {menu}
-                  </Link>
-                ) : (
-                  <span
-                    key={menu}
-                    className="text-[14px] text-[#555]"
-                  >
-                    {menu}
-                  </span>
-                ),
-              )}
-            </nav>
-          </div>
-        </aside>
+        <MyPageSidebar />
 
         <div className="min-w-0 flex-1">
           <section className="flex flex-col justify-between gap-6 rounded-md border border-[#ddd] bg-[#fafafa] p-7 sm:flex-row sm:items-center">
@@ -157,7 +88,6 @@ export default function MyPage() {
                   <p role="alert" className="text-[14px] text-red-600">
                     {error}
                   </p>
-
                   {isAuthError && (
                     <Link
                       to="/login"
@@ -190,7 +120,6 @@ export default function MyPage() {
                   2 <span className="text-[13px] font-normal">건</span>
                 </p>
               </div>
-
               <div className="text-center">
                 <p className="text-[13px] text-[#666]">관심 공연</p>
                 <p className="mt-2 text-[20px] font-semibold">
@@ -226,7 +155,6 @@ export default function MyPage() {
                     {booking.date}
                   </p>
                 </div>
-
                 <span className="text-[13px] text-[#555]">
                   {booking.status}
                 </span>
@@ -253,7 +181,6 @@ export default function MyPage() {
                   <div className="flex aspect-[3/4] items-center justify-center rounded-md bg-[#f1f1f1] text-[13px] text-[#999]">
                     공연 이미지
                   </div>
-
                   <p className="mt-3 text-[14px] font-medium">
                     {favorite.title}
                   </p>

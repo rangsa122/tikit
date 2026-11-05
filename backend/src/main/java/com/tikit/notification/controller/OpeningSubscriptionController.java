@@ -54,10 +54,8 @@ public class OpeningSubscriptionController {
             @AuthenticationPrincipal String accountId,
             @PathVariable Long performanceId
     ) {
-        // 로그인 회원 ID 확인
         Long memberId = getMemberId(accountId);
 
-        // 신청 기록 삭제 (없으면 정상 종료)
         subscriptionService.unsubscribe(memberId, performanceId);
 
         // 204 No Content 반환

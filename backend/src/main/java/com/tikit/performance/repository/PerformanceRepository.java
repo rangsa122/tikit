@@ -1,7 +1,9 @@
+
 package com.tikit.performance.repository;
 
 import com.tikit.performance.entity.Performance;
 import com.tikit.performance.entity.PublicationStatus;
+import com.tikit.performance.entity.Visibility;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -12,6 +14,7 @@ import java.util.Optional;
 
 public interface PerformanceRepository extends JpaRepository<Performance, Long> {
 
+    // 기존 관리자용 공연 목록 조회
     @Query(value = """
             select p
             from Performance p join fetch p.genre
@@ -22,14 +25,32 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
             from Performance p
             where (:status is null or p.publicationStatus = :status)
             """)
-    Page<Performance> findAllByStatus(@Param("status")PublicationStatus status, Pageable pageable);
+    Page<Performance> findAllByStatus(
+            @Param("status") PublicationStatus status,
+            Pageable pageable
+    );
 
+    // 기존 관리자용 공연 상세 조회
     @Query("""
             select p
-            from Performance p join fetch p.genre 
+            from Performance p join fetch p.genre
             where p.id = :id
             """)
     Optional<Performance> findDetail(@Param("id") Long id);
+
+    // 추가: 일반 사용자용 공개 공연 상세 조회
+    @Query("""
+            select p
+            from Performance p join fetch p.genre
+            where p.id = :id
+              and p.publicationStatus = :publicationStatus
+              and p.visibility = :visibility
+            """)
+    Optional<Performance> findPublicDetail(
+            @Param("id") Long id,
+            @Param("publicationStatus") PublicationStatus publicationStatus,
+            @Param("visibility") Visibility visibility
+    );
 
     boolean existsByKopisId(String kopisId);
 }
