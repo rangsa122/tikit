@@ -5,6 +5,8 @@ import com.tikit.booking.dto.response.BookingResponseDTO;
 import com.tikit.booking.exception.BookingException;
 import com.tikit.booking.redis.SeatLockRepository;
 import com.tikit.common.ErrorCode;
+import com.tikit.queue.exception.QueueException;
+import com.tikit.queue.service.AdmissionService;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -46,17 +48,22 @@ class BookingServiceTest {
 
     private SeatLockRepository seatLockRepository;
     private BookingTransactionService bookingTransactionService;
+    private AdmissionService admissionService;
     private BookingService bookingService;
 
     @BeforeEach
     void setup() {
         seatLockRepository = mock(SeatLockRepository.class);
         bookingTransactionService = mock(BookingTransactionService.class);
+        admissionService = mock(AdmissionService.class);
         bookingService = new BookingService(
                 seatLockRepository,
                 bookingTransactionService,
+                admissionService,
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
+
+        given(admissionService.isRequired()).willReturn(true);
 
         given(seatLockRepository.lockAll(anyList(), anyString(), any(Duration.class))).willReturn(true);
     }
@@ -116,9 +123,20 @@ class BookingServiceTest {
     }
 
     @Test
-    @DisplayName("입장 ID 헤더가 없으면 임시 ID를 발급하고 기존 예매를 찾지 않는다")
-    void create_withoutAdmissionHeader() {
+    @DisplayName("입장 권한 검사를 켰을 때 입장 ID 헤더가 없으면 ADMISSION_INVALID이고 좌석을 잠그지 않는다")
+    void create_withoutAdmissionHeader_rejected() {
+        // when, then
+        assertRejected(() -> bookingService.create(MEMBER_ID, null, REQUEST),
+                ErrorCode.ADMISSION_INVALID);
+        then(seatLockRepository).shouldHaveNoInteractions();
+        then(bookingTransactionService).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("입장 권한 검사를 끄면 입장 ID 헤더가 없어도 임시 ID를 발급하고 기존 예매를 찾지 않는다")
+    void create_withoutAdmissionHeader_whenNotRequired() {
         // given
+        given(admissionService.isRequired()).willReturn(false);
         ArgumentCaptor<UUID> admissionId = ArgumentCaptor.forClass(UUID.class);
         given(bookingTransactionService.create(any(), any(), any(), anyList(), any(), any()))
                 .willReturn(new BookingResult(null, true));
@@ -135,6 +153,49 @@ class BookingServiceTest {
     }
 
     @Test
+    @DisplayName("입장 권한이 유효하지 않으면 ADMISSION_INVALID이고 좌석을 잠그지 않는다")
+    void create_admissionRejected() {
+        // given
+        willThrow(new QueueException(ErrorCode.ADMISSION_INVALID))
+                .given(admissionService).validate(ADMISSION_ID, MEMBER_ID, SESSION_ID);
+
+        // when, then
+        assertRejected(() -> bookingService.create(MEMBER_ID, ADMISSION_HEADER, REQUEST),
+                ErrorCode.ADMISSION_INVALID);
+        then(seatLockRepository).shouldHaveNoInteractions();
+        then(bookingTransactionService).should(never()).create(any(), any(), any(), anyList(), any(), any());
+        then(admissionService).should(never()).consume(any());
+    }
+
+    @Test
+    @DisplayName("새 예매를 만들면 입장 권한을 소비해서 정원을 돌려준다")
+    void create_consumesAdmission() {
+        // given
+        given(bookingTransactionService.create(MEMBER_ID, ADMISSION_ID, SESSION_ID, SEAT_IDS, NOW, EXPIRES_AT))
+                .willReturn(new BookingResult(null, true));
+
+        // when
+        bookingService.create(MEMBER_ID, ADMISSION_HEADER, REQUEST);
+
+        // then
+        then(admissionService).should().validate(ADMISSION_ID, MEMBER_ID, SESSION_ID);
+        then(admissionService).should().consume(ADMISSION_ID);
+    }
+
+    @Test
+    @DisplayName("좌석 선점이 실패하면 입장 권한을 소비하지 않아 다시 고를 수 있다")
+    void create_failure_keepsAdmission() {
+        // given
+        given(bookingTransactionService.create(any(), any(), any(), anyList(), any(), any()))
+                .willThrow(new BookingException(ErrorCode.SEAT_UNAVAILABLE));
+
+        // when, then
+        assertRejected(() -> bookingService.create(MEMBER_ID, ADMISSION_HEADER, REQUEST),
+                ErrorCode.SEAT_UNAVAILABLE);
+        then(admissionService).should(never()).consume(any());
+    }
+
+    @Test
     @DisplayName("같은 입장 ID의 예매가 이미 있으면 좌석을 잠그지 않고 기존 예매를 돌려준다")
     void create_existingBooking() {
         // given
@@ -148,6 +209,7 @@ class BookingServiceTest {
         assertThat(result.created()).isFalse();
         then(seatLockRepository).shouldHaveNoInteractions();
         then(bookingTransactionService).should(never()).create(any(), any(), any(), anyList(), any(), any());
+        then(admissionService).should(never()).validate(any(), any(), any());
     }
 
     @Test

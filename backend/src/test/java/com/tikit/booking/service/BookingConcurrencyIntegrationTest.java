@@ -43,7 +43,7 @@ import static org.mockito.BDDMockito.willThrow;
  * BOOKING_IT=true ./gradlew test --tests '*BookingConcurrencyIntegrationTest'
  */
 @ActiveProfiles("local")
-@SpringBootTest
+@SpringBootTest(properties = "tikit.queue.admission-required=false")
 @EnabledIfEnvironmentVariable(named = "BOOKING_IT", matches = "true")
 class BookingConcurrencyIntegrationTest {
 
