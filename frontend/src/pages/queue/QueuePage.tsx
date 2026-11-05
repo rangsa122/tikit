@@ -493,7 +493,7 @@ function PrimaryButton({disabled = false, onClick, children}: {disabled?: boolea
             type="button"
             disabled={disabled}
             onClick={onClick}
-            className="flex h-[54px] w-full items-center justify-center rounded-xl bg-[#4338ca] text-[17px] font-bold text-white transition-colors hover:bg-[#3730a3] disabled:cursor-not-allowed disabled:bg-[#e4e6eb] disabled:text-[#5b616e]"
+            className="flex h-[54px] w-full items-center justify-center rounded-xl bg-[#4338ca] text-[17px] font-bold text-white transition-colors hover:bg-[#3730a3] disabled:cursor-default disabled:bg-[#e4e6eb] disabled:text-[#5b616e]"
         >
             {children}
         </button>
@@ -506,7 +506,7 @@ function SecondaryButton({disabled = false, onClick, children}: {disabled?: bool
             type="button"
             disabled={disabled}
             onClick={onClick}
-            className="flex h-11 w-full items-center justify-center rounded-xl border border-[#e4e6eb] bg-white text-[15px] text-[#111318] transition-colors hover:bg-[#f6f7f9] disabled:cursor-not-allowed disabled:text-[#5b616e] disabled:hover:bg-white"
+            className="flex h-11 w-full items-center justify-center rounded-xl border border-[#e4e6eb] bg-white text-[15px] text-[#111318] transition-colors hover:bg-[#f6f7f9] disabled:cursor-default disabled:text-[#5b616e] disabled:hover:bg-white"
         >
             {children}
         </button>
