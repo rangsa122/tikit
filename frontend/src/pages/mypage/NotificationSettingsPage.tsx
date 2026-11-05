@@ -9,6 +9,7 @@ import {
     type OpeningSubscriptionPage,
 } from '../../api/notificationApi'
 
+const PAGE_SIZE = 10
 
 // 알림 설정 화면
 export default function NotificationSettingsPage() {
@@ -21,6 +22,9 @@ export default function NotificationSettingsPage() {
     const [subscriptions, setSubscriptions] = useState<OpeningSubscriptionPage | null>(null)
     const [isSubscriptionsLoading, setIsSubscriptionsLoading] = useState(true)
     const [subscriptionsError, setSubscriptionsError] = useState('')
+
+    // 현재 조회 중인 페이지
+    const [currentPage, setCurrentPage] = useState(0)
 
     // 공연별 알림 해제 처리 상태
     const [deletingPerformanceId, setDeletingPerformanceId] = useState<number | null>(null)
@@ -52,12 +56,16 @@ export default function NotificationSettingsPage() {
     }, [])
 
     // 공연별 알림 신청 목록 조회
+    // 현재 페이지가 변경되면 해당 페이지를 다시 조회
     useEffect(() => {
         let active = true
 
         async function loadSubscriptions() {
+            setIsSubscriptionsLoading(true)
+            setSubscriptionsError('')
+
             try {
-                const data = await getOpeningSubscriptions()
+                const data = await getOpeningSubscriptions(currentPage, PAGE_SIZE)
 
                 if (active) {
                     setSubscriptions(data)
@@ -78,7 +86,7 @@ export default function NotificationSettingsPage() {
         return () => {
             active = false
         }
-    }, [])
+    }, [currentPage])
 
     // 전체 알림 수신 설정 <<변경>>
     async function handleToggle() {
@@ -107,18 +115,41 @@ export default function NotificationSettingsPage() {
         setUnsubscribeError('')
 
         try {
-            // 공연별 알림 신청 기록 삭제
             await deleteOpeningSubscription(performanceId)
 
-            // 해제 후 신청 목록 다시 조회
-            const updatedSubscriptions = await getOpeningSubscriptions()
+            // 현재 페이지의 신청 목록 다시 조회
+            const updatedSubscriptions =
+                await getOpeningSubscriptions(currentPage, PAGE_SIZE)
 
-            setSubscriptions(updatedSubscriptions)
+            if (
+                updatedSubscriptions.content.length === 0 &&
+                currentPage > 0
+            ) {
+                setCurrentPage(currentPage - 1)
+            } else {
+                setSubscriptions(updatedSubscriptions)
+            }
         } catch {
-            setUnsubscribeError('알림 해제 또는 목록 갱신에 실패했습니다. 새로고침 후 상태를 확인해 주세요.')
+            setUnsubscribeError(
+                '알림 해제 또는 목록 갱신에 실패했습니다. 새로고침 후 상태를 확인해 주세요.'
+            )
         } finally {
             setDeletingPerformanceId(null)
         }
+    }
+
+    // 이전 페이지 이동
+    function handlePreviousPage() {
+        if (currentPage <= 0) return
+
+        setCurrentPage(currentPage - 1)
+    }
+
+    // 다음 페이지 이동
+    function handleNextPage() {
+        if (!subscriptions || subscriptions.last) return
+
+        setCurrentPage(currentPage + 1)
     }
 
     return (
@@ -136,10 +167,6 @@ export default function NotificationSettingsPage() {
                     <h2 className="mb-3 text-[22px] font-semibold">
                         알림 설정
                     </h2>
-
-                    <p className="mb-8 text-[14px] text-[#777]">
-                        공연별 예매 시작 알림과 전체 알림 수신 여부를 관리할 수 있습니다.
-                    </p>
 
                     {/* 전체 알림 수신 설정 */}
                     <section className="rounded-md border border-[#ddd] p-6">
@@ -190,7 +217,7 @@ export default function NotificationSettingsPage() {
                         </h3>
 
                         <p className="mb-6 text-[13px] text-[#777]">
-                            알림 신청한 공연을 확인하고 공연별 알림을 해제할 수 있습니다.
+                            현재 알림을 신청한 공연을 확인하고 공연별 알림을 해제할 수 있습니다.
                         </p>
 
                         <div className="rounded-md border border-[#ddd]">
@@ -214,11 +241,12 @@ export default function NotificationSettingsPage() {
                                 </p>
                             ) : (
                                 <div className="divide-y divide-[#ddd]">
+                                    {/* 전체 신청 건수 */}
                                     <p className="px-6 py-4 text-[13px] text-[#777]">
                                         전체 {subscriptions.totalElements}건
-                                        (첫 페이지 최대 10건 표시)
                                     </p>
 
+                                    {/* 현재 페이지의 공연 목록 */}
                                     {subscriptions.content.map(
                                         (performanceId) => (
                                             <div
@@ -243,6 +271,42 @@ export default function NotificationSettingsPage() {
                                 </div>
                             )}
                         </div>
+
+                        {/* 페이지네이션 */}
+                        {!isSubscriptionsLoading &&
+                            !subscriptionsError &&
+                            subscriptions !== null &&
+                            subscriptions.totalPages > 1 && (
+                                <div className="mt-6 flex items-center justify-center gap-4">
+                                    <button
+                                        type="button"
+                                        onClick={handlePreviousPage}
+                                        disabled={
+                                            currentPage === 0 ||
+                                            deletingPerformanceId !== null
+                                        }
+                                        className="rounded border border-[#ddd] px-4 py-2 text-[13px] text-[#555] hover:bg-[#f7f7f7] disabled:cursor-not-allowed disabled:opacity-40"
+                                    >
+                                        이전
+                                    </button>
+
+                                    <span className="text-[13px] text-[#555]">
+                                        {currentPage + 1} / {subscriptions.totalPages} 페이지
+                                    </span>
+
+                                    <button
+                                        type="button"
+                                        onClick={handleNextPage}
+                                        disabled={
+                                            subscriptions.last ||
+                                            deletingPerformanceId !== null
+                                        }
+                                        className="rounded border border-[#ddd] px-4 py-2 text-[13px] text-[#555] hover:bg-[#f7f7f7] disabled:cursor-not-allowed disabled:opacity-40"
+                                    >
+                                        다음
+                                    </button>
+                                </div>
+                            )}
                     </section>
 
                     {/* 알림 안내 */}
@@ -250,6 +314,7 @@ export default function NotificationSettingsPage() {
                         <h3 className="mb-3 text-[15px] font-semibold">
                             알림 안내
                         </h3>
+
                         <p className="text-[13px] leading-7 text-[#666]">
                             신청한 공연의 예매 시작 알림을 받을 수 있습니다.
                             <br />

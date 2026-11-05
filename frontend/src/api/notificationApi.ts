@@ -36,14 +36,11 @@ export async function updateNotificationPreference(
 }
 
 // 공연별 알림 신청 목록 조회
-export async function getOpeningSubscriptions(): Promise<OpeningSubscriptionPage> {
+export async function getOpeningSubscriptions(page = 0, size = 10): Promise<OpeningSubscriptionPage> {
     const response = await apiClient.get<ApiResponse<OpeningSubscriptionPage>>(
         '/api/v1/me/opening-subscriptions',
         {
-            params: {
-                page: 0,
-                size: 10,
-            },
+            params: { page, size },
         }
     )
 
