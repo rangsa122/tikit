@@ -56,3 +56,12 @@ export async function deleteOpeningSubscription(
 ): Promise<void> {
     await apiClient.delete(`/api/v1/me/opening-subscriptions/${performanceId}`)
 }
+
+// 공연별 예매 시작 알림 신청
+export async function subscribeOpeningSubscription(
+    performanceId: number
+): Promise<void> {
+    await apiClient.put(
+        `/api/v1/me/opening-subscriptions/${performanceId}`
+    )
+}

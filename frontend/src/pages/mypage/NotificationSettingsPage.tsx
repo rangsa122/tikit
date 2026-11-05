@@ -22,12 +22,11 @@ export default function NotificationSettingsPage() {
     const [isSubscriptionsLoading, setIsSubscriptionsLoading] = useState(true)
     const [subscriptionsError, setSubscriptionsError] = useState('')
 
-    // 신청 취소 처리 상태
+    // 공연별 알림 해제 처리 상태
     const [deletingPerformanceId, setDeletingPerformanceId] = useState<number | null>(null)
     const [unsubscribeError, setUnsubscribeError] = useState('')
 
-
-    // 현재 알림 수신 설정 조회
+    // 전체 알림 수신 설정 조회
     useEffect(() => {
         let active = true
 
@@ -52,7 +51,7 @@ export default function NotificationSettingsPage() {
         }
     }, [])
 
-    // <<공연별>> 알림 신청 목록 조회
+    // 공연별 알림 신청 목록 조회
     useEffect(() => {
         let active = true
 
@@ -100,7 +99,7 @@ export default function NotificationSettingsPage() {
         }
     }
 
-    // 공연별 알림 신청 <<취소>>
+    // 공연별 알림 신청 <<해제>>
     async function handleUnsubscribe(performanceId: number) {
         if (deletingPerformanceId !== null) return
 
@@ -108,12 +107,15 @@ export default function NotificationSettingsPage() {
         setUnsubscribeError('')
 
         try {
+            // 공연별 알림 신청 기록 삭제
             await deleteOpeningSubscription(performanceId)
 
+            // 해제 후 신청 목록 다시 조회
             const updatedSubscriptions = await getOpeningSubscriptions()
+
             setSubscriptions(updatedSubscriptions)
         } catch {
-            setUnsubscribeError('신청 취소 또는 목록 갱신에 실패했습니다. 새로고침 후 상태를 확인해 주세요.')
+            setUnsubscribeError('알림 해제 또는 목록 갱신에 실패했습니다. 새로고침 후 상태를 확인해 주세요.')
         } finally {
             setDeletingPerformanceId(null)
         }
@@ -134,16 +136,19 @@ export default function NotificationSettingsPage() {
                     <h2 className="mb-3 text-[22px] font-semibold">
                         알림 설정
                     </h2>
+
                     <p className="mb-8 text-[14px] text-[#777]">
                         공연별 예매 시작 알림과 전체 알림 수신 여부를 관리할 수 있습니다.
                     </p>
 
+                    {/* 전체 알림 수신 설정 */}
                     <section className="rounded-md border border-[#ddd] p-6">
                         <div className="flex items-center justify-between gap-4">
                             <div>
                                 <h3 className="text-[17px] font-semibold">
                                     전체 알림 수신
                                 </h3>
+
                                 <p className="mt-2 text-[13px] text-[#777]">
                                     신청한 공연의 예매 시작 알림을 수신합니다.
                                 </p>
@@ -163,7 +168,6 @@ export default function NotificationSettingsPage() {
                             >
                                 <span className={`h-5 w-5 rounded-full bg-white transition-transform ${enabled ? 'translate-x-5' : ''}`}/>
                             </button>
-
                         </div>
 
                         {enabled === null && !error && (
@@ -179,29 +183,16 @@ export default function NotificationSettingsPage() {
                         )}
                     </section>
 
+                    {/* 공연별 알림 설정 목록 */}
                     <section className="mt-10">
                         <h3 className="mb-2 text-[20px] font-semibold">
                             공연별 알림 설정
                         </h3>
+
                         <p className="mb-6 text-[13px] text-[#777]">
-                            공연별 예매 시작 알림 신청 내역을 확인하고 관리할 수 있습니다.
+                            알림 신청한 공연을 확인하고 공연별 알림을 해제할 수 있습니다.
                         </p>
 
-                        {/* TODO: 필터 기능 구현 */}
-                        <div className="mb-5 flex flex-wrap gap-2">
-                            {['전체', '알림 신청', '알림 해제'].map((filter) => (
-                                <button
-                                    key={filter}
-                                    type="button"
-                                    disabled
-                                    className="rounded border border-[#ddd] px-4 py-2 text-[13px] text-[#777] opacity-60"
-                                >
-                                    {filter}
-                                </button>
-                            ))}
-                        </div>
-
-                        {/* 공연별 알림 신청 목록 */}
                         <div className="rounded-md border border-[#ddd]">
                             {unsubscribeError && (
                                 <p role="alert" className="px-6 pt-4 text-[13px] text-red-600">
@@ -228,36 +219,39 @@ export default function NotificationSettingsPage() {
                                         (첫 페이지 최대 10건 표시)
                                     </p>
 
-                                    {subscriptions.content.map((performanceId) => (
-                                        <div key={performanceId} className="flex items-center justify-between gap-4 px-6 py-5">
-                                            <span className="text-[14px] font-medium">
-                                                공연 ID: {performanceId}
-                                            </span>
-
-                                            <button
-                                                type="button"
-                                                onClick={() => void handleUnsubscribe(performanceId)}
-                                                disabled={deletingPerformanceId !== null}
-                                                className="shrink-0 rounded border border-[#ccc] px-4 py-2 text-[13px] text-[#555] hover:bg-[#f7f7f7] disabled:opacity-50"
+                                    {subscriptions.content.map(
+                                        (performanceId) => (
+                                            <div
+                                                key={performanceId}
+                                                className="flex items-center justify-between gap-4 px-6 py-5"
                                             >
-                                                {deletingPerformanceId === performanceId
-                                                    ? '취소 중...'
-                                                    : '신청 취소'}
-                                            </button>
+                                                <span className="text-[14px] font-medium">
+                                                    공연 ID: {performanceId}
+                                                </span>
 
-                                        </div>
-                                    ))}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void handleUnsubscribe(performanceId)}
+                                                    disabled={deletingPerformanceId !== null}
+                                                    className="shrink-0 rounded border border-[#ccc] px-4 py-2 text-[13px] text-[#555] hover:bg-[#f7f7f7] disabled:opacity-50"
+                                                >
+                                                    {deletingPerformanceId === performanceId ? '해제 중...' : '알림 해제'}
+                                                </button>
+                                            </div>
+                                        )
+                                    )}
                                 </div>
                             )}
                         </div>
                     </section>
 
+                    {/* 알림 안내 */}
                     <section className="mt-10 rounded-md bg-[#f7f7f7] p-6">
                         <h3 className="mb-3 text-[15px] font-semibold">
                             알림 안내
                         </h3>
                         <p className="text-[13px] leading-7 text-[#666]">
-                            예매 시작 알림은 사이트 내부 알림으로 제공됩니다.
+                            신청한 공연의 예매 시작 알림을 받을 수 있습니다.
                             <br />
                             전체 알림 수신을 OFF로 변경해도 공연별 알림 신청 기록은 유지됩니다.
                         </p>
