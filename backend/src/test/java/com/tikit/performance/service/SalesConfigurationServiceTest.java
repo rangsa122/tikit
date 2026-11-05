@@ -5,6 +5,7 @@ import com.tikit.auth.entity.MemberStatus;
 import com.tikit.auth.entity.Role;
 import com.tikit.auth.repository.MemberRepository;
 import com.tikit.common.ErrorCode;
+import com.tikit.performance.dto.GradePriceDTO;
 import com.tikit.performance.dto.SeatTemplateListResponseDTO;
 import com.tikit.performance.dto.SessionConfigurationDTO;
 import com.tikit.performance.dto.request.SalesConfigurationSaveRequestDTO;
@@ -22,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
@@ -126,6 +128,12 @@ class SalesConfigurationServiceTest {
         assertThatThrownBy(action::run)
                 .isInstanceOf(PerformanceException.class)
                 .extracting("errorCode").isEqualTo(expected);
+    }
+
+    private SessionConfigurationDTO sessionDto(Long sessionId, OffsetDateTime startsAt, OffsetDateTime opensAt) {
+        return new SessionConfigurationDTO(sessionId, startsAt, opensAt,
+                startsAt.minusHours(1), startsAt.minusDays(1), 1L,
+                List.of(new GradePriceDTO("R", 50000L), new GradePriceDTO("S", 30000L)));
     }
 
     @Test
@@ -288,5 +296,60 @@ class SalesConfigurationServiceTest {
         assertFails(
                 () -> service.saveSalesConfiguration(1L, 10L, saveRequest(3L)),
                 ErrorCode.PERFORMANCE_EDIT_LOCKED);
+    }
+
+    @Test
+    @DisplayName("요청에 없는 기존 회차는 좌석 → 가격 → 회차 순으로 삭제된다")
+    void save_deletesMissingSessions() {
+        Member manager = member(Role.MANAGER);
+        Performance performance = performance(manager);
+        PerformanceSession s100 = session(performance, 100L, 1L, Instant.parse("2026-12-10T05:00:00Z"));
+        PerformanceSession s101 = session(performance, 101L, 1L, Instant.parse("2026-12-11T05:00:00Z"));
+
+        given(memberRepository.findById(1L)).willReturn(Optional.of(manager));
+        given(performanceRepository.findForSave(10L)).willReturn(Optional.of(performance));
+        given(performanceSessionRepository.findByPerformance(10L))
+                .willReturn(List.of(s100, s101))    // 첫 호출: 저장 전 기존 회차
+                .willReturn(List.of());             // 두 번째 호출: 응답을 만들 때
+
+        service.saveSalesConfiguration(1L, 10L, saveRequest(3L));
+
+        InOrder inOrder = inOrder(sessionSeatRepository, sessionGradePriceRepository, performanceSessionRepository);
+        inOrder.verify(sessionSeatRepository).deleteBySessions(List.of(100L, 101L));
+        inOrder.verify(sessionGradePriceRepository).deleteBySessions(List.of(100L, 101L));
+        inOrder.verify(performanceSessionRepository).deleteAll(List.of(s100, s101));
+    }
+
+    @Test
+    @DisplayName("sessionId가 없는 회차는 새로 만들고 좌석과 가격을 저장한다")
+    void save_createsNewSession() {
+        Member manager = member(Role.MANAGER);
+        Performance performance = performance(manager);
+        SeatTemplate t1 = template(1L, "소극장");
+        List<TemplateSeat> seats = List.of(seat(t1, "A-01", "A", 1, "R"), seat(t1, "A-02", "A", 2, "S"));
+        SaleOpening opening = opening(performance, 5L, Instant.parse("2026-11-20T01:00:00Z"));
+        PerformanceSession created = session(performance, 200L, 5L, Instant.parse("2026-12-10T05:00:00Z"));
+
+        given(memberRepository.findById(1L)).willReturn(Optional.of(manager));
+        given(performanceRepository.findForSave(10L)).willReturn(Optional.of(performance));
+        given(performanceSessionRepository.findByPerformance(10L)).willReturn(List.of());   // 기존 회차 없음
+        given(seatTemplateRepository.findAllById(any())).willReturn(List.of(t1));
+        given(templateSeatRepository.findByTemplateIdIn(any())).willReturn(seats);
+        given(saleOpeningRepository.findByPerformance(10L)).willReturn(List.of(opening));
+        given(performanceSessionRepository.save(any())).willReturn(created);
+        given(templateSeatRepository.findByTemplateId(1L)).willReturn(seats);
+
+        SalesConfigurationSaveRequestDTO request = new SalesConfigurationSaveRequestDTO(3L, 6, List.of(
+                sessionDto(null,
+                        OffsetDateTime.parse("2026-12-10T14:00:00+09:00"),     // = 05:00Z
+                        OffsetDateTime.parse("2026-11-20T10:00:00+09:00"))));  // = 01:00Z (기존 오픈과 같은 시각)
+
+        service.saveSalesConfiguration(1L, 10L, request);
+
+        verify(saleOpeningRepository, never()).save(any());          // 같은 시각 오픈을 재사용
+        verify(performanceSessionRepository).save(any());            // 새 회차 저장
+        verify(sessionSeatRepository).saveAll(any());                // 좌석 생성
+        verify(sessionGradePriceRepository).saveAll(any());          // 가격 저장
+        assertThat((int) performance.getBookingLimitPerMember()).isEqualTo(6);   // 예매 한도 변경
     }
 }

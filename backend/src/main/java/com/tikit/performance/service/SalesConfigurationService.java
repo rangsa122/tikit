@@ -173,11 +173,11 @@ public class SalesConfigurationService {
                 session.update(openingId, s.seatTemplateId(), startsAt, salesCloseAt, deadline);
                 //새회차 생성
             }else{
-                    session = performanceSessionRepository.save(PerformanceSession.create(
-                            performance, openingId, s.seatTemplateId(), startsAt, salesCloseAt, deadline,
-                            POLICY_VERSION, CANCELLATION_POLICY));
-                    needSeats = true;
-                }
+                session = performanceSessionRepository.save(PerformanceSession.create(
+                        performance, openingId, s.seatTemplateId(), startsAt, salesCloseAt, deadline,
+                        POLICY_VERSION, CANCELLATION_POLICY));
+                needSeats = true;
+            }
 
             if(needSeats){
                 List<TemplateSeat> templateSeats = seatsByTemplate.computeIfAbsent(
@@ -191,6 +191,7 @@ public class SalesConfigurationService {
                     .toList());
         }
 
+        performanceRepository.flush();
         return buildResponse(performance, performanceSessionRepository.findByPerformance(performanceId));
     }
 
