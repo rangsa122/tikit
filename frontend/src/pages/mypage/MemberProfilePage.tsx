@@ -5,6 +5,7 @@ import {
     updateMyProfile,
     type MemberProfile,
 } from '../../api/memberApi'
+import MyPageSidebar from './MyPageSidebar'
 import axios from 'axios'
 
 
@@ -145,28 +146,7 @@ export default function MemberProfilePage() {
             </h1>
 
             <div className="mt-8 flex flex-col gap-10 md:flex-row">
-                {/* 왼쪽 사이드바 */}
-                <aside className="w-full shrink-0 md:w-[190px]">
-                    <h2 className="mb-5 text-[15px] font-semibold">나의 예매 정보</h2>
-                    <nav className="flex flex-col gap-4 text-[14px] text-[#555]">
-                        <span>예매 내역</span>
-                        <span>취소/환불 내역</span>
-                        <span>관심 공연</span>
-                    </nav>
-
-                    <div className="my-8 border-t border-[#ddd]" />
-
-                    <h2 className="mb-5 text-[15px] font-semibold">계정 관리</h2>
-                    <nav className="flex flex-col gap-4 text-[14px] text-[#555]">
-                        <Link to="/mypage/profile"
-                              className="rounded bg-[#eeeeee] px-2 py-2 text-[14px] text-[#111]">
-                            내 정보 조회
-                        </Link>
-                        <span>비밀번호 변경</span>
-                        <span>알림 설정</span>
-                        <span>로그아웃</span>
-                    </nav>
-                </aside>
+                <MyPageSidebar />
 
                 <section className="min-w-0 flex-1">
                     <h2 className="mb-6 text-[22px] font-semibold">내 정보 조회</h2>
