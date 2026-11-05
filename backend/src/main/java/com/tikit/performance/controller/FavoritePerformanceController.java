@@ -42,7 +42,7 @@ public class FavoritePerformanceController {
     }
 
     @DeleteMapping("/{performanceId}")
-    public ResponseEntity<ResponseDTO<Void>> removeFavorite(
+    public ResponseEntity<Void> removeFavorite(
             @AuthenticationPrincipal String memberId,
             @PathVariable Long performanceId
     ) {
@@ -51,12 +51,7 @@ public class FavoritePerformanceController {
                 performanceId
         );
 
-        return ResponseEntity.ok(
-                ResponseDTO.<Void>success(
-                        "관심 공연이 해제되었습니다.",
-                        null
-                )
-        );
+        return ResponseEntity.noContent().build();
     }
 
     private Long parseMemberId(String memberId) {
