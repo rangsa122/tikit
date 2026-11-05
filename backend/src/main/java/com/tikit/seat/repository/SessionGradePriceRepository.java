@@ -10,4 +10,5 @@ public interface SessionGradePriceRepository
         extends JpaRepository<SessionGradePrice, SessionGradePriceId> {
 
     List<SessionGradePrice> findBySessionId(Long sessionId);
+    List<SessionGradePrice> findBySessionIdIn(List<Long> sessionIds);
 }
