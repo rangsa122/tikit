@@ -1,4 +1,4 @@
-package com.tikit.performance.dto;
+package com.tikit.performance.dto.response;
 
 import java.util.List;
 

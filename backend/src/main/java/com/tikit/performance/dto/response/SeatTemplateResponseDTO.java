@@ -1,5 +1,7 @@
-package com.tikit.performance.dto;
+package com.tikit.performance.dto.response;
 
+
+import com.tikit.performance.dto.SeatTemplateSeatDTO;
 
 import java.util.List;
 
