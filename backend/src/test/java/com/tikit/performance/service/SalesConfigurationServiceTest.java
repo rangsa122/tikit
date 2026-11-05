@@ -6,7 +6,7 @@ import com.tikit.auth.entity.Role;
 import com.tikit.auth.repository.MemberRepository;
 import com.tikit.common.ErrorCode;
 import com.tikit.performance.dto.GradePriceDTO;
-import com.tikit.performance.dto.SeatTemplateListResponseDTO;
+import com.tikit.performance.dto.response.SeatTemplateListResponseDTO;
 import com.tikit.performance.dto.SessionConfigurationDTO;
 import com.tikit.performance.dto.request.SalesConfigurationSaveRequestDTO;
 import com.tikit.performance.dto.response.SalesConfigurationResponseDTO;
