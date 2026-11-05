@@ -3,8 +3,13 @@ import type {ReactNode} from 'react'
 /**
  * 결제 화면 공통 조각
  *
- * 카드, 상태 카드, 안내 박스, 포스터 자리, 아이콘 (버튼은 components/common/Button)
+ * 가운데 정렬 칸, 카드, 상태 카드, 안내 박스, 포스터 자리, 아이콘 (버튼은 components/common/Button)
  */
+
+// 상태 화면용 가운데 정렬 칸 (결제 화면·성공·실패 페이지 공통)
+export function CenterColumn({children}: {children: ReactNode}) {
+    return <div className="mx-auto flex max-w-[560px] flex-col gap-4 pt-6 pb-10">{children}</div>
+}
 
 export function Card({children, className = ''}: {children: ReactNode; className?: string}) {
     return (
