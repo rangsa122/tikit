@@ -5,6 +5,8 @@ import com.tikit.booking.dto.response.BookingResponseDTO;
 import com.tikit.booking.exception.BookingException;
 import com.tikit.booking.redis.SeatLockRepository;
 import com.tikit.common.ErrorCode;
+import com.tikit.queue.exception.QueueException;
+import com.tikit.queue.service.AdmissionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
@@ -28,6 +30,7 @@ public class BookingService {
 
     private final SeatLockRepository seatLockRepository;
     private final BookingTransactionService bookingTransactionService;
+    private final AdmissionService admissionService;
     private final Clock clock;
 
     // Redis로 좌석을 먼저 잡고, DB 선점이 실패하면 Redis 락을 풀어 줌
@@ -41,12 +44,15 @@ public class BookingService {
         UUID admissionId = resolveAdmissionId(admissionIdHeader);
 
         if (admissionIdHeader != null) {
+            // 같은 입장 ID로 이미 만든 예매는 입장 권한이 만료되거나 소비됐어도 돌려줌
             Optional<BookingResponseDTO> existing =
                     bookingTransactionService.findExisting(memberId, admissionId, now);
             if (existing.isPresent()) {
                 return new BookingResult(existing.get(), false);
             }
         }
+
+        validateAdmission(admissionId, memberId, request.sessionId());
 
         String lockToken = admissionId.toString();
         boolean redisLocked = lockSeats(seatIds, lockToken);
@@ -57,6 +63,10 @@ public class BookingService {
             if (!result.created() && redisLocked) {
                 // 기존 예매를 돌려준 경우 방금 잡은 락은 필요 없음
                 unlockSeats(seatIds, lockToken);
+            }
+            if (result.created()) {
+                // 좌석을 잡았으니 대기열 정원을 다음 사람에게 넘김
+                admissionService.consume(admissionId);
             }
             return result;
         } catch (RuntimeException e) {
@@ -91,9 +101,21 @@ public class BookingService {
         }
     }
 
-    // 대기열(A-09) 전까지는 입장 ID가 없으면 임시로 발급
+    // 대기열에서 받은 입장 권한이 이 회원과 회차의 것인지 확인
+    private void validateAdmission(UUID admissionId, Long memberId, Long sessionId) {
+        try {
+            admissionService.validate(admissionId, memberId, sessionId);
+        } catch (QueueException e) {
+            throw new BookingException(e.getErrorCode());
+        }
+    }
+
+    // 입장 권한 검사를 끈 경우에만 헤더 없이 임시 ID를 발급
     private UUID resolveAdmissionId(String admissionIdHeader) {
         if (admissionIdHeader == null) {
+            if (admissionService.isRequired()) {
+                throw new BookingException(ErrorCode.ADMISSION_INVALID);
+            }
             return UUID.randomUUID();
         }
         try {
