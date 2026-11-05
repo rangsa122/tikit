@@ -1,7 +1,7 @@
 package com.tikit.performance.controller;
 
 import com.tikit.common.dto.ResponseDTO;
-import com.tikit.performance.dto.SeatTemplateListResponseDTO;
+import com.tikit.performance.dto.response.SeatTemplateListResponseDTO;
 import com.tikit.performance.dto.request.SalesConfigurationSaveRequestDTO;
 import com.tikit.performance.dto.response.SalesConfigurationResponseDTO;
 import com.tikit.performance.service.SalesConfigurationService;

@@ -4,6 +4,8 @@ import com.tikit.common.ErrorCode;
 import com.tikit.performance.dto.*;
 import com.tikit.performance.dto.request.SalesConfigurationSaveRequestDTO;
 import com.tikit.performance.dto.response.SalesConfigurationResponseDTO;
+import com.tikit.performance.dto.response.SeatTemplateListResponseDTO;
+import com.tikit.performance.dto.response.SeatTemplateResponseDTO;
 import com.tikit.performance.entity.*;
 import com.tikit.performance.exception.PerformanceException;
 import com.tikit.performance.repository.PerformanceRepository;
