@@ -17,11 +17,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -36,6 +36,9 @@ public class SalesConfigurationService {
     private final PerformanceSessionRepository performanceSessionRepository;
     private final SaleOpeningRepository saleOpeningRepository;
     private final SessionGradePriceRepository sessionGradePriceRepository;
+
+    private static final String POLICY_VERSION = "v1";
+    private static final String CANCELLATION_POLICY ="공연 시작 24시간 전까지 취소가능";
 
     private static final ZoneOffset KST = ZoneOffset.ofHours(9);
     private final SessionSeatRepository sessionSeatRepository;
@@ -79,6 +82,136 @@ public class SalesConfigurationService {
 
     }
 
+
+
+    @Transactional
+    public SalesConfigurationResponseDTO saveSalesConfiguration(Long memberId, Long performanceId,
+                                                                SalesConfigurationSaveRequestDTO request) {
+        accessChecker.requireManager(memberId);
+
+        Performance performance = performanceRepository.findForSave(performanceId)
+                .orElseThrow(() -> new PerformanceException(ErrorCode.RESOURCE_NOT_FOUND));
+
+        if (performance.getPublicationStatus() != PublicationStatus.DRAFT) {
+            throw new PerformanceException(ErrorCode.PERFORMANCE_EDIT_LOCKED);
+        }
+        if (!performance.getVersion().equals(request.expectedVersion())) {
+            throw new PerformanceException(ErrorCode.VERSION_CONFLICT);
+        }
+
+        List<PerformanceSession> existing = performanceSessionRepository.findByPerformance(performanceId);
+        Set<Long> existingIds = existing.stream().map(PerformanceSession::getId).collect(Collectors.toSet());
+
+        if (!existingIds.isEmpty() && sessionSeatRepository.existsTaken(existingIds)) {
+            throw new PerformanceException(ErrorCode.PERFORMANCE_EDIT_LOCKED);
+        }
+
+        SalesConfigurationValidator.validate(request, performance.getStartDate(), performance.getEndDate(),
+                existingIds, loadTemplateGrades(request));
+
+        //요청에 없는 기존 회차 삭제(삭제순서 : 좌석 -> 가격 -> 회차)
+        Set<Long> requestedIds = request.sessions().stream()
+                .map(SessionConfigurationDTO::sessionId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        List<PerformanceSession> toDelete = existing.stream()
+                .filter(s -> !requestedIds.contains(s.getId()))
+                .toList();
+
+        if(!toDelete.isEmpty()){
+            List<Long> deleteIds = toDelete.stream().map(PerformanceSession::getId).toList();
+            sessionSeatRepository.deleteBySessions(deleteIds);
+            sessionGradePriceRepository.deleteBySessions(deleteIds);
+            performanceSessionRepository.deleteAll(toDelete);
+            performanceSessionRepository.flush();
+        }
+
+        performance.changeBookingLimit(request.bookingLimitPerMember().shortValue());
+
+        //판매 오픈 찾기, 만들기
+        Map<Instant, SaleOpening> openingByTime = new HashMap<>(
+                saleOpeningRepository.findByPerformance(performanceId).stream()
+                        .collect(Collectors.toMap(SaleOpening::getOpensAt, o ->o)));
+
+        for(SessionConfigurationDTO s : request.sessions()){
+            Instant opensAt = s.salesOpenAt().toInstant().truncatedTo(ChronoUnit.MICROS);
+            if(!openingByTime.containsKey(opensAt)){
+                SaleOpening created = saleOpeningRepository.save(SaleOpening.create(performance, opensAt));
+                openingByTime.put(opensAt, created);
+            }
+        }
+
+        //회차 수정 및 생성(좌석, 가격)
+        Map<Long, PerformanceSession> existingById = existing.stream()
+                .collect(Collectors.toMap(PerformanceSession::getId, s-> s));
+        //남는 기존회차의 가격은 한번에 지움 (아래 반복문에서 새로 넣음)
+        List<Long> keptIds = existing.stream()
+                .map(PerformanceSession::getId)
+                .filter(requestedIds::contains)
+                .toList();
+        if(!keptIds.isEmpty()){
+            sessionGradePriceRepository.deleteBySessions(keptIds);
+        }
+        Map<Long, List<TemplateSeat>> seatsByTemplate = new HashMap<>();
+
+        for(SessionConfigurationDTO s:request.sessions()){
+            Instant startsAt = toInstant(s.startsAt());
+            Instant salesCloseAt = toInstant(s.salesCloseAt());
+            Instant deadline = toInstant(s.cancellationDeadline());
+            Long openingId = openingByTime.get(toInstant(s.salesOpenAt())).getId();
+
+            final PerformanceSession session;
+            boolean needSeats;
+
+            //기존회차 수정
+            if(s.sessionId() != null) {
+                session = existingById.get(s.sessionId());
+                needSeats = !session.getSeatTemplateId().equals(s.seatTemplateId());
+                if (needSeats) {
+                    sessionSeatRepository.deleteBySessions(List.of(session.getId()));
+                }
+                session.update(openingId, s.seatTemplateId(), startsAt, salesCloseAt, deadline);
+                //새회차 생성
+            }else{
+                    session = performanceSessionRepository.save(PerformanceSession.create(
+                            performance, openingId, s.seatTemplateId(), startsAt, salesCloseAt, deadline,
+                            POLICY_VERSION, CANCELLATION_POLICY));
+                    needSeats = true;
+                }
+
+            if(needSeats){
+                List<TemplateSeat> templateSeats = seatsByTemplate.computeIfAbsent(
+                        s.seatTemplateId(), templateSeatRepository::findByTemplateId);
+                sessionSeatRepository.saveAll(templateSeats.stream()
+                        .map(ts -> SessionSeat.create(session, ts))
+                        .toList());
+            }
+            sessionGradePriceRepository.saveAll(s.gradePrices().stream()
+                    .map(p->SessionGradePrice.create(session, p.grade(), p.price()))
+                    .toList());
+        }
+
+        return buildResponse(performance, performanceSessionRepository.findByPerformance(performanceId));
+    }
+
+    private Map<Long, Set<String>> loadTemplateGrades(SalesConfigurationSaveRequestDTO request) {
+        Set<Long> templateIds = request.sessions().stream()
+                .map(SessionConfigurationDTO::seatTemplateId)
+                .collect(Collectors.toSet());
+
+        Set<Long> activeIds = seatTemplateRepository.findAllById(templateIds).stream()
+                .filter(SeatTemplate::isActive)
+                .map(SeatTemplate::getId)
+                .collect(Collectors.toSet());
+        if (activeIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return templateSeatRepository.findByTemplateIdIn(activeIds).stream()
+                .collect(Collectors.groupingBy(s -> s.getTemplate().getId(),
+                        Collectors.mapping(TemplateSeat::getGrade, Collectors.toSet())));
+    }
+
     private SalesConfigurationResponseDTO buildResponse(Performance performance, List<PerformanceSession> sessions){
         if(sessions.isEmpty()){
             return new SalesConfigurationResponseDTO(performance.getId(), performance.getVersion(),
@@ -112,50 +245,8 @@ public class SalesConfigurationService {
                 (int)performance.getBookingLimitPerMember(), sessionDtos);
     }
 
-    @Transactional
-    public SalesConfigurationResponseDTO saveSalesConfiguration(Long memberId, Long performanceId,
-                                                                SalesConfigurationSaveRequestDTO request) {
-        accessChecker.requireManager(memberId);
-
-        Performance performance = performanceRepository.findForSave(performanceId)
-                .orElseThrow(() -> new PerformanceException(ErrorCode.RESOURCE_NOT_FOUND));
-
-        if (performance.getPublicationStatus() != PublicationStatus.DRAFT) {
-            throw new PerformanceException(ErrorCode.PERFORMANCE_EDIT_LOCKED);
-        }
-        if (!performance.getVersion().equals(request.expectedVersion())) {
-            throw new PerformanceException(ErrorCode.VERSION_CONFLICT);
-        }
-
-        List<PerformanceSession> existing = performanceSessionRepository.findByPerformance(performanceId);
-        Set<Long> existingIds = existing.stream().map(PerformanceSession::getId).collect(Collectors.toSet());
-
-        if (!existingIds.isEmpty() && sessionSeatRepository.existsTaken(existingIds)) {
-            throw new PerformanceException(ErrorCode.PERFORMANCE_EDIT_LOCKED);
-        }
-
-        SalesConfigurationValidator.validate(request, performance.getStartDate(), performance.getEndDate(),
-                existingIds, loadTemplateGrades(request));
-
-        return buildResponse(performance, performanceSessionRepository.findByPerformance(performanceId));
-    }
-
-    private Map<Long, Set<String>> loadTemplateGrades(SalesConfigurationSaveRequestDTO request) {
-        Set<Long> templateIds = request.sessions().stream()
-                .map(SessionConfigurationDTO::seatTemplateId)
-                .collect(Collectors.toSet());
-
-        Set<Long> activeIds = seatTemplateRepository.findAllById(templateIds).stream()
-                .filter(SeatTemplate::isActive)
-                .map(SeatTemplate::getId)
-                .collect(Collectors.toSet());
-        if (activeIds.isEmpty()) {
-            return Map.of();
-        }
-
-        return templateSeatRepository.findByTemplateIdIn(activeIds).stream()
-                .collect(Collectors.groupingBy(s -> s.getTemplate().getId(),
-                        Collectors.mapping(TemplateSeat::getGrade, Collectors.toSet())));
+    private static  Instant toInstant(OffsetDateTime time){
+        return time.toInstant().truncatedTo(ChronoUnit.MICROS);
     }
 
 }
