@@ -161,4 +161,20 @@ class MemberServiceTest {
         assertThat(captor.getValue().getRole()).isEqualTo(Role.MEMBER);
         assertThat(captor.getValue().getPasswordHash()).isEqualTo("encodedPassword");
     }
+
+    @Test
+    @DisplayName("이메일 중복 확인은 정규화한 이메일로 조회해 가입된 이메일이면 사용 불가")
+    void isEmailAvailable_registeredEmail() {
+        when(memberRepository.existsByEmail("test@example.com")).thenReturn(true);
+
+        assertThat(memberService.isEmailAvailable("  Test@Example.com ")).isFalse();
+    }
+
+    @Test
+    @DisplayName("가입되지 않은 이메일은 사용 가능")
+    void isEmailAvailable_newEmail() {
+        when(memberRepository.existsByEmail("new@example.com")).thenReturn(false);
+
+        assertThat(memberService.isEmailAvailable("new@example.com")).isTrue();
+    }
 }

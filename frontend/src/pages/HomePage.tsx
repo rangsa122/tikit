@@ -6,6 +6,7 @@ import type {CategoryId} from '../constants/categories'
 import {mockOpeningPerformances, mockPerformances} from '../mocks/performances'
 import PerformanceBanner from '../components/performance/PerformanceBanner'
 import PerformanceSection from '../components/performance/PerformanceSection'
+import PerformanceListState from '../components/performance/PerformanceListState'
 import PromotionBanner from '../components/performance/PromotionBanner'
 
 export default function HomePage() {
@@ -76,14 +77,7 @@ export default function HomePage() {
                 ))}
               </div>
             ) : (
-              <div className="py-20 text-center">
-                <p className="text-lg font-semibold text-[#111]">
-                  검색 결과가 없습니다.
-                </p>
-                <p className="mt-2 text-sm text-gray-500">
-                  다른 공연 제목으로 검색해 보세요.
-                </p>
-              </div>
+              <PerformanceListState state="empty" />
             )}
           </section>
         ) : (

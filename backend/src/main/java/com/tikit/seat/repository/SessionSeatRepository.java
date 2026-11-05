@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
+import com.tikit.performance.entity.SeatStatus;
 import java.util.List;
 
 public interface SessionSeatRepository extends JpaRepository<SessionSeat, Long> {
@@ -21,4 +22,5 @@ public interface SessionSeatRepository extends JpaRepository<SessionSeat, Long> 
     @Modifying
     @Query("delete from SessionSeat s where s.session.id in :sessionIds")
     void deleteBySessions(@Param("sessionIds") Collection<Long> sessionIds);
+    long countBySessionIdAndStatus(Long sessionId, SeatStatus status);
 }

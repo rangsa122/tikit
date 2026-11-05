@@ -2,7 +2,9 @@ package com.tikit.auth.controller;
 
 import com.tikit.auth.dto.response.JwtTokenResponseDTO;
 import com.tikit.auth.dto.response.AccessTokenResponseDTO;
+import com.tikit.auth.dto.response.EmailAvailabilityResponseDTO;
 import com.tikit.auth.cookie.RefreshTokenCookie;
+import com.tikit.auth.dto.request.EmailAvailabilityRequestDTO;
 import com.tikit.auth.dto.request.MemberLoginRequestDTO;
 import com.tikit.auth.dto.request.MemberRegisterRequestDTO;
 import com.tikit.auth.service.MemberService;
@@ -15,6 +17,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -48,6 +52,21 @@ public class MemberController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ResponseDTO.success("회원가입 성공."));
+    }
+
+    @GetMapping("/email-availability")
+    public ResponseEntity<ResponseDTO<EmailAvailabilityResponseDTO>> checkEmailAvailability(
+            @Valid @ModelAttribute EmailAvailabilityRequestDTO dto
+    ) {
+        boolean available = memberService.isEmailAvailable(dto.getEmail());
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .body(ResponseDTO.success(
+                        "이메일 중복 확인 성공",
+                        new EmailAvailabilityResponseDTO(available)
+                ));
     }
 
     @PostMapping(value = "/refresh", consumes = MediaType.APPLICATION_JSON_VALUE)

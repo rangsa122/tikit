@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 public interface SaleOpeningRepository extends JpaRepository<SaleOpening, Long> {
+    List<SaleOpening> findByPerformance_IdOrderByOpensAtAsc(Long performanceId);
 
     @Query("select o from SaleOpening o where o.performance.id = :performanceId")
     List<SaleOpening> findByPerformance(@Param("performanceId") Long performanceId);

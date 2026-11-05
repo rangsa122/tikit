@@ -21,4 +21,5 @@ public interface SessionGradePriceRepository
     @Modifying
     @Query("delete from SessionGradePrice p where p.id.sessionId in :sessionIds")
     void deleteBySessions(@Param("sessionIds") Collection<Long> sessionIds);
+    List<SessionGradePrice> findBySessionIdIn(List<Long> sessionIds);
 }

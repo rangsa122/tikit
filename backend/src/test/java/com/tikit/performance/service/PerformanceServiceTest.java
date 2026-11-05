@@ -5,13 +5,15 @@ import com.tikit.auth.entity.MemberStatus;
 import com.tikit.auth.entity.Role;
 import com.tikit.auth.repository.MemberRepository;
 import com.tikit.common.ErrorCode;
-import com.tikit.performance.dto.PerformanceCreateRequestDTO;
-import com.tikit.performance.dto.PerformanceResponseDTO;
-import com.tikit.performance.dto.PerformanceUpdateRequestDTO;
+import com.tikit.performance.dto.*;
 import com.tikit.performance.entity.*;
 import com.tikit.performance.exception.PerformanceException;
 import com.tikit.performance.repository.GenreRepository;
 import com.tikit.performance.repository.PerformanceRepository;
+import com.tikit.performance.repository.SaleOpeningRepository;
+import com.tikit.seat.repository.PerformanceSessionRepository;
+import com.tikit.seat.repository.SessionGradePriceRepository;
+import com.tikit.seat.repository.SessionSeatRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,7 +23,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,17 +45,43 @@ public class PerformanceServiceTest {
     @Mock
     MemberRepository memberRepository;
 
+    @Mock
+    PerformanceSessionRepository performanceSessionRepository;
+
+    @Mock
+    SaleOpeningRepository saleOpeningRepository;
+
+    @Mock
+    SessionGradePriceRepository sessionGradePriceRepository;
+
+    @Mock
+    SessionSeatRepository sessionSeatRepository;
+
     PerformanceService service;
 
     private static final Long MEMBER_ID = 1L;
 
     private static final Long PERFORMANCE_ID = 10L;
 
+    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+
     @BeforeEach
     void setUp() {
         PerformanceAccessChecker accessChecker = new PerformanceAccessChecker(memberRepository);
-        service = new PerformanceService(performanceRepository, genreRepository, accessChecker);
+        service = new PerformanceService(
+                performanceRepository,
+                genreRepository,
+                accessChecker,
+                performanceSessionRepository,
+                saleOpeningRepository,
+                sessionGradePriceRepository,
+                sessionSeatRepository
+        );
     }
+
+    // =====================================================
+    // 테스트 데이터 생성
+    // =====================================================
 
     private Member member(Role role, MemberStatus status) {
         Member member = Member.create("test@test.com", "1234", "김철수", role);
@@ -83,6 +114,30 @@ public class PerformanceServiceTest {
         return p;
     }
 
+    private Performance publicPerformance() {
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
+        Performance performance = draftPerformance(manager);
+        ReflectionTestUtils.setField(performance, "id", PERFORMANCE_ID);
+        ReflectionTestUtils.setField(performance, "publicationStatus", PublicationStatus.PUBLISHED);
+        ReflectionTestUtils.setField(performance, "visibility", Visibility.PUBLIC);
+        return performance;
+    }
+
+    private PerformanceSession session(Performance performance, Long id, Instant startsAt) {
+        PerformanceSession session = PerformanceSession.create(
+                performance,
+                1L,
+                1L,
+                startsAt,
+                startsAt.minusSeconds(3600),
+                startsAt.minusSeconds(7200),
+                "v1",
+                "테스트 취소 정책"
+        );
+        ReflectionTestUtils.setField(session, "id", id);
+        return session;
+    }
+
     private PerformanceUpdateRequestDTO updateRequest(Long expectedVersion) {
         PerformanceUpdateRequestDTO dto = new PerformanceUpdateRequestDTO();
         ReflectionTestUtils.setField(dto, "expectedVersion", expectedVersion);
@@ -95,7 +150,51 @@ public class PerformanceServiceTest {
                 .extracting("errorCode").isEqualTo(expected);
     }
 
+    /**
+     * 공개 공연 조회 Repository 공통 Mock
+     */
+    private void mockPublicPerformance(Performance performance) {
+        when(performanceRepository.findPublicDetail(
+                PERFORMANCE_ID,
+                PublicationStatus.PUBLISHED,
+                Visibility.PUBLIC
+        )).thenReturn(Optional.of(performance));
+    }
 
+    /**
+     * 판매 오픈 데이터 Mock
+     */
+    private SaleOpening mockOpening() {
+        SaleOpening opening = mock(SaleOpening.class);
+
+        when(opening.getId()).thenReturn(1L);
+
+        lenient().when(opening.getOpensAt()).thenReturn(
+                Instant.parse("2026-11-20T05:00:00Z")
+        );
+
+        return opening;
+    }
+
+    /**
+     * 회차별 등급 가격 Mock
+     */
+    private SessionGradePrice mockPrice(Long sessionId, String grade, long amount) {
+        SessionGradePrice price = mock(SessionGradePrice.class);
+        SessionGradePriceId priceId = mock(SessionGradePriceId.class);
+
+        lenient().when(price.getId()).thenReturn(priceId);
+        lenient().when(priceId.getSessionId()).thenReturn(sessionId);
+        lenient().when(priceId.getGrade()).thenReturn(grade);
+
+        when(price.getPrice()).thenReturn(amount);
+
+        return price;
+    }
+
+    // =====================================================
+    // 기존 관리자 기능 테스트
+    // =====================================================
 
     @Test
     @DisplayName("직접등록성공 : DRAFT/PRIVATE/STOPPED로 저장되고 기본 예매 제한은 4")
@@ -230,4 +329,163 @@ public class PerformanceServiceTest {
                 ErrorCode.VALIDATION_ERROR);
     }
 
+    // =====================================================
+    // 이슈 #85 공개 공연 상세 조회 테스트
+    // =====================================================
+
+    @Test
+    @DisplayName("공개된 공연은 로그인 없이 상세 정보를 조회할 수 있다")
+    void getPublicDetail_success() {
+        Performance performance = publicPerformance();
+
+        PerformanceSession first = session(performance, 101L, Instant.parse("2026-12-01T10:00:00Z"));
+        SaleOpening opening = mockOpening();
+        SessionGradePrice price = mockPrice(101L, "R", 50000L);
+
+        mockPublicPerformance(performance);
+
+        when(performanceSessionRepository.findByPerformance_IdOrderByStartsAtAsc(PERFORMANCE_ID))
+                .thenReturn(List.of(first));
+        when(saleOpeningRepository.findByPerformance_IdOrderByOpensAtAsc(PERFORMANCE_ID))
+                .thenReturn(List.of(opening));
+        when(sessionGradePriceRepository.findBySessionIdIn(List.of(101L)))
+                .thenReturn(List.of(price));
+
+        PublicPerformanceDetailDTO result = service.getPublicDetail(PERFORMANCE_ID);
+
+        assertThat(result.performanceId()).isEqualTo("10");
+        assertThat(result.title()).isEqualTo("제목");
+        assertThat(result.genreCode()).isEqualTo("THEATER");
+        assertThat(result.venueName()).isEqualTo("장소");
+        assertThat(result.minPrice()).isEqualTo(50000L);
+        assertThat(result.salesStatus()).isEqualTo("STOPPED");
+        assertThat(result.bookingLimitPerMember()).isEqualTo(4);
+        assertThat(result.cancellationPolicy()).isEqualTo("테스트 취소 정책");
+        assertThat(result.saleOpenings()).hasSize(1);
+        assertThat(result.saleOpenings().getFirst().openingId()).isEqualTo("1");
+        assertThat(result.saleOpenings().getFirst().notified()).isFalse();
+
+        verify(performanceRepository).findPublicDetail(
+                PERFORMANCE_ID,
+                PublicationStatus.PUBLISHED,
+                Visibility.PUBLIC
+        );
+    }
+
+    @Test
+    @DisplayName("비공개 공연은 공개 상세 조회에서 찾을 수 없다")
+    void getPublicDetail_privateNotFound() {
+        when(performanceRepository.findPublicDetail(
+                PERFORMANCE_ID,
+                PublicationStatus.PUBLISHED,
+                Visibility.PUBLIC
+        )).thenReturn(Optional.empty());
+
+        assertFails(() -> service.getPublicDetail(PERFORMANCE_ID), ErrorCode.RESOURCE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("공연 가격 데이터가 없으면 상세 조회에 실패한다")
+    void getPublicDetail_withoutPrices() {
+        Performance performance = publicPerformance();
+
+        mockPublicPerformance(performance);
+
+        when(performanceSessionRepository.findByPerformance_IdOrderByStartsAtAsc(PERFORMANCE_ID))
+                .thenReturn(List.of());
+        when(saleOpeningRepository.findByPerformance_IdOrderByOpensAtAsc(PERFORMANCE_ID))
+                .thenReturn(List.of());
+
+        assertFails(() -> service.getPublicDetail(PERFORMANCE_ID), ErrorCode.RESOURCE_NOT_FOUND);
+    }
+
+    // =====================================================
+    // 이슈 #85 공개 공연 회차 조회 테스트
+    // =====================================================
+
+    @Test
+    @DisplayName("공개 공연의 회차 목록을 시작 시간순으로 조회한다")
+    void getPublicSessions_success() {
+        Performance performance = publicPerformance();
+
+        Instant firstStartsAt = Instant.parse("2026-12-01T10:00:00Z");
+        Instant secondStartsAt = Instant.parse("2026-12-02T10:00:00Z");
+
+        PerformanceSession first = session(performance, 101L, firstStartsAt);
+        PerformanceSession second = session(performance, 102L, secondStartsAt);
+
+        SaleOpening opening = mockOpening();
+
+        SessionGradePrice firstPrice = mockPrice(101L, "R", 50000L);
+        SessionGradePrice secondPrice = mockPrice(102L, "S", 30000L);
+
+        mockPublicPerformance(performance);
+
+        when(performanceSessionRepository.findByPerformance_IdOrderByStartsAtAsc(PERFORMANCE_ID))
+                .thenReturn(List.of(first, second));
+        when(saleOpeningRepository.findByPerformance_IdOrderByOpensAtAsc(PERFORMANCE_ID))
+                .thenReturn(List.of(opening));
+        when(sessionGradePriceRepository.findBySessionIdIn(List.of(101L, 102L)))
+                .thenReturn(List.of(firstPrice, secondPrice));
+
+        PerformanceSessionListDTO result = service.getPublicSessions(PERFORMANCE_ID);
+
+        assertThat(result.items()).hasSize(2);
+
+        assertThat(result.items())
+                .extracting(PerformanceSessionResponseDTO::sessionId)
+                .containsExactly("101", "102");
+
+        assertThat(result.items())
+                .extracting(PerformanceSessionResponseDTO::performanceId)
+                .containsExactly("10", "10");
+
+        assertThat(result.items())
+                .extracting(PerformanceSessionResponseDTO::startsAt)
+                .containsExactly(
+                        firstStartsAt.atZone(SEOUL).toOffsetDateTime(),
+                        secondStartsAt.atZone(SEOUL).toOffsetDateTime()
+                );
+
+        assertThat(result.items())
+                .extracting(PerformanceSessionResponseDTO::bookingAvailability)
+                .containsExactly("STOPPED", "STOPPED");
+
+        assertThat(result.items().getFirst().gradePrices()).hasSize(1);
+        assertThat(result.items().getFirst().gradePrices().getFirst().grade()).isEqualTo("R");
+        assertThat(result.items().getFirst().gradePrices().getFirst().price()).isEqualTo(50000L);
+
+        assertThat(result.items().get(1).gradePrices()).hasSize(1);
+        assertThat(result.items().get(1).gradePrices().getFirst().grade()).isEqualTo("S");
+        assertThat(result.items().get(1).gradePrices().getFirst().price()).isEqualTo(30000L);
+
+        assertThat(result.items().getFirst().serverTime()).isNotNull();
+
+        verify(performanceSessionRepository)
+                .findByPerformance_IdOrderByStartsAtAsc(PERFORMANCE_ID);
+    }
+
+    @Test
+    @DisplayName("공개 공연에 회차가 없으면 빈 items 목록을 반환한다")
+    void getPublicSessions_empty() {
+        Performance performance = publicPerformance();
+
+        mockPublicPerformance(performance);
+
+        when(performanceSessionRepository.findByPerformance_IdOrderByStartsAtAsc(PERFORMANCE_ID))
+                .thenReturn(List.of());
+
+        PerformanceSessionListDTO result = service.getPublicSessions(PERFORMANCE_ID);
+
+        assertThat(result.items()).isEmpty();
+
+        verify(performanceSessionRepository)
+                .findByPerformance_IdOrderByStartsAtAsc(PERFORMANCE_ID);
+
+        verifyNoInteractions(
+                saleOpeningRepository,
+                sessionGradePriceRepository,
+                sessionSeatRepository
+        );
+    }
 }
