@@ -280,14 +280,18 @@ function AdmittedView({entry, clockOffsetMs, onEnter, onExpired}: {
     const admission = usePaymentCountdown(entry.admissionExpiresAt ?? undefined, clockOffsetMs)
     const holdMinutes = Math.max(1, Math.ceil(admission.remainingSeconds / 60))
 
+    // 입장 권한이 이미 만료됐으면 자동 이동하지 않음
     useEffect(() => {
+        if (admission.isExpired) {
+            return
+        }
         if (count <= 0) {
             onEnter()
             return
         }
         const timerId = window.setTimeout(() => setCount(value => value - 1), 1000)
         return () => window.clearTimeout(timerId)
-    }, [count, onEnter])
+    }, [count, onEnter, admission.isExpired])
 
     if (admission.isExpired) {
         return (
