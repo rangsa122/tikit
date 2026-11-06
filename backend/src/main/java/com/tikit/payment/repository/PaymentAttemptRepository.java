@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 public interface PaymentAttemptRepository extends JpaRepository<PaymentAttempt, Long> {
@@ -66,6 +67,9 @@ public interface PaymentAttemptRepository extends JpaRepository<PaymentAttempt, 
 
     // 같은 예매의 해당 상태 결제 시도 조회 (READY 재사용용)
     Optional<PaymentAttempt> findFirstByBookingIdAndStatus(Long bookingId, PaymentAttemptStatus status);
+
+    // 여러 예매의 결제 시도를 최신순으로 조회 (예매 조회의 최신 결제 상태용)
+    List<PaymentAttempt> findByBookingIdInOrderByIdDesc(Collection<Long> bookingIds);
 
     // 승인 1. 결제 시도의 예매 ID만 조회 (잠금 순서를 지키려고 잠금 없이 먼저 읽음)
     @Query("SELECT pa.bookingId FROM PaymentAttempt pa WHERE pa.id = :paymentAttemptId")

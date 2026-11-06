@@ -24,6 +24,15 @@ public interface SeatHoldRepository extends Repository<SessionSeat, Long> {
             """)
     Optional<PerformanceSession> findSessionWithPerformance(@Param("sessionId") Long sessionId);
 
+    // 여러 회차를 공연과 함께 조회 (예매 목록의 공연 ID용)
+    @Query("""
+            select s
+            from PerformanceSession s
+            join fetch s.performance
+            where s.id in :sessionIds
+            """)
+    List<PerformanceSession> findSessionsWithPerformance(@Param("sessionIds") Collection<Long> sessionIds);
+
     @Query("""
             select o.opensAt
             from SaleOpening o
