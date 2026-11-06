@@ -3,7 +3,7 @@ package com.tikit.config.security;
 import com.tikit.auth.dto.request.MemberLoginRequestDTO;
 import com.tikit.auth.entity.Member;
 import com.tikit.auth.entity.Role;
-import com.tikit.auth.repository.AccountRepository;
+import com.tikit.auth.repository.MemberRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +20,7 @@ import tools.jackson.databind.ObjectMapper;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 
 @ActiveProfiles("local")
 @AutoConfigureMockMvc // Mock(가짜) 환경에 MockMvc가 등록
@@ -37,7 +38,7 @@ public class SecurityConfigTest {
     private PasswordEncoder passwordEncoder;
 
     @Autowired
-    private AccountRepository accountRepository;
+    private MemberRepository memberRepository;
 
 
     @Test
@@ -70,10 +71,10 @@ public class SecurityConfigTest {
         );
 
         // 저장 후
-        accountRepository.save(member);
+        memberRepository.save(member);
 
         // 바로 insert
-        accountRepository.flush();
+        memberRepository.flush();
 
         MemberLoginRequestDTO dto = new MemberLoginRequestDTO(
                 "test1234567error@gmail.com",
@@ -114,10 +115,10 @@ public class SecurityConfigTest {
         );
 
         // 저장 후
-        accountRepository.save(member);
+        memberRepository.save(member);
 
         // 바로 insert
-        accountRepository.flush();
+        memberRepository.flush();
 
         MemberLoginRequestDTO dto = new MemberLoginRequestDTO(
                 "test12345@gmail.com",
@@ -143,7 +144,10 @@ public class SecurityConfigTest {
         resultActions
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
-                .andExpect(jsonPath("$.data.refreshToken").isNotEmpty());
+                .andExpect(jsonPath("$.data.refreshToken").doesNotExist())
+                .andExpect(cookie().exists("refreshToken"))
+                .andExpect(cookie().httpOnly("refreshToken", true))
+                .andExpect(cookie().path("refreshToken", "/api/v1/auth"));
     }
 
 

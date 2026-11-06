@@ -2,9 +2,11 @@
 package com.tikit.seat.service;
 
 import com.tikit.seat.dto.response.SessionSeatResponseDTO;
-import com.tikit.seat.entity.SessionGradePrice;
-import com.tikit.seat.entity.SessionSeat;
-import com.tikit.seat.entity.TemplateSeat;
+import com.tikit.performance.entity.SeatStatus;
+import com.tikit.performance.entity.SessionGradePrice;
+import com.tikit.performance.entity.SessionGradePriceId;
+import com.tikit.performance.entity.SessionSeat;
+import com.tikit.performance.entity.TemplateSeat;
 import com.tikit.seat.repository.PerformanceSessionRepository;
 import com.tikit.seat.repository.SessionGradePriceRepository;
 import com.tikit.seat.repository.SessionSeatRepository;
@@ -92,10 +94,10 @@ class SessionSeatServiceTest {
                 .thenReturn(List.of(sessionSeat));
 
         when(sessionSeat.getSeatTemplateId()).thenReturn(10L);
-        when(sessionSeat.getTemplateSeatId()).thenReturn(100L);
+        when(sessionSeat.getTemplateSeat()).thenReturn(templateSeat);
         when(sessionSeat.getId()).thenReturn(1000L);
         when(sessionSeat.getGrade()).thenReturn("VIP");
-        when(sessionSeat.getStatus()).thenReturn("AVAILABLE");
+        when(sessionSeat.getStatus()).thenReturn(SeatStatus.AVAILABLE);
 
         when(templateSeatRepository.findByTemplateId(10L))
                 .thenReturn(List.of(templateSeat));
@@ -111,7 +113,7 @@ class SessionSeatServiceTest {
         when(sessionGradePriceRepository.findBySessionId(1L))
                 .thenReturn(List.of(gradePrice));
 
-        when(gradePrice.getGrade()).thenReturn("VIP");
+        when(gradePrice.getId()).thenReturn(new SessionGradePriceId(1L, "VIP"));
         when(gradePrice.getPrice()).thenReturn(150000L);
 
         List<SessionSeatResponseDTO> result =

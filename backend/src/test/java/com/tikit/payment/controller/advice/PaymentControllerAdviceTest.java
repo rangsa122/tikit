@@ -2,6 +2,7 @@ package com.tikit.payment.controller.advice;
 
 import com.tikit.common.ErrorCode;
 import com.tikit.common.dto.ResponseDTO;
+import com.tikit.payment.exception.PaymentException;
 import com.tikit.payment.exception.TossApiException;
 import com.tikit.payment.exception.TossResultUnknownException;
 import com.tikit.payment.exception.TossUnavailableException;
@@ -69,6 +70,24 @@ public class PaymentControllerAdviceTest {
 
         // then
         assertFailResponse(response, ErrorCode.PAYMENT_IN_PROGRESS);
+    }
+
+    @Test
+    @DisplayName("결제 업무 규칙 위반은 예외에 담긴 ErrorCode로 응답한다")
+    void handle_payment_exception() {
+        // given
+        // setup에서 이미 셋팅
+        PaymentException e = new PaymentException(
+                ErrorCode.BOOKING_EXPIRED,
+                "bookingId=1, memberId=1"
+        );
+
+        // when
+        ResponseEntity<ResponseDTO<Void>> response =
+                paymentControllerAdvice.handlePaymentException(e);
+
+        // then
+        assertFailResponse(response,  ErrorCode.BOOKING_EXPIRED);
     }
 
     private void assertFailResponse(

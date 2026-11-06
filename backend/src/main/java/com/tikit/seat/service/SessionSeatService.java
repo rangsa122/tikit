@@ -2,9 +2,9 @@
 package com.tikit.seat.service;
 
 import com.tikit.seat.dto.response.SessionSeatResponseDTO;
-import com.tikit.seat.entity.SessionGradePrice;
-import com.tikit.seat.entity.SessionSeat;
-import com.tikit.seat.entity.TemplateSeat;
+import com.tikit.performance.entity.SessionGradePrice;
+import com.tikit.performance.entity.SessionSeat;
+import com.tikit.performance.entity.TemplateSeat;
 import com.tikit.seat.repository.PerformanceSessionRepository;
 import com.tikit.seat.repository.SessionGradePriceRepository;
 import com.tikit.seat.repository.SessionSeatRepository;
@@ -60,14 +60,14 @@ public class SessionSeatService {
                 sessionGradePriceRepository.findBySessionId(sessionId)
                         .stream()
                         .collect(Collectors.toMap(
-                                SessionGradePrice::getGrade,
+                                price -> price.getId().getGrade(),
                                 SessionGradePrice::getPrice
                         ));
 
         return sessionSeats.stream()
                 .map(seat -> {
                     TemplateSeat templateSeat =
-                            templateSeatMap.get(seat.getTemplateSeatId());
+                            templateSeatMap.get(seat.getTemplateSeat().getId());
 
                     Long price = priceMap.get(seat.getGrade());
 
@@ -81,7 +81,7 @@ public class SessionSeatService {
                             price,
                             templateSeat.getX(),
                             templateSeat.getY(),
-                            seat.getStatus()
+                            seat.getStatus().name()
                     );
                 })
                 .toList();
