@@ -82,11 +82,15 @@ public enum ErrorCode {
     ),
     KOPIS_ALREADY_REGISTERED(
             HttpStatus.CONFLICT,
-            "이미 등록된 원본입니다. 타 판매자 정보는 반환하지 않습니다."
+            "이미 등록된 원본입니다."
     ),
     KOPIS_UNAVAILABLE(
             HttpStatus.SERVICE_UNAVAILABLE,
             "KOPIS 조회가 일시적으로 불가능합니다."
+    ),
+    NOT_MANAGER_ACCOUNT(
+            HttpStatus.CONFLICT,
+            "대상 계정이 MANAGER가 아닙니다."
     ),
     PASSWORD_MISMATCH(
             HttpStatus.UNAUTHORIZED,
@@ -104,17 +108,21 @@ public enum ErrorCode {
             HttpStatus.CONFLICT,
             "기존 결제 승인 결과를 확인 중입니다. 잠시 후 다시 확인해 주세요."
     ),
+    PERFORMANCE_ALREADY_PUBLISHED(
+            HttpStatus.CONFLICT,
+            "이미 게시된 공연입니다."
+    ),
     PERFORMANCE_EDIT_LOCKED(
             HttpStatus.CONFLICT,
-            "심사 중, 게시 후 또는 기존 예매가 있어 수정할 수 없습니다."
+            "게시 후 또는 기존 예매가 있어 수정할 수 없습니다."
     ),
-    PUBLICATION_NOT_APPROVED(
+    PERFORMANCE_NOT_PUBLISHED(
             HttpStatus.CONFLICT,
-            "승인된 공연만 공개 상태를 변경할 수 있습니다."
+            "게시된 공연만 공개 상태를 변경할 수 있습니다."
     ),
-    PUBLICATION_REQUIREMENTS_MISSING(
+    PUBLISH_REQUIREMENTS_MISSING(
             HttpStatus.UNPROCESSABLE_CONTENT,
-            "필수 판매 설정 또는 권한 자료가 없습니다."
+            "회차, 좌석, 가격 또는 판매 기간 설정이 없습니다."
     ),
     RAG_UNAVAILABLE(
             HttpStatus.SERVICE_UNAVAILABLE,
@@ -132,17 +140,13 @@ public enum ErrorCode {
             HttpStatus.NOT_FOUND,
             "요청한 리소스를 찾을 수 없거나 접근할 수 없습니다."
     ),
-    REVIEW_ALREADY_DECIDED(
-            HttpStatus.CONFLICT,
-            "이미 처리된 심사입니다."
-    ),
     SALE_NOT_OPEN(
             HttpStatus.CONFLICT,
             "판매 시작 전이거나 판매가 종료되었습니다."
     ),
     SALE_RESUME_NOT_ALLOWED(
             HttpStatus.CONFLICT,
-            "현재 승인 또는 공개 상태에서는 판매를 재개할 수 없습니다."
+            "현재 게시 또는 공개 상태에서는 판매를 재개할 수 없습니다."
     ),
     SALE_STOPPED(
             HttpStatus.CONFLICT,
@@ -151,10 +155,6 @@ public enum ErrorCode {
     SEAT_UNAVAILABLE(
             HttpStatus.CONFLICT,
             "선택한 좌석 중 선점 불가 좌석이 있습니다."
-    ),
-    SELLER_APPLICATION_EXISTS(
-            HttpStatus.CONFLICT,
-            "진행 중 신청 또는 승인된 판매자 계정이 있습니다."
     ),
     SERVICE_UNAVAILABLE(
             HttpStatus.SERVICE_UNAVAILABLE,
@@ -174,7 +174,7 @@ public enum ErrorCode {
     ),
     WITHDRAWAL_BLOCKED(
             HttpStatus.CONFLICT,
-            "진행 중 거래 또는 운영 의무가 있어 탈퇴할 수 없습니다."
+            "진행 중 거래가 있어 탈퇴할 수 없습니다."
     );
 
 
