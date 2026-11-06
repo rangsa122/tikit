@@ -21,7 +21,6 @@ const router = createBrowserRouter([
       {path: '/categories/:categoryId', element: <CategoryPage />},
       {path: '/performances/:performanceId', element: <PerformanceDetailPage />},
       {path: '/login', element: <LoginPage />},
-      {path: '/sessions/:sessionId/seats', element: <SeatSelectionPage />},
       {path: '/signup', element: <SignupPage />},
       {path: '/bookings/:bookingId/payment', element: <PaymentPage />},
       {path: '/bookings/:bookingId/payment/success', element: <PaymentSuccessPage />},
@@ -29,8 +28,9 @@ const router = createBrowserRouter([
       ...mypageRoutes,
     ],
   },
-  // 대기열은 피그마 Header/Minimal만 쓰므로 사이트 메뉴 없이 따로 둠
+  // 대기열과 좌석 선택은 피그마에서 전용 헤더를 쓰므로 사이트 메뉴 없이 따로 둠
   {path: '/sessions/:sessionId/queue', element: <QueuePage />},
+  {path: '/sessions/:sessionId/seats', element: <SeatSelectionPage />},
 ])
 
 export default router
