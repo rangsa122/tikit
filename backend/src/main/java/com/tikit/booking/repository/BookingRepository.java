@@ -4,6 +4,7 @@ import com.tikit.booking.entity.Booking;
 import com.tikit.booking.entity.BookingStatus;
 import com.tikit.payment.entity.PaymentAttemptStatus;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -23,6 +24,12 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     // 같은 입장 ID로 이미 만든 예매 (재요청 시 기존 예매 반환)
     Optional<Booking> findByAdmissionIdAndMemberId(UUID admissionId, Long memberId);
+
+    // 내 예매 목록
+    Page<Booking> findByMemberId(Long memberId, Pageable pageable);
+
+    // 내 예매 목록 (상태 필터)
+    Page<Booking> findByMemberIdAndStatus(Long memberId, BookingStatus status, Pageable pageable);
 
     // 회원이 회차에 가진 결제 대기와 확정 매수 합계
     @Query("""
