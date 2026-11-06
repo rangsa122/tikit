@@ -5,6 +5,7 @@ import com.tikit.auth.entity.Member;
 import com.tikit.auth.entity.MemberStatus;
 import com.tikit.auth.repository.MemberRepository;
 import com.tikit.common.ErrorCode;
+import com.tikit.performance.dto.response.FavoritePerformanceResponseDTO;
 import com.tikit.performance.entity.Performance;
 import com.tikit.performance.entity.PublicationStatus;
 import com.tikit.performance.entity.Visibility;
@@ -15,6 +16,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class FavoritePerformanceService {
@@ -23,6 +26,7 @@ public class FavoritePerformanceService {
     private final PerformanceRepository performanceRepository;
     private final MemberRepository memberRepository;
 
+    // 관심 공연 등록
     @Transactional
     public void addFavorite(Long memberId, Long performanceId) {
         validateMember(memberId);
@@ -43,6 +47,7 @@ public class FavoritePerformanceService {
         );
     }
 
+    // 관심 공연 해제
     @Transactional
     public void removeFavorite(Long memberId, Long performanceId) {
         validateMember(memberId);
@@ -53,6 +58,26 @@ public class FavoritePerformanceService {
         );
     }
 
+    // 관심 공연 목록 조회 (신규)
+    @Transactional(readOnly = true)
+    public List<FavoritePerformanceResponseDTO> getFavorites(Long memberId) {
+        validateMember(memberId);
+
+        return favoritePerformanceRepository.findPublicFavorites(
+                        memberId,
+                        PublicationStatus.PUBLISHED,
+                        Visibility.PUBLIC
+                )
+                .stream()
+                .map(favorite ->
+                        FavoritePerformanceResponseDTO.from(
+                                favorite.getPerformance()
+                        )
+                )
+                .toList();
+    }
+
+    // 회원 유효성 검사
     private void validateMember(Long memberId) {
         if (memberId == null) {
             throw new PerformanceException(
