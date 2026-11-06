@@ -76,6 +76,13 @@ public class Performance {
     @Column(name = "booking_limit_per_member", nullable = false)
     private short bookingLimitPerMember;
 
+    @Column(name = "published_at")
+    private Instant publishedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "published_by")
+    private Member publishedBy;
+
     @Version
     private Long version;
 
