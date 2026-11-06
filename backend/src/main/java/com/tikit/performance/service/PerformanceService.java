@@ -1,12 +1,12 @@
-
 package com.tikit.performance.service;
 
 import com.tikit.auth.entity.Member;
-import com.tikit.auth.entity.MemberStatus;
-import com.tikit.auth.entity.Role;
-import com.tikit.auth.repository.MemberRepository;
 import com.tikit.common.ErrorCode;
 import com.tikit.performance.dto.*;
+import com.tikit.performance.dto.request.PerformanceCreateRequestDTO;
+import com.tikit.performance.dto.request.PerformanceUpdateRequestDTO;
+import com.tikit.performance.dto.response.PerformanceResponseDTO;
+import com.tikit.performance.dto.response.PerformanceSessionResponseDTO;
 import com.tikit.performance.entity.*;
 import com.tikit.performance.exception.PerformanceException;
 import com.tikit.performance.repository.GenreRepository;
@@ -38,11 +38,12 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class PerformanceService {
 
+    private static final int MAX_PAGE_SIZE = 100;
     private static final ZoneId RESPONSE_ZONE = ZoneId.of("Asia/Seoul");
 
     private final PerformanceRepository performanceRepository;
     private final GenreRepository genreRepository;
-    private final MemberRepository memberRepository;
+    private final PerformanceAccessChecker accessChecker;
     private final PerformanceSessionRepository performanceSessionRepository;
     private final SaleOpeningRepository saleOpeningRepository;
     private final SessionGradePriceRepository sessionGradePriceRepository;
@@ -56,7 +57,7 @@ public class PerformanceService {
             Long memberId,
             PerformanceCreateRequestDTO request
     ) {
-        Member manager = getManager(memberId);
+        Member manager = accessChecker.requireManager(memberId);
 
         validateSource(request);
         validateDates(request.getStartDate(), request.getEndDate());
@@ -114,10 +115,10 @@ public class PerformanceService {
             int page,
             int size
     ) {
-        getViewer(memberId);
+        accessChecker.requireViewer(memberId);
 
         int safePage = Math.max(page, 0);
-        int safeSize = Math.min(Math.max(size, 1), 100);
+        int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
 
         return performanceRepository
                 .findAllByStatus(
@@ -134,7 +135,7 @@ public class PerformanceService {
             Long memberId,
             Long performanceId
     ) {
-        getViewer(memberId);
+        accessChecker.requireViewer(memberId);
 
         return PerformanceResponseDTO.from(
                 findPerformance(performanceId)
@@ -376,7 +377,7 @@ public class PerformanceService {
             Long performanceId,
             PerformanceUpdateRequestDTO request
     ) {
-        getManager(memberId);
+        accessChecker.requireManager(memberId);
 
         Performance performance = findPerformance(performanceId);
 
@@ -438,47 +439,6 @@ public class PerformanceService {
                                 ErrorCode.RESOURCE_NOT_FOUND
                         )
                 );
-    }
-
-    /**
-     * 관리자 권한 확인
-     */
-    private Member getManager(Long memberId) {
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(() ->
-                        new PerformanceException(ErrorCode.ACCESS_DENIED)
-                );
-
-        if (member.getStatus() != MemberStatus.ACTIVE) {
-            throw new PerformanceException(ErrorCode.ACCOUNT_RESTRICTED);
-        }
-
-        if (member.getRole() != Role.MANAGER) {
-            throw new PerformanceException(ErrorCode.ACCESS_DENIED);
-        }
-
-        return member;
-    }
-
-    /**
-     * 관리자 또는 운영자 권한 확인
-     */
-    private Member getViewer(Long memberId) {
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(() ->
-                        new PerformanceException(ErrorCode.ACCESS_DENIED)
-                );
-
-        if (member.getStatus() != MemberStatus.ACTIVE) {
-            throw new PerformanceException(ErrorCode.ACCOUNT_RESTRICTED);
-        }
-
-        if (member.getRole() != Role.MANAGER
-                && member.getRole() != Role.ADMIN) {
-            throw new PerformanceException(ErrorCode.ACCESS_DENIED);
-        }
-
-        return member;
     }
 
     /**

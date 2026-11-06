@@ -1,4 +1,4 @@
-package com.tikit.performance.dto;
+package com.tikit.performance.dto.response;
 
 import com.tikit.performance.entity.*;
 import lombok.AccessLevel;

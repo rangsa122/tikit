@@ -1,4 +1,3 @@
-
 package com.tikit.performance.service;
 
 import com.tikit.auth.entity.Member;
@@ -7,6 +6,10 @@ import com.tikit.auth.entity.Role;
 import com.tikit.auth.repository.MemberRepository;
 import com.tikit.common.ErrorCode;
 import com.tikit.performance.dto.*;
+import com.tikit.performance.dto.request.PerformanceCreateRequestDTO;
+import com.tikit.performance.dto.request.PerformanceUpdateRequestDTO;
+import com.tikit.performance.dto.response.PerformanceResponseDTO;
+import com.tikit.performance.dto.response.PerformanceSessionResponseDTO;
 import com.tikit.performance.entity.*;
 import com.tikit.performance.exception.PerformanceException;
 import com.tikit.performance.repository.GenreRepository;
@@ -15,12 +18,11 @@ import com.tikit.performance.repository.SaleOpeningRepository;
 import com.tikit.seat.repository.PerformanceSessionRepository;
 import com.tikit.seat.repository.SessionGradePriceRepository;
 import com.tikit.seat.repository.SessionSeatRepository;
-
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -59,134 +61,73 @@ public class PerformanceServiceTest {
     @Mock
     SessionSeatRepository sessionSeatRepository;
 
-    @InjectMocks
     PerformanceService service;
 
     private static final Long MEMBER_ID = 1L;
+
     private static final Long PERFORMANCE_ID = 10L;
 
-    private static final ZoneId SEOUL =
-            ZoneId.of("Asia/Seoul");
+    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+
+    @BeforeEach
+    void setUp() {
+        PerformanceAccessChecker accessChecker = new PerformanceAccessChecker(memberRepository);
+        service = new PerformanceService(
+                performanceRepository,
+                genreRepository,
+                accessChecker,
+                performanceSessionRepository,
+                saleOpeningRepository,
+                sessionGradePriceRepository,
+                sessionSeatRepository
+        );
+    }
 
     // =====================================================
     // 테스트 데이터 생성
     // =====================================================
 
     private Member member(Role role, MemberStatus status) {
-        Member member = Member.create(
-                "test@test.com",
-                "1234",
-                "김철수",
-                role
-        );
-
+        Member member = Member.create("test@test.com", "1234", "김철수", role);
         ReflectionTestUtils.setField(member, "id", 1L);
         ReflectionTestUtils.setField(member, "status", status);
-
         return member;
     }
 
-    private Genre genre() {
-        return Genre.create(
-                "THEATER",
-                "테스트연극",
-                null,
-                1,
-                true
-        );
+    private Genre genre(){
+        return Genre.create("THEATER", "테스트연극", null, 1, true);
     }
 
-    private PerformanceCreateRequestDTO createRequestDTO(
-            PerformanceSource source,
-            String kopisId
-    ) {
-        PerformanceCreateRequestDTO dto =
-                new PerformanceCreateRequestDTO();
-
+    private PerformanceCreateRequestDTO createRequestDTO(PerformanceSource source, String kopisId){
+        PerformanceCreateRequestDTO dto = new PerformanceCreateRequestDTO();
         ReflectionTestUtils.setField(dto, "source", source);
-        ReflectionTestUtils.setField(dto, "kopisId", kopisId);
+        ReflectionTestUtils.setField(dto,"kopisId", kopisId);
         ReflectionTestUtils.setField(dto, "title", "테스트공연");
         ReflectionTestUtils.setField(dto, "genreCode", "THEATER");
         ReflectionTestUtils.setField(dto, "venueName", "테스트극장");
-
-        ReflectionTestUtils.setField(
-                dto,
-                "description",
-                "테스트공연을 소개합니다"
-        );
-
-        ReflectionTestUtils.setField(
-                dto,
-                "startDate",
-                LocalDate.of(2026, 12, 1)
-        );
-
-        ReflectionTestUtils.setField(
-                dto,
-                "endDate",
-                LocalDate.of(2026, 12, 31)
-        );
-
+        ReflectionTestUtils.setField(dto, "description", "테스트공연을 소개합니다");
+        ReflectionTestUtils.setField(dto, "startDate", LocalDate.of(2026,12,1));
+        ReflectionTestUtils.setField(dto, "endDate", LocalDate.of(2026,12,31));
         return dto;
     }
 
-    private Performance draftPerformance(Member manager) {
-        Performance performance = Performance.createManual(
-                manager,
-                genre(),
-                "제목",
-                "장소",
-                null,
-                "소개",
-                null,
-                LocalDate.of(2026, 12, 1),
-                LocalDate.of(2026, 12, 31),
-                null
-        );
-
-        ReflectionTestUtils.setField(
-                performance,
-                "version",
-                0L
-        );
-
-        return performance;
+    private Performance draftPerformance(Member manager){
+        Performance p = Performance.createManual(manager, genre(),  "제목", "장소", null,
+                "소개", null, LocalDate.of(2026, 12, 1), LocalDate.of(2026, 12, 31), null);
+        ReflectionTestUtils.setField(p, "version", 0L);
+        return p;
     }
 
     private Performance publicPerformance() {
-        Member manager = member(
-                Role.MANAGER,
-                MemberStatus.ACTIVE
-        );
-
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
         Performance performance = draftPerformance(manager);
-
-        ReflectionTestUtils.setField(
-                performance,
-                "id",
-                PERFORMANCE_ID
-        );
-
-        ReflectionTestUtils.setField(
-                performance,
-                "publicationStatus",
-                PublicationStatus.PUBLISHED
-        );
-
-        ReflectionTestUtils.setField(
-                performance,
-                "visibility",
-                Visibility.PUBLIC
-        );
-
+        ReflectionTestUtils.setField(performance, "id", PERFORMANCE_ID);
+        ReflectionTestUtils.setField(performance, "publicationStatus", PublicationStatus.PUBLISHED);
+        ReflectionTestUtils.setField(performance, "visibility", Visibility.PUBLIC);
         return performance;
     }
 
-    private PerformanceSession session(
-            Performance performance,
-            Long id,
-            Instant startsAt
-    ) {
+    private PerformanceSession session(Performance performance, Long id, Instant startsAt) {
         PerformanceSession session = PerformanceSession.create(
                 performance,
                 1L,
@@ -197,35 +138,20 @@ public class PerformanceServiceTest {
                 "v1",
                 "테스트 취소 정책"
         );
-
         ReflectionTestUtils.setField(session, "id", id);
-
         return session;
     }
 
-    private PerformanceUpdateRequestDTO updateRequest(
-            Long expectedVersion
-    ) {
-        PerformanceUpdateRequestDTO dto =
-                new PerformanceUpdateRequestDTO();
-
-        ReflectionTestUtils.setField(
-                dto,
-                "expectedVersion",
-                expectedVersion
-        );
-
+    private PerformanceUpdateRequestDTO updateRequest(Long expectedVersion) {
+        PerformanceUpdateRequestDTO dto = new PerformanceUpdateRequestDTO();
+        ReflectionTestUtils.setField(dto, "expectedVersion", expectedVersion);
         return dto;
     }
 
-    private void assertFails(
-            Runnable action,
-            ErrorCode expected
-    ) {
+    private void assertFails(Runnable action, ErrorCode expected){
         assertThatThrownBy(action::run)
                 .isInstanceOf(PerformanceException.class)
-                .extracting("errorCode")
-                .isEqualTo(expected);
+                .extracting("errorCode").isEqualTo(expected);
     }
 
     /**
@@ -257,16 +183,9 @@ public class PerformanceServiceTest {
     /**
      * 회차별 등급 가격 Mock
      */
-    private SessionGradePrice mockPrice(
-            Long sessionId,
-            String grade,
-            long amount
-    ) {
-        SessionGradePrice price =
-                mock(SessionGradePrice.class);
-
-        SessionGradePriceId priceId =
-                mock(SessionGradePriceId.class);
+    private SessionGradePrice mockPrice(Long sessionId, String grade, long amount) {
+        SessionGradePrice price = mock(SessionGradePrice.class);
+        SessionGradePriceId priceId = mock(SessionGradePriceId.class);
 
         lenient().when(price.getId()).thenReturn(priceId);
         lenient().when(priceId.getSessionId()).thenReturn(sessionId);
@@ -276,289 +195,142 @@ public class PerformanceServiceTest {
 
         return price;
     }
+
     // =====================================================
     // 기존 관리자 기능 테스트
     // =====================================================
 
     @Test
     @DisplayName("직접등록성공 : DRAFT/PRIVATE/STOPPED로 저장되고 기본 예매 제한은 4")
-    void create_manual_success() {
-        Member manager = member(
-                Role.MANAGER,
-                MemberStatus.ACTIVE
-        );
+    void create_manual_success(){
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
+        when(genreRepository.findActive("THEATER")).thenReturn(Optional.of(genre()));
 
-        when(memberRepository.findById(MEMBER_ID))
-                .thenReturn(Optional.of(manager));
+        service.create(MEMBER_ID, createRequestDTO(PerformanceSource.MANUAL, null));
 
-        when(genreRepository.findActive("THEATER"))
-                .thenReturn(Optional.of(genre()));
-
-        service.create(
-                MEMBER_ID,
-                createRequestDTO(PerformanceSource.MANUAL, null)
-        );
-
-        ArgumentCaptor<Performance> captor =
-                ArgumentCaptor.forClass(Performance.class);
-
+        ArgumentCaptor<Performance> captor = ArgumentCaptor.forClass(Performance.class);
         verify(performanceRepository).save(captor.capture());
-
         Performance saved = captor.getValue();
-
-        assertThat(saved.getPublicationStatus())
-                .isEqualTo(PublicationStatus.DRAFT);
-
-        assertThat(saved.getVisibility())
-                .isEqualTo(Visibility.PRIVATE);
-
-        assertThat(saved.getSalesStatus())
-                .isEqualTo(SalesStatus.STOPPED);
-
-        assertThat(saved.getBookingLimitPerMember())
-                .isEqualTo((short) 4);
-
-        assertThat(saved.getCreatedBy())
-                .isSameAs(manager);
+        assertThat(saved.getPublicationStatus()).isEqualTo(PublicationStatus.DRAFT);
+        assertThat(saved.getVisibility()).isEqualTo(Visibility.PRIVATE);
+        assertThat(saved.getSalesStatus()).isEqualTo(SalesStatus.STOPPED);
+        assertThat(saved.getBookingLimitPerMember()).isEqualTo((short)4);
+        assertThat(saved.getCreatedBy()).isSameAs(manager);
     }
 
     @Test
     @DisplayName("ADMIN은 공연을 등록 할 수 없다")
-    void create_admin_denied() {
+    void create_admin_denied(){
         when(memberRepository.findById(MEMBER_ID))
-                .thenReturn(Optional.of(
-                        member(Role.ADMIN, MemberStatus.ACTIVE)
-                ));
+                .thenReturn(Optional.of(member(Role.ADMIN, MemberStatus.ACTIVE)));
 
-        assertFails(
-                () -> service.create(
-                        MEMBER_ID,
-                        createRequestDTO(
-                                PerformanceSource.MANUAL,
-                                null
-                        )
-                ),
-                ErrorCode.ACCESS_DENIED
-        );
-
+        assertFails(()->service.create(MEMBER_ID, createRequestDTO(PerformanceSource.MANUAL, null)),
+                ErrorCode.ACCESS_DENIED);
         verify(performanceRepository, never()).save(any());
     }
 
     @Test
     @DisplayName("이미 등록된 kopis_id는 거절한다")
-    void create_kopi_duplicate() {
+    void create_kopi_duplicate(){
         when(memberRepository.findById(MEMBER_ID))
-                .thenReturn(Optional.of(
-                        member(Role.MANAGER, MemberStatus.ACTIVE)
-                ));
+                .thenReturn(Optional.of(member(Role.MANAGER, MemberStatus.ACTIVE)));
+        when(genreRepository.findActive("THEATER")).thenReturn(Optional.of(genre()));
+        when(performanceRepository.existsByKopisId("PF123456")).thenReturn(true);
 
-        when(genreRepository.findActive("THEATER"))
-                .thenReturn(Optional.of(genre()));
-
-        when(performanceRepository.existsByKopisId("PF123456"))
-                .thenReturn(true);
-
-        assertFails(
-                () -> service.create(
-                        MEMBER_ID,
-                        createRequestDTO(
-                                PerformanceSource.KOPIS,
-                                "PF123456"
-                        )
-                ),
-                ErrorCode.KOPIS_ALREADY_REGISTERED
-        );
+        assertFails(()->service.create(MEMBER_ID, createRequestDTO(PerformanceSource.KOPIS, "PF123456")),
+                ErrorCode.KOPIS_ALREADY_REGISTERED);
     }
 
     @Test
     @DisplayName("게시된 공연은 수정되지 않는다")
     void update_published_locked() {
-        Member manager = member(
-                Role.MANAGER,
-                MemberStatus.ACTIVE
-        );
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
+        Performance p = draftPerformance(manager);
+        ReflectionTestUtils.setField(p, "publicationStatus", PublicationStatus.PUBLISHED);
 
-        Performance performance = draftPerformance(manager);
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findDetail(PERFORMANCE_ID)).thenReturn(Optional.of(p));
 
-        ReflectionTestUtils.setField(
-                performance,
-                "publicationStatus",
-                PublicationStatus.PUBLISHED
-        );
-
-        when(memberRepository.findById(MEMBER_ID))
-                .thenReturn(Optional.of(manager));
-
-        when(performanceRepository.findDetail(PERFORMANCE_ID))
-                .thenReturn(Optional.of(performance));
-
-        assertFails(
-                () -> service.update(
-                        MEMBER_ID,
-                        PERFORMANCE_ID,
-                        updateRequest(0L)
-                ),
-                ErrorCode.PERFORMANCE_EDIT_LOCKED
-        );
+        assertFails(() -> service.update(MEMBER_ID, PERFORMANCE_ID, updateRequest(0L)),
+                ErrorCode.PERFORMANCE_EDIT_LOCKED);
     }
 
     @Test
     @DisplayName("expectedVersion이 현재 버전과 다르면 수정할 수 없다")
-    void update_versionConflict() {
-        Member manager = member(
-                Role.MANAGER,
-                MemberStatus.ACTIVE
-        );
-
-        when(memberRepository.findById(MEMBER_ID))
-                .thenReturn(Optional.of(manager));
-
+    void update_versionConflict(){
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
         when(performanceRepository.findDetail(PERFORMANCE_ID))
                 .thenReturn(Optional.of(draftPerformance(manager)));
 
-        assertFails(
-                () -> service.update(
-                        MEMBER_ID,
-                        PERFORMANCE_ID,
-                        updateRequest(5L)
-                ),
-                ErrorCode.VERSION_CONFLICT
-        );
+        assertFails(() -> service.update(MEMBER_ID, PERFORMANCE_ID, updateRequest(5L)),
+                ErrorCode.VERSION_CONFLICT);   // 공연의 version은 0, 요청은 5
     }
 
     @Test
     @DisplayName("보낸 필드만 수정되고 보내지 않은 필드는 그대로다")
     void update_success() {
-        Member manager = member(
-                Role.MANAGER,
-                MemberStatus.ACTIVE
-        );
-
-        Performance performance = draftPerformance(manager);
-
-        when(memberRepository.findById(MEMBER_ID))
-                .thenReturn(Optional.of(manager));
-
-        when(performanceRepository.findDetail(PERFORMANCE_ID))
-                .thenReturn(Optional.of(performance));
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
+        Performance p = draftPerformance(manager);
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findDetail(PERFORMANCE_ID)).thenReturn(Optional.of(p));
 
         PerformanceUpdateRequestDTO dto = updateRequest(0L);
+        ReflectionTestUtils.setField(dto, "title", "변경된 제목");
 
-        ReflectionTestUtils.setField(
-                dto,
-                "title",
-                "변경된 제목"
-        );
+        service.update(MEMBER_ID, PERFORMANCE_ID, dto);
 
-        service.update(
-                MEMBER_ID,
-                PERFORMANCE_ID,
-                dto
-        );
-
-        assertThat(performance.getTitle())
-                .isEqualTo("변경된 제목");
-
-        assertThat(performance.getVenueName())
-                .isEqualTo("장소");
-
+        assertThat(p.getTitle()).isEqualTo("변경된 제목");   // 바뀜
+        assertThat(p.getVenueName()).isEqualTo("장소");      // 안 보냈으니 그대로
         verify(performanceRepository).flush();
     }
 
     @Test
     @DisplayName("ADMIN은 공연을 조회할 수 있다")
     void get_admin_allowed() {
-        Member admin = member(
-                Role.ADMIN,
-                MemberStatus.ACTIVE
-        );
-
-        when(memberRepository.findById(MEMBER_ID))
-                .thenReturn(Optional.of(admin));
-
+        Member admin = member(Role.ADMIN, MemberStatus.ACTIVE);
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(admin));
         when(performanceRepository.findDetail(PERFORMANCE_ID))
                 .thenReturn(Optional.of(draftPerformance(admin)));
 
-        PerformanceResponseDTO result =
-                service.get(MEMBER_ID, PERFORMANCE_ID);
+        PerformanceResponseDTO result = service.get(MEMBER_ID, PERFORMANCE_ID);
 
-        assertThat(result.getTitle())
-                .isEqualTo("제목");
+        assertThat(result.getTitle()).isEqualTo("제목");
     }
 
     @Test
     @DisplayName("존재하지 않는 장르로는 등록할 수 없다")
     void create_genreNotFound() {
         when(memberRepository.findById(MEMBER_ID))
-                .thenReturn(Optional.of(
-                        member(Role.MANAGER, MemberStatus.ACTIVE)
-                ));
+                .thenReturn(Optional.of(member(Role.MANAGER, MemberStatus.ACTIVE)));
+        when(genreRepository.findActive("THEATER")).thenReturn(Optional.empty());
 
-        when(genreRepository.findActive("THEATER"))
-                .thenReturn(Optional.empty());
-
-        assertFails(
-                () -> service.create(
-                        MEMBER_ID,
-                        createRequestDTO(
-                                PerformanceSource.MANUAL,
-                                null
-                        )
-                ),
-                ErrorCode.VALIDATION_ERROR
-        );
+        assertFails(() -> service.create(MEMBER_ID, createRequestDTO(PerformanceSource.MANUAL, null)),
+                ErrorCode.VALIDATION_ERROR);
     }
 
     @Test
     @DisplayName("종료일이 시작일보다 빠르면 등록할 수 없다")
     void create_endBeforeStart() {
         when(memberRepository.findById(MEMBER_ID))
-                .thenReturn(Optional.of(
-                        member(Role.MANAGER, MemberStatus.ACTIVE)
-                ));
+                .thenReturn(Optional.of(member(Role.MANAGER, MemberStatus.ACTIVE)));
 
-        PerformanceCreateRequestDTO dto =
-                createRequestDTO(
-                        PerformanceSource.MANUAL,
-                        null
-                );
+        PerformanceCreateRequestDTO dto = createRequestDTO(PerformanceSource.MANUAL, null);
+        ReflectionTestUtils.setField(dto, "startDate", LocalDate.of(2026, 12, 31));
+        ReflectionTestUtils.setField(dto, "endDate", LocalDate.of(2026, 12, 1));
 
-        ReflectionTestUtils.setField(
-                dto,
-                "startDate",
-                LocalDate.of(2026, 12, 31)
-        );
-
-        ReflectionTestUtils.setField(
-                dto,
-                "endDate",
-                LocalDate.of(2026, 12, 1)
-        );
-
-        assertFails(
-                () -> service.create(MEMBER_ID, dto),
-                ErrorCode.VALIDATION_ERROR
-        );
+        assertFails(() -> service.create(MEMBER_ID, dto), ErrorCode.VALIDATION_ERROR);
     }
 
     @Test
     @DisplayName("직접 등록(MANUAL)에는 kopisId를 보낼 수 없다")
     void create_manualWithKopisId() {
         when(memberRepository.findById(MEMBER_ID))
-                .thenReturn(Optional.of(
-                        member(Role.MANAGER, MemberStatus.ACTIVE)
-                ));
+                .thenReturn(Optional.of(member(Role.MANAGER, MemberStatus.ACTIVE)));
 
-        assertFails(
-                () -> service.create(
-                        MEMBER_ID,
-                        createRequestDTO(
-                                PerformanceSource.MANUAL,
-                                "PF123456"
-                        )
-                ),
-                ErrorCode.VALIDATION_ERROR
-        );
+        assertFails(() -> service.create(MEMBER_ID, createRequestDTO(PerformanceSource.MANUAL, "PF123456")),
+                ErrorCode.VALIDATION_ERROR);
     }
 
     // =====================================================
@@ -570,66 +342,32 @@ public class PerformanceServiceTest {
     void getPublicDetail_success() {
         Performance performance = publicPerformance();
 
-        PerformanceSession first = session(
-                performance,
-                101L,
-                Instant.parse("2026-12-01T10:00:00Z")
-        );
-
+        PerformanceSession first = session(performance, 101L, Instant.parse("2026-12-01T10:00:00Z"));
         SaleOpening opening = mockOpening();
-
-        SessionGradePrice price =
-                mockPrice(101L, "R", 50000L);
+        SessionGradePrice price = mockPrice(101L, "R", 50000L);
 
         mockPublicPerformance(performance);
 
-        when(performanceSessionRepository
-                .findByPerformance_IdOrderByStartsAtAsc(PERFORMANCE_ID))
+        when(performanceSessionRepository.findByPerformance_IdOrderByStartsAtAsc(PERFORMANCE_ID))
                 .thenReturn(List.of(first));
-
-        when(saleOpeningRepository
-                .findByPerformance_IdOrderByOpensAtAsc(PERFORMANCE_ID))
+        when(saleOpeningRepository.findByPerformance_IdOrderByOpensAtAsc(PERFORMANCE_ID))
                 .thenReturn(List.of(opening));
-
-        when(sessionGradePriceRepository
-                .findBySessionIdIn(List.of(101L)))
+        when(sessionGradePriceRepository.findBySessionIdIn(List.of(101L)))
                 .thenReturn(List.of(price));
 
-        PublicPerformanceDetailDTO result =
-                service.getPublicDetail(PERFORMANCE_ID);
+        PublicPerformanceDetailDTO result = service.getPublicDetail(PERFORMANCE_ID);
 
-        assertThat(result.performanceId())
-                .isEqualTo("10");
-
-        assertThat(result.title())
-                .isEqualTo("제목");
-
-        assertThat(result.genreCode())
-                .isEqualTo("THEATER");
-
-        assertThat(result.venueName())
-                .isEqualTo("장소");
-
-        assertThat(result.minPrice())
-                .isEqualTo(50000L);
-
-        assertThat(result.salesStatus())
-                .isEqualTo("STOPPED");
-
-        assertThat(result.bookingLimitPerMember())
-                .isEqualTo(4);
-
-        assertThat(result.cancellationPolicy())
-                .isEqualTo("테스트 취소 정책");
-
-        assertThat(result.saleOpenings())
-                .hasSize(1);
-
-        assertThat(result.saleOpenings().getFirst().openingId())
-                .isEqualTo("1");
-
-        assertThat(result.saleOpenings().getFirst().notified())
-                .isFalse();
+        assertThat(result.performanceId()).isEqualTo("10");
+        assertThat(result.title()).isEqualTo("제목");
+        assertThat(result.genreCode()).isEqualTo("THEATER");
+        assertThat(result.venueName()).isEqualTo("장소");
+        assertThat(result.minPrice()).isEqualTo(50000L);
+        assertThat(result.salesStatus()).isEqualTo("STOPPED");
+        assertThat(result.bookingLimitPerMember()).isEqualTo(4);
+        assertThat(result.cancellationPolicy()).isEqualTo("테스트 취소 정책");
+        assertThat(result.saleOpenings()).hasSize(1);
+        assertThat(result.saleOpenings().getFirst().openingId()).isEqualTo("1");
+        assertThat(result.saleOpenings().getFirst().notified()).isFalse();
 
         verify(performanceRepository).findPublicDetail(
                 PERFORMANCE_ID,
@@ -647,10 +385,7 @@ public class PerformanceServiceTest {
                 Visibility.PUBLIC
         )).thenReturn(Optional.empty());
 
-        assertFails(
-                () -> service.getPublicDetail(PERFORMANCE_ID),
-                ErrorCode.RESOURCE_NOT_FOUND
-        );
+        assertFails(() -> service.getPublicDetail(PERFORMANCE_ID), ErrorCode.RESOURCE_NOT_FOUND);
     }
 
     @Test
@@ -660,18 +395,12 @@ public class PerformanceServiceTest {
 
         mockPublicPerformance(performance);
 
-        when(performanceSessionRepository
-                .findByPerformance_IdOrderByStartsAtAsc(PERFORMANCE_ID))
+        when(performanceSessionRepository.findByPerformance_IdOrderByStartsAtAsc(PERFORMANCE_ID))
+                .thenReturn(List.of());
+        when(saleOpeningRepository.findByPerformance_IdOrderByOpensAtAsc(PERFORMANCE_ID))
                 .thenReturn(List.of());
 
-        when(saleOpeningRepository
-                .findByPerformance_IdOrderByOpensAtAsc(PERFORMANCE_ID))
-                .thenReturn(List.of());
-
-        assertFails(
-                () -> service.getPublicDetail(PERFORMANCE_ID),
-                ErrorCode.RESOURCE_NOT_FOUND
-        );
+        assertFails(() -> service.getPublicDetail(PERFORMANCE_ID), ErrorCode.RESOURCE_NOT_FOUND);
     }
 
     // =====================================================
@@ -683,45 +412,29 @@ public class PerformanceServiceTest {
     void getPublicSessions_success() {
         Performance performance = publicPerformance();
 
-        Instant firstStartsAt =
-                Instant.parse("2026-12-01T10:00:00Z");
+        Instant firstStartsAt = Instant.parse("2026-12-01T10:00:00Z");
+        Instant secondStartsAt = Instant.parse("2026-12-02T10:00:00Z");
 
-        Instant secondStartsAt =
-                Instant.parse("2026-12-02T10:00:00Z");
-
-        PerformanceSession first =
-                session(performance, 101L, firstStartsAt);
-
-        PerformanceSession second =
-                session(performance, 102L, secondStartsAt);
+        PerformanceSession first = session(performance, 101L, firstStartsAt);
+        PerformanceSession second = session(performance, 102L, secondStartsAt);
 
         SaleOpening opening = mockOpening();
 
-        SessionGradePrice firstPrice =
-                mockPrice(101L, "R", 50000L);
-
-        SessionGradePrice secondPrice =
-                mockPrice(102L, "S", 30000L);
+        SessionGradePrice firstPrice = mockPrice(101L, "R", 50000L);
+        SessionGradePrice secondPrice = mockPrice(102L, "S", 30000L);
 
         mockPublicPerformance(performance);
 
-        when(performanceSessionRepository
-                .findByPerformance_IdOrderByStartsAtAsc(PERFORMANCE_ID))
+        when(performanceSessionRepository.findByPerformance_IdOrderByStartsAtAsc(PERFORMANCE_ID))
                 .thenReturn(List.of(first, second));
-
-        when(saleOpeningRepository
-                .findByPerformance_IdOrderByOpensAtAsc(PERFORMANCE_ID))
+        when(saleOpeningRepository.findByPerformance_IdOrderByOpensAtAsc(PERFORMANCE_ID))
                 .thenReturn(List.of(opening));
-
-        when(sessionGradePriceRepository
-                .findBySessionIdIn(List.of(101L, 102L)))
+        when(sessionGradePriceRepository.findBySessionIdIn(List.of(101L, 102L)))
                 .thenReturn(List.of(firstPrice, secondPrice));
 
-        PerformanceSessionListDTO result =
-                service.getPublicSessions(PERFORMANCE_ID);
+        PerformanceSessionListDTO result = service.getPublicSessions(PERFORMANCE_ID);
 
-        assertThat(result.items())
-                .hasSize(2);
+        assertThat(result.items()).hasSize(2);
 
         assertThat(result.items())
                 .extracting(PerformanceSessionResponseDTO::sessionId)
@@ -742,31 +455,18 @@ public class PerformanceServiceTest {
                 .extracting(PerformanceSessionResponseDTO::bookingAvailability)
                 .containsExactly("STOPPED", "STOPPED");
 
-        assertThat(result.items().getFirst().gradePrices())
-                .hasSize(1);
+        assertThat(result.items().getFirst().gradePrices()).hasSize(1);
+        assertThat(result.items().getFirst().gradePrices().getFirst().grade()).isEqualTo("R");
+        assertThat(result.items().getFirst().gradePrices().getFirst().price()).isEqualTo(50000L);
 
-        assertThat(result.items().getFirst().gradePrices().getFirst().grade())
-                .isEqualTo("R");
+        assertThat(result.items().get(1).gradePrices()).hasSize(1);
+        assertThat(result.items().get(1).gradePrices().getFirst().grade()).isEqualTo("S");
+        assertThat(result.items().get(1).gradePrices().getFirst().price()).isEqualTo(30000L);
 
-        assertThat(result.items().getFirst().gradePrices().getFirst().price())
-                .isEqualTo(50000L);
-
-        assertThat(result.items().get(1).gradePrices())
-                .hasSize(1);
-
-        assertThat(result.items().get(1).gradePrices().getFirst().grade())
-                .isEqualTo("S");
-
-        assertThat(result.items().get(1).gradePrices().getFirst().price())
-                .isEqualTo(30000L);
-
-        assertThat(result.items().getFirst().serverTime())
-                .isNotNull();
+        assertThat(result.items().getFirst().serverTime()).isNotNull();
 
         verify(performanceSessionRepository)
-                .findByPerformance_IdOrderByStartsAtAsc(
-                        PERFORMANCE_ID
-                );
+                .findByPerformance_IdOrderByStartsAtAsc(PERFORMANCE_ID);
     }
 
     @Test
@@ -776,20 +476,15 @@ public class PerformanceServiceTest {
 
         mockPublicPerformance(performance);
 
-        when(performanceSessionRepository
-                .findByPerformance_IdOrderByStartsAtAsc(PERFORMANCE_ID))
+        when(performanceSessionRepository.findByPerformance_IdOrderByStartsAtAsc(PERFORMANCE_ID))
                 .thenReturn(List.of());
 
-        PerformanceSessionListDTO result =
-                service.getPublicSessions(PERFORMANCE_ID);
+        PerformanceSessionListDTO result = service.getPublicSessions(PERFORMANCE_ID);
 
-        assertThat(result.items())
-                .isEmpty();
+        assertThat(result.items()).isEmpty();
 
         verify(performanceSessionRepository)
-                .findByPerformance_IdOrderByStartsAtAsc(
-                        PERFORMANCE_ID
-                );
+                .findByPerformance_IdOrderByStartsAtAsc(PERFORMANCE_ID);
 
         verifyNoInteractions(
                 saleOpeningRepository,
