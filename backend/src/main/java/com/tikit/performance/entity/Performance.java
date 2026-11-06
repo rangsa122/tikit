@@ -155,4 +155,9 @@ public class Performance {
         this.salesStatus = salesStatus;
     }
 
+    // 공개 상태 변경 (규칙 검사는 서비스에서 한다)
+    public void changeVisibility(Visibility visibility) {
+        this.visibility = visibility;
+    }
+
 }
