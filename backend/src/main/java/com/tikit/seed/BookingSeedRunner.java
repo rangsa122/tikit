@@ -39,6 +39,7 @@ public class BookingSeedRunner implements ApplicationRunner {
             new SeedPerformance("TIKIT 테스트 연극", "theater", "연극", "테스트 소극장", 3)
     );
 
+    private static final String LOCAL_FRONTEND_URL = "http://localhost:5173";
     private static final String TEMPLATE_SUFFIX = " 템플릿 A (중극장 240석)";
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final int SEATS_PER_ROW = 20;
@@ -58,12 +59,15 @@ public class BookingSeedRunner implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         for (SeedPerformance performance : PERFORMANCES) {
             List<Long> existing = findSessionIds(performance.title());
-            if (existing.isEmpty()) {
-                log.info("테스트 공연을 만들었습니다. {} 회차 ID: {}", performance.title(), seed(performance));
-            } else {
-                log.info("테스트 공연이 이미 있어 건너뜁니다. {} 회차 ID: {}", performance.title(), existing);
-            }
+            List<Long> sessionIds = existing.isEmpty() ? seed(performance) : existing;
+            log.info("{} {} 예매 주소: {}", existing.isEmpty() ? "생성" : "이미 있음", performance.title(),
+                    sessionIds.stream().map(BookingSeedRunner::queueUrl).toList());
         }
+    }
+
+    // 대기열부터 들어가야 입장 권한을 받아 좌석 선택으로 넘어감
+    private static String queueUrl(Long sessionId) {
+        return LOCAL_FRONTEND_URL + "/sessions/" + sessionId + "/queue";
     }
 
     // 공연 하나를 전부 넣거나 전부 취소. 만든 회차 ID 반환
