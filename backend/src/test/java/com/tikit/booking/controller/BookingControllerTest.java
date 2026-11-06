@@ -105,7 +105,7 @@ class BookingControllerTest {
     }
 
     @Test
-    @DisplayName("입장 ID 헤더는 없어도 된다")
+    @DisplayName("입장 ID 헤더 검사는 서비스가 하므로 컨트롤러는 헤더 없이도 넘긴다")
     void createBooking_withoutAdmissionHeader() throws Exception {
         given(bookingService.create(eq(MEMBER_ID), isNull(), any(BookingCreateRequestDTO.class)))
                 .willReturn(new BookingResult(response(), true));

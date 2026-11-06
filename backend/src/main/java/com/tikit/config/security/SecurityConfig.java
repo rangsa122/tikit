@@ -105,6 +105,12 @@ public class SecurityConfig {
                                         "/api/v1/admin/**"
                                 ).hasRole("ADMIN")
 
+                                // 대기열은 일반 회원만
+                                .requestMatchers(
+                                        "/api/v1/sessions/*/queue-entries",
+                                        "/api/v1/queue-entries/**"
+                                ).hasRole("MEMBER")
+
                                 // 나머지 API는 인증 필요
                                 .anyRequest().authenticated()
                 )
