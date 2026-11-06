@@ -21,8 +21,7 @@ import java.util.UUID;
 
 /**
  * 좌석 선택부터 결제까지 확인할 테스트 공연을 만든다.
- * 팀이 같이 쓰는 DB에 들어가므로 아래처럼 켰을 때만 실행한다.
- * ./gradlew bootRun --args='--tikit.seed.enabled=true'
+ * secrets.properties에 SEED_ENABLED=true를 넣고 local 프로필로 서버를 켰을 때만 실행한다.
  *
  * 공연, 회차, 판매 시간은 관리자 API가 아직 없어 DB에 직접 넣는다.
  * 같은 제목의 공연이 있으면 그 공연은 건너뛴다.
