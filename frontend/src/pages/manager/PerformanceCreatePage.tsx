@@ -3,7 +3,6 @@ import type {ChangeEvent, FocusEvent, FormEvent, ReactNode} from 'react'
 import axios from 'axios'
 import {createPerformance} from '../../api/managerPerformanceApi.ts'
 
-// TODO: 장르 시드가 확정되면 코드값을 맞춘다. (순서와 이름은 헤더 메뉴와 같다)
 const GENRES = [
     {code: 'THEATER', name: '연극'},
     {code: 'DANCE', name: '무용'},
