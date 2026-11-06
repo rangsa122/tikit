@@ -10,11 +10,14 @@ import PaymentPage from '../pages/payment/PaymentPage'
 import PaymentSuccessPage from '../pages/payment/PaymentSuccessPage'
 import PaymentFailPage from '../pages/payment/PaymentFailPage'
 import mypageRoutes from './mypageRoutes'
+import AdminGuard from '../pages/admin/AdminGuard'
+import AdminMembersPage from '../pages/admin/AdminMembersPage'
 
 const router = createBrowserRouter([
   {
     element: <MainLayout />,
     children: [
+      {element: <AdminGuard />, children: [{path: '/admin/members', element: <AdminMembersPage />}]},
       {path: '/', element: <HomePage />},
       {path: '/categories/:categoryId', element: <CategoryPage />},
       {path: '/performances/:performanceId', element: <PerformanceDetailPage />},
