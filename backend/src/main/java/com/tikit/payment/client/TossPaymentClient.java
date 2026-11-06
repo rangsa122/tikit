@@ -1,5 +1,6 @@
 package com.tikit.payment.client;
 
+import com.tikit.payment.dto.toss.TossCancelRequestDTO;
 import com.tikit.payment.dto.toss.TossConfirmRequestDTO;
 import com.tikit.payment.dto.toss.TossErrorResponseDTO;
 import com.tikit.payment.dto.toss.TossPaymentResponseDTO;
@@ -46,7 +47,7 @@ public class TossPaymentClient {
         // Toss 장애(5xx) 또는 우리 쪽 키 설정 문제(401, 403)
         if (status >= 500 || status == 401 || status == 403) {
             throw new TossUnavailableException(
-                "Toss 사용 불가 [" + status + "] " + error.code() + ": " + error.message());
+                    "Toss 사용 불가 [" + status + "] " + error.code() + ": " + error.message());
         }
 
         // 그 외 4xx : Toss가 요청을 거절
@@ -87,6 +88,18 @@ public class TossPaymentClient {
     public TossPaymentResponseDTO confirmPayment(TossConfirmRequestDTO request, String idempotencyKey) {
         return execute(() -> tossRestClient.post()
                 .uri("v1/payments/confirm")
+                .header("Idempotency-Key", idempotencyKey)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(request)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, this::throwTossApiException)
+                .body(TossPaymentResponseDTO.class));
+    }
+
+    // 결제 취소 요청 (cancelAmount가 없으면 전액 취소, 같은 멱등키로 다시 보내면 Toss가 첫 취소 결과를 그대로 반환)
+    public TossPaymentResponseDTO cancelPayment(String paymentKey, TossCancelRequestDTO request, String idempotencyKey) {
+        return execute(() -> tossRestClient.post()
+                .uri("/v1/payments/{paymentKey}/cancel", paymentKey)
                 .header("Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(request)

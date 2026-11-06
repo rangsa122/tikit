@@ -47,4 +47,14 @@ public class SessionSeat {
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    public static SessionSeat create(PerformanceSession session, TemplateSeat templateSeat) {
+        SessionSeat s = new SessionSeat();
+        s.session = session;
+        s.seatTemplateId = session.getSeatTemplateId();
+        s.templateSeat = templateSeat;
+        s.grade = templateSeat.getGrade();
+        s.status = SeatStatus.AVAILABLE;
+        return s;
+    }
 }

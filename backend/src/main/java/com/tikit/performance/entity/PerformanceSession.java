@@ -72,4 +72,13 @@ public class PerformanceSession {
         s.cancellationPolicy = cancellationPolicy;
         return s;
     }
+
+    public void update(Long openingId, Long seatTemplateId, Instant startsAt,
+                       Instant salesCloseAt, Instant cancellationDeadline){
+        this.openingId = openingId;
+        this.seatTemplateId = seatTemplateId;
+        this.startsAt = startsAt;
+        this.salesCloseAt = salesCloseAt;
+        this.cancellationDeadline = cancellationDeadline;
+    }
 }

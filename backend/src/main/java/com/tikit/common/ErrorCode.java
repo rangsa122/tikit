@@ -64,6 +64,10 @@ public enum ErrorCode {
             HttpStatus.CONFLICT,
             "해당 문서 버전의 색인이 완료되지 않았습니다."
     ),
+    INTERNAL_SERVER_ERROR(
+            HttpStatus.INTERNAL_SERVER_ERROR,
+            "서버 내부 오류가 발생했습니다."
+    ),
     INVALID_BOOKING_STATE(
             HttpStatus.CONFLICT,
             "현재 예매 상태에서는 결제를 시작할 수 없습니다."

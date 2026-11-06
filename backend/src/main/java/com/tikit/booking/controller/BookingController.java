@@ -2,7 +2,9 @@ package com.tikit.booking.controller;
 
 import com.tikit.booking.dto.request.BookingCreateRequestDTO;
 import com.tikit.booking.dto.response.BookingResponseDTO;
+import com.tikit.booking.dto.response.TicketListResponseDTO;
 import com.tikit.booking.service.BookingHoldCancelService;
+import com.tikit.booking.service.BookingQueryService;
 import com.tikit.booking.service.BookingResult;
 import com.tikit.booking.service.BookingService;
 import com.tikit.common.dto.ResponseDTO;
@@ -11,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -25,6 +28,7 @@ public class BookingController {
 
     private final BookingService bookingService;
     private final BookingHoldCancelService bookingHoldCancelService;
+    private final BookingQueryService bookingQueryService;
 
     // 좌석 선점과 임시 예매 생성 (새로 만들면 201, 같은 입장 ID로 이미 만든 예매면 200)
     @PostMapping
@@ -40,6 +44,26 @@ public class BookingController {
                     .body(ResponseDTO.success("좌석 선점 성공", result.booking()));
         }
         return ResponseEntity.ok(ResponseDTO.success("기존 예매 반환", result.booking()));
+    }
+
+    // 예매 상세와 처리 상태 (다른 회원 예매는 404)
+    @GetMapping("/{bookingId}")
+    public ResponseEntity<ResponseDTO<BookingResponseDTO>> getBooking(
+            @AuthenticationPrincipal String memberId,
+            @PathVariable Long bookingId
+    ) {
+        BookingResponseDTO booking = bookingQueryService.getBooking(Long.valueOf(memberId), bookingId);
+        return ResponseEntity.ok(ResponseDTO.success("처리 성공", booking));
+    }
+
+    // 예매 티켓 조회 (미확정은 빈 배열, 취소 후에는 VOID 티켓)
+    @GetMapping("/{bookingId}/tickets")
+    public ResponseEntity<ResponseDTO<TicketListResponseDTO>> getTickets(
+            @AuthenticationPrincipal String memberId,
+            @PathVariable Long bookingId
+    ) {
+        TicketListResponseDTO tickets = bookingQueryService.getTickets(Long.valueOf(memberId), bookingId);
+        return ResponseEntity.ok(ResponseDTO.success("처리 성공", tickets));
     }
 
     // 결제 전 선점 전체 해제 (이미 만료나 취소된 예매도 현재 상태로 200)

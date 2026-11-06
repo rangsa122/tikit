@@ -5,6 +5,7 @@ import com.tikit.auth.entity.MemberStatus;
 import com.tikit.auth.entity.Role;
 import com.tikit.booking.entity.Booking;
 import com.tikit.booking.entity.BookingStatus;
+import com.tikit.booking.service.BookingConfirmService;
 import com.tikit.common.ErrorCode;
 import com.tikit.payment.dto.request.PaymentConfirmRequestDTO;
 import com.tikit.payment.entity.PaymentAttempt;
@@ -24,6 +25,7 @@ import java.time.Instant;
 public class PaymentConfirmTxService {
 
     private final PaymentAttemptRepository paymentAttemptRepository;
+    private final BookingConfirmService bookingConfirmService;
 
     // 승인 1차 트랜잭션: 회원 -> 예매 -> 결제 순으로 잠그고 검사한 뒤 PROCESSING 저장 (커밋 후 Toss 호출)
     @Transactional
@@ -118,7 +120,8 @@ public class PaymentConfirmTxService {
         // 3. 승인 완료 (FAILED에서 오면 엔티티가 예외 -> 롤백, 지휘 서비스가 결과 확인 중으로 처리)
         attempt.approve(approvedAt);
 
-        // TODO Y-06(11/11): A파트 예매 확정 메서드 호출 (예매 CONFIRMED, 좌석 SOLD, 티켓 발급)
+        // 4. 예매 확정 (CONFIRMED, 좌석  SOLD, 티켓 발급), 실패 승인까지 함께 롤백 -> 결과 확인 중 처리
+        bookingConfirmService.confirm(booking, approvedAt);
 
         log.info("payment approved: {}, bookingId={}", detail, booking.getId());
     }

@@ -1,4 +1,4 @@
-package com.tikit.performance.dto;
+package com.tikit.performance.dto.request;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;

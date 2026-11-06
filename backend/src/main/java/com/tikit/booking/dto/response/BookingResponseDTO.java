@@ -3,6 +3,8 @@ package com.tikit.booking.dto.response;
 import com.tikit.booking.entity.Booking;
 import com.tikit.booking.entity.BookingSeat;
 import com.tikit.booking.entity.BookingStatus;
+import com.tikit.payment.entity.Cancellation;
+import com.tikit.payment.entity.PaymentAttempt;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -37,9 +39,15 @@ public record BookingResponseDTO(
         }
     }
 
-    // 결제와 취소 정보는 결제 연동(A-07) 이후 채움
+    // 예매 생성과 선점 해제 응답 (결제와 취소 정보 없음)
     public static BookingResponseDTO of(Booking booking, Long performanceId,
                                         List<BookingSeat> seats, Instant now) {
+        return of(booking, performanceId, seats, null, null, now);
+    }
+
+    // 예매 조회 응답 (최신 결제 시도와 취소 포함, 없으면 null)
+    public static BookingResponseDTO of(Booking booking, Long performanceId, List<BookingSeat> seats,
+                                        PaymentAttempt paymentAttempt, Cancellation cancellation, Instant now) {
         return new BookingResponseDTO(
                 booking.getId(),
                 booking.getSessionId(),
@@ -50,10 +58,10 @@ public record BookingResponseDTO(
                 seats.stream().map(BookedSeat::from).toList(),
                 booking.getTotalAmount(),
                 toSeoul(booking.getExpiresAt()),
-                null,
-                null,
-                null,
-                null,
+                paymentAttempt == null ? null : paymentAttempt.getId(),
+                paymentAttempt == null ? null : paymentAttempt.getStatus().name(),
+                cancellation == null ? null : cancellation.getId(),
+                cancellation == null ? null : cancellation.getStatus().name(),
                 toSeoul(booking.getCreatedAt()),
                 toSeoul(now)
         );

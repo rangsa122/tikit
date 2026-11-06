@@ -139,4 +139,8 @@ public class Performance {
         if (bookingLimitPerMember != null) this.bookingLimitPerMember = bookingLimitPerMember;
     }
 
+    public void changeBookingLimit(short bookingLimitPerMember){
+        this.bookingLimitPerMember = bookingLimitPerMember;
+    }
+
 }

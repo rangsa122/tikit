@@ -4,8 +4,8 @@ import type {Booking} from '../api/bookingApi'
 import {getMockBooking} from '../mocks/bookings'
 import {getClockOffsetMs} from './usePaymentCountdown'
 
-// A파트 GET /bookings/{bookingId}가 준비되면 true로 변경
-const USE_REAL_API = false
+// 백엔드 없이 화면만 볼 때 false
+const USE_REAL_API = true
 
 export interface BookingDetail {
     booking: Booking

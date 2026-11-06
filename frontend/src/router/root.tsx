@@ -4,14 +4,17 @@ import MainLayout from '../layouts/MainLayout'
 import HomePage from '../pages/HomePage'
 import LoginPage from '../pages/auth/LoginPage'
 import SignupPage from '../pages/auth/SignupPage'
+import SeatSelectionPage from '../pages/SeatSelectionPage'
 import CategoryPage from '../pages/CategoryPage'
 import PerformanceDetailPage from '../pages/PerformanceDetailPage'
 import PaymentPage from '../pages/payment/PaymentPage'
+import QueuePage from '../pages/queue/QueuePage'
 import PaymentSuccessPage from '../pages/payment/PaymentSuccessPage'
 import PaymentFailPage from '../pages/payment/PaymentFailPage'
 import mypageRoutes from './mypageRoutes'
 import AdminGuard from '../pages/admin/AdminGuard'
 import AdminMembersPage from '../pages/admin/AdminMembersPage'
+import PerformanceCreatePage from '../pages/manager/PerformanceCreatePage'
 
 const router = createBrowserRouter([
   {
@@ -26,9 +29,13 @@ const router = createBrowserRouter([
       {path: '/bookings/:bookingId/payment', element: <PaymentPage />},
       {path: '/bookings/:bookingId/payment/success', element: <PaymentSuccessPage />},
       {path: '/bookings/:bookingId/payment/fail', element: <PaymentFailPage />},
+      {path: '/manager/performances/new', element: <PerformanceCreatePage /> },
       ...mypageRoutes,
     ],
   },
+  // 대기열과 좌석 선택은 피그마에서 전용 헤더를 쓰므로 사이트 메뉴 없이 따로 둠
+  {path: '/sessions/:sessionId/queue', element: <QueuePage />},
+  {path: '/sessions/:sessionId/seats', element: <SeatSelectionPage />},
 ])
 
 export default router

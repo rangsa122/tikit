@@ -2,9 +2,9 @@ package com.tikit.performance.controller;
 
 import com.tikit.common.dto.PageResponseDTO;
 import com.tikit.common.dto.ResponseDTO;
-import com.tikit.performance.dto.PerformanceCreateRequestDTO;
-import com.tikit.performance.dto.PerformanceResponseDTO;
-import com.tikit.performance.dto.PerformanceUpdateRequestDTO;
+import com.tikit.performance.dto.request.PerformanceCreateRequestDTO;
+import com.tikit.performance.dto.response.PerformanceResponseDTO;
+import com.tikit.performance.dto.request.PerformanceUpdateRequestDTO;
 import com.tikit.performance.entity.PublicationStatus;
 import com.tikit.performance.service.PerformanceService;
 import jakarta.validation.Valid;

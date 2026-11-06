@@ -37,7 +37,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * BOOKING_IT=true ./gradlew test --tests '*BookingHoldCancelIntegrationTest'
  */
 @ActiveProfiles("local")
-@SpringBootTest(properties = "booking.expiry.scheduler.enabled=false")
+@SpringBootTest(properties = {
+        "booking.expiry.scheduler.enabled=false",
+        // 대기열 없이 예매 흐름만 검증
+        "tikit.queue.admission-required=false"
+})
 @EnabledIfEnvironmentVariable(named = "BOOKING_IT", matches = "true")
 class BookingHoldCancelIntegrationTest {
 

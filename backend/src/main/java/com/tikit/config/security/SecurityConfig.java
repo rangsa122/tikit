@@ -105,6 +105,20 @@ public class SecurityConfig {
                                         "/api/v1/admin/**"
                                 ).hasRole("ADMIN")
 
+                                // 대기열은 일반 회원만
+                                .requestMatchers(
+                                        "/api/v1/sessions/*/queue-entries",
+                                        "/api/v1/queue-entries/**"
+                                ).hasRole("MEMBER")
+
+                                // 예매 조회는 일반 회원만
+                                .requestMatchers(
+                                        HttpMethod.GET,
+                                        "/api/v1/me/bookings",
+                                        "/api/v1/bookings/*",
+                                        "/api/v1/bookings/*/tickets"
+                                ).hasRole("MEMBER")
+
                                 // 나머지 API는 인증 필요
                                 .anyRequest().authenticated()
                 )
