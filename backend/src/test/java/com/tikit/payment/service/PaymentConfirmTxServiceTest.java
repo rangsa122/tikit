@@ -1,6 +1,7 @@
 package com.tikit.payment.service;
 
 import com.tikit.booking.entity.Booking;
+import com.tikit.booking.service.BookingConfirmService;
 import com.tikit.payment.entity.PaymentAttempt;
 import com.tikit.payment.entity.PaymentAttemptStatus;
 import com.tikit.payment.repository.PaymentAttemptRepository;
@@ -11,9 +12,12 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 
@@ -26,6 +30,7 @@ class PaymentConfirmTxServiceTest {
     private static final String FAILURE_CODE = "REJECT_CARD_COMPANY";
 
     private PaymentAttemptRepository paymentAttemptRepository;
+    private BookingConfirmService bookingConfirmService;
     private PaymentConfirmTxService paymentConfirmTxService;
     private Booking booking;
     private PaymentAttempt attempt;
@@ -33,7 +38,8 @@ class PaymentConfirmTxServiceTest {
     @BeforeEach
     void setup() {
         paymentAttemptRepository = mock(PaymentAttemptRepository.class);
-        paymentConfirmTxService = new PaymentConfirmTxService(paymentAttemptRepository);
+        bookingConfirmService = mock(BookingConfirmService.class);
+        paymentConfirmTxService = new PaymentConfirmTxService(paymentAttemptRepository, bookingConfirmService);
 
         booking = mock(Booking.class);
         attempt = mock(PaymentAttempt.class);
@@ -47,7 +53,7 @@ class PaymentConfirmTxServiceTest {
     }
 
     @Test
-    @DisplayName("승인 완료: 처리 중인 결제는 Toss 승인 시각으로 승인 처리한다")
+    @DisplayName("승인 완료: 처리 중인 결제는 Toss 승인 시각으로 승인하고 예매를 확정한다")
     void completeApproval_processing_approves() {
         // given
         // setup에서 이미 셋팅
@@ -59,10 +65,11 @@ class PaymentConfirmTxServiceTest {
 
         // then
         then(attempt).should().approve(APPROVED_AT);
+        then(bookingConfirmService).should().confirm(booking, APPROVED_AT);
     }
 
     @Test
-    @DisplayName("승인 완료: 이미 처리된 결제는 다시 승인하지 않는다")
+    @DisplayName("승인 완료: 이미 처리된 결제는 다시 승인하지 않고 예매 확정도 하지 않는다")
     void completeApproval_alreadyApproved_skipsApprove() {
         // given
         // setup에서 이미 셋팅
@@ -74,6 +81,25 @@ class PaymentConfirmTxServiceTest {
 
         // then
         then(attempt).should(never()).approve(any());
+        then(bookingConfirmService).should(never()).confirm(any(), any());
+    }
+
+    @Test
+    @DisplayName("승인 완료: 예매 확정이 실패하면 예외를 그대로 던져 승인까지 롤백되게 한다")
+    void completeApproval_confirmFails_throws() {
+        // given
+        // setup에서 이미 셋팅
+        given(attempt.isApproved()).willReturn(false);
+        willThrow(new IllegalStateException("판매 처리된 좌석 수가 맞지 않습니다."))
+                .given(bookingConfirmService).confirm(booking, APPROVED_AT);
+
+        // when
+        Throwable thrown = catchThrowable(() ->
+                paymentConfirmTxService.completeApproval(PAYMENT_ATTEMPT_ID, MEMBER_ID, APPROVED_AT));
+        System.out.println("테스트: " + thrown);
+
+        // then
+        assertThat(thrown).isInstanceOf(IllegalStateException.class);
     }
 
     @Test
