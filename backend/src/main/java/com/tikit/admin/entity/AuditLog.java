@@ -1,6 +1,7 @@
 package com.tikit.admin.entity;
 
 import com.tikit.auth.entity.MemberStatus;
+import com.tikit.auth.entity.Role;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -50,6 +51,18 @@ public class AuditLog {
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    public static AuditLog memberRoleChange(Long actorId, Long memberId, String reason, Role before, Role after) {
+        AuditLog log = new AuditLog();
+        log.actorMemberId = actorId;
+        log.action = "MEMBER_ROLE_CHANGE";
+        log.targetType = "MEMBER";
+        log.targetId = memberId;
+        log.reason = reason.strip();
+        log.beforeState = Map.of("role", before.name());
+        log.afterState = Map.of("role", after.name());
+        return log;
+    }
 
     public static AuditLog memberStatusChange(Long actorId, Long memberId, String reason,
                                               MemberStatus before, MemberStatus after) {

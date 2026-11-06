@@ -85,6 +85,19 @@ public class Member {
         this.notificationEnabled = enabled;
     }
 
+    public void changeRole(Role newRole) {
+        if (role == Role.ADMIN) {
+            throw new MemberStatusChangeException(ErrorCode.ADMIN_ACCOUNT_PROTECTED);
+        }
+        if (newRole != Role.MEMBER && newRole != Role.MANAGER) {
+            throw new MemberStatusChangeException(ErrorCode.VALIDATION_ERROR);
+        }
+        if (role == newRole || status != MemberStatus.ACTIVE) {
+            throw new MemberStatusChangeException(ErrorCode.STATE_CONFLICT);
+        }
+        role = newRole;
+    }
+
     public void suspend() {
         validateStatusChange(MemberStatus.ACTIVE);
         this.status = MemberStatus.SUSPENDED;

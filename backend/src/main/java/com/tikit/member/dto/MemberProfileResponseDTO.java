@@ -1,6 +1,8 @@
 package com.tikit.member.dto;
 
 import com.tikit.auth.entity.Member;
+import com.tikit.auth.entity.Role;
+import com.tikit.auth.entity.MemberStatus;
 import java.time.Instant;
 
 // 회원 정보 조회 응답 DTO
@@ -10,7 +12,9 @@ public record MemberProfileResponseDTO(
         String email,
         String name,
         boolean notificationEnabled,
-        Instant createdAt
+        Instant createdAt,
+        Role role,
+        MemberStatus accountStatus
 ) {
     public static MemberProfileResponseDTO from(Member member) {
         return new MemberProfileResponseDTO(
@@ -18,7 +22,9 @@ public record MemberProfileResponseDTO(
                 member.getEmail(),
                 member.getName(),
                 member.isNotificationEnabled(),
-                member.getCreatedAt()
+                member.getCreatedAt(),
+                member.getRole(),
+                member.getStatus()
         );
     }
 }

@@ -1,6 +1,7 @@
 package com.tikit.admin.controller;
 
 import com.tikit.admin.dto.request.AdminMemberSearchRequestDTO;
+import com.tikit.admin.dto.request.AdminMemberRoleChangeRequestDTO;
 import com.tikit.admin.dto.request.AdminMemberStatusChangeRequestDTO;
 import com.tikit.admin.dto.response.AdminMemberDetailResponseDTO;
 import com.tikit.admin.dto.response.AdminMemberListResponseDTO;
@@ -28,6 +29,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminMemberController {
 
     private final AdminMemberService adminMemberService;
+
+    @PatchMapping("/{memberId}/role")
+    public ResponseEntity<ResponseDTO<AdminMemberSummaryResponseDTO>> changeRole(
+            @AuthenticationPrincipal String actorId,
+            @PathVariable @Positive Long memberId,
+            @Valid @RequestBody AdminMemberRoleChangeRequestDTO request
+    ) {
+        return ResponseEntity.ok(ResponseDTO.success("회원 권한 변경 성공",
+                adminMemberService.changeRole(Long.parseLong(actorId), memberId, request)));
+    }
 
     // 회원 운영 목록
     @GetMapping
