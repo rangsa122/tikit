@@ -24,7 +24,7 @@ const router = createBrowserRouter([
       {path: '/bookings/:bookingId/payment', element: <PaymentPage />},
       {path: '/bookings/:bookingId/payment/success', element: <PaymentSuccessPage />},
       {path: '/bookings/:bookingId/payment/fail', element: <PaymentFailPage />},
-      {path: 'manager/performances/new', element: <PerformanceCreatePage /> },
+      {path: '/manager/performances/new', element: <PerformanceCreatePage /> },
       ...mypageRoutes,
     ],
   },
