@@ -4,6 +4,7 @@ import MainLayout from '../layouts/MainLayout'
 import HomePage from '../pages/HomePage'
 import LoginPage from '../pages/auth/LoginPage'
 import SignupPage from '../pages/auth/SignupPage'
+import SeatSelectionPage from '../pages/SeatSelectionPage'
 import CategoryPage from '../pages/CategoryPage'
 import PerformanceDetailPage from '../pages/PerformanceDetailPage'
 import PaymentPage from '../pages/payment/PaymentPage'
@@ -20,6 +21,7 @@ const router = createBrowserRouter([
       {path: '/categories/:categoryId', element: <CategoryPage />},
       {path: '/performances/:performanceId', element: <PerformanceDetailPage />},
       {path: '/login', element: <LoginPage />},
+      {path: '/sessions/:sessionId/seats', element: <SeatSelectionPage />},
       {path: '/signup', element: <SignupPage />},
       {path: '/bookings/:bookingId/payment', element: <PaymentPage />},
       {path: '/bookings/:bookingId/payment/success', element: <PaymentSuccessPage />},
