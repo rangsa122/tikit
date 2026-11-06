@@ -10,6 +10,7 @@ import PaymentPage from '../pages/payment/PaymentPage'
 import PaymentSuccessPage from '../pages/payment/PaymentSuccessPage'
 import PaymentFailPage from '../pages/payment/PaymentFailPage'
 import mypageRoutes from './mypageRoutes'
+import PerformanceCreatePage from "../pages/manager/PerformanceCreatePage.tsx";
 
 const router = createBrowserRouter([
   {
@@ -23,6 +24,7 @@ const router = createBrowserRouter([
       {path: '/bookings/:bookingId/payment', element: <PaymentPage />},
       {path: '/bookings/:bookingId/payment/success', element: <PaymentSuccessPage />},
       {path: '/bookings/:bookingId/payment/fail', element: <PaymentFailPage />},
+      {path: 'manager/performances/new', element: <PerformanceCreatePage /> },
       ...mypageRoutes,
     ],
   },
