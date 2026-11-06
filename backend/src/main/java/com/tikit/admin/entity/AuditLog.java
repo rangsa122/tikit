@@ -1,6 +1,7 @@
 package com.tikit.admin.entity;
 
 import com.tikit.auth.entity.MemberStatus;
+import com.tikit.auth.entity.Role;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -50,6 +51,17 @@ public class AuditLog {
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    public static AuditLog managerCreate(Long actorId, Long memberId) {
+        AuditLog log = new AuditLog();
+        log.actorMemberId = actorId;
+        log.action = "MANAGER_CREATE";
+        log.targetType = "MEMBER";
+        log.targetId = memberId;
+        log.reason = "ADMIN에 의한 MANAGER 계정 생성";
+        log.afterState = Map.of("role", Role.MANAGER.name(), "status", MemberStatus.ACTIVE.name());
+        return log;
+    }
 
     public static AuditLog memberStatusChange(Long actorId, Long memberId, String reason,
                                               MemberStatus before, MemberStatus after) {
