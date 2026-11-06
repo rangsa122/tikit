@@ -3,8 +3,9 @@ package com.tikit.performance.controller;
 import com.tikit.common.dto.PageResponseDTO;
 import com.tikit.common.dto.ResponseDTO;
 import com.tikit.performance.dto.request.PerformanceCreateRequestDTO;
-import com.tikit.performance.dto.response.PerformanceResponseDTO;
 import com.tikit.performance.dto.request.PerformanceUpdateRequestDTO;
+import com.tikit.performance.dto.request.SalesStatusUpdateRequestDTO;
+import com.tikit.performance.dto.response.PerformanceResponseDTO;
 import com.tikit.performance.entity.PublicationStatus;
 import com.tikit.performance.service.PerformanceService;
 import jakarta.validation.Valid;
@@ -51,6 +52,14 @@ public class PerformanceController {
             @Valid @RequestBody PerformanceUpdateRequestDTO request){
         return ResponseEntity.ok(ResponseDTO.success("공연정보가 수정되었습니다",
                 service.update(Long.valueOf(memberId), performanceId, request)));
+    }
+
+    @PatchMapping("/{performanceId}/sales-status")
+    public ResponseEntity<ResponseDTO<PerformanceResponseDTO>> changeSalesStatus(
+            @AuthenticationPrincipal String memberId, @PathVariable Long performanceId,
+            @Valid @RequestBody SalesStatusUpdateRequestDTO request){
+        return ResponseEntity.ok(ResponseDTO.success("신규 판매 상태가 변경되었습니다",
+                service.changeSalesStatus(Long.valueOf(memberId), performanceId, request)));
     }
 
 

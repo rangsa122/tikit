@@ -143,4 +143,9 @@ public class Performance {
         this.bookingLimitPerMember = bookingLimitPerMember;
     }
 
+    // 신규 판매 상태 변경 (규칙 검사는 서비스에서 한다)
+    public void changeSalesStatus(SalesStatus salesStatus) {
+        this.salesStatus = salesStatus;
+    }
+
 }

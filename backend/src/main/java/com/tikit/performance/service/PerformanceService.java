@@ -2,9 +2,11 @@ package com.tikit.performance.service;
 
 import com.tikit.auth.entity.Member;
 import com.tikit.common.ErrorCode;
-import com.tikit.performance.dto.*;
+import com.tikit.performance.dto.PerformanceSessionListDTO;
+import com.tikit.performance.dto.PublicPerformanceDetailDTO;
 import com.tikit.performance.dto.request.PerformanceCreateRequestDTO;
 import com.tikit.performance.dto.request.PerformanceUpdateRequestDTO;
+import com.tikit.performance.dto.request.SalesStatusUpdateRequestDTO;
 import com.tikit.performance.dto.response.PerformanceResponseDTO;
 import com.tikit.performance.dto.response.PerformanceSessionResponseDTO;
 import com.tikit.performance.entity.*;
@@ -492,5 +494,44 @@ public class PerformanceService {
      */
     private OffsetDateTime toOffsetDateTime(Instant instant) {
         return instant.atZone(RESPONSE_ZONE).toOffsetDateTime();
+    }
+
+    /**
+     * 신규 판매 중단 또는 재개
+     */
+    @Transactional
+    public PerformanceResponseDTO changeSalesStatus(
+            Long memberId,
+            Long performanceId,
+            SalesStatusUpdateRequestDTO request
+    ) {
+        accessChecker.requireManager(memberId);
+
+        Performance performance = performanceRepository.findForSave(performanceId)
+                .orElseThrow(() ->
+                        new PerformanceException(ErrorCode.RESOURCE_NOT_FOUND)
+                );
+
+        if (request.getSalesStatus() == SalesStatus.ENABLED) {
+            // 재개: 게시됐고 공개 상태일 때만 가능
+            boolean resumable = performance.getPublicationStatus() == PublicationStatus.PUBLISHED
+                    && performance.getVisibility() == Visibility.PUBLIC;
+            if (!resumable) {
+                throw new PerformanceException(ErrorCode.SALE_RESUME_NOT_ALLOWED);
+            }
+        } else if (performance.getPublicationStatus() != PublicationStatus.PUBLISHED) {
+
+            throw new PerformanceException(ErrorCode.PERFORMANCE_NOT_PUBLISHED);
+        }
+
+        if (!performance.getVersion().equals(request.getExpectedVersion())) {
+            throw new PerformanceException(ErrorCode.VERSION_CONFLICT);
+        }
+
+        performance.changeSalesStatus(request.getSalesStatus());
+
+        performanceRepository.flush();
+
+        return PerformanceResponseDTO.from(performance);
     }
 }
