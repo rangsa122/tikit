@@ -54,7 +54,7 @@ class BookingSeedRunnerIntegrationTest {
     private BookingSeedRunner bookingSeedRunner;
     private String title;
     private Long memberId;
-    private Long sessionId;
+    private List<Long> sessionIds = List.of();
 
     @BeforeEach
     void setup() {
@@ -70,21 +70,24 @@ class BookingSeedRunnerIntegrationTest {
 
     @AfterEach
     void cleanup() {
-        if (sessionId != null) {
-            List<Long> seatIds = jdbc.queryForList("select id from session_seats where session_id = ?",
-                    Long.class, sessionId);
-            redisTemplate.delete(seatIds.stream().map(id -> "seat-hold:" + id).toList());
-
+        if (!sessionIds.isEmpty()) {
+            Long firstSessionId = sessionIds.getFirst();
             Long templateId = jdbc.queryForObject(
-                    "select seat_template_id from performance_sessions where id = ?", Long.class, sessionId);
+                    "select seat_template_id from performance_sessions where id = ?", Long.class, firstSessionId);
             Long performanceId = jdbc.queryForObject(
-                    "select performance_id from performance_sessions where id = ?", Long.class, sessionId);
+                    "select performance_id from performance_sessions where id = ?", Long.class, firstSessionId);
 
-            jdbc.update("delete from booking_seats where session_id = ?", sessionId);
-            jdbc.update("delete from session_seats where session_id = ?", sessionId);
-            jdbc.update("delete from bookings where session_id = ?", sessionId);
-            jdbc.update("delete from session_grade_prices where session_id = ?", sessionId);
-            jdbc.update("delete from performance_sessions where id = ?", sessionId);
+            for (Long sessionId : sessionIds) {
+                List<Long> seatIds = jdbc.queryForList("select id from session_seats where session_id = ?",
+                        Long.class, sessionId);
+                redisTemplate.delete(seatIds.stream().map(id -> "seat-hold:" + id).toList());
+
+                jdbc.update("delete from booking_seats where session_id = ?", sessionId);
+                jdbc.update("delete from session_seats where session_id = ?", sessionId);
+                jdbc.update("delete from bookings where session_id = ?", sessionId);
+                jdbc.update("delete from session_grade_prices where session_id = ?", sessionId);
+                jdbc.update("delete from performance_sessions where id = ?", sessionId);
+            }
             jdbc.update("delete from template_seats where template_id = ?", templateId);
             jdbc.update("delete from seat_templates where id = ?", templateId);
             jdbc.update("delete from sale_openings where performance_id = ?", performanceId);
@@ -94,26 +97,30 @@ class BookingSeedRunnerIntegrationTest {
     }
 
     @Test
-    @DisplayName("템플릿 A 240석이 등급별로 만들어지고 찾을 수 있다")
-    void seed_createsTemplateA() {
+    @DisplayName("회차마다 템플릿 A 240석이 등급별로 만들어지고 찾을 수 있다")
+    void seed_createsSessions() {
         // when
-        sessionId = bookingSeedRunner.seed(title);
+        sessionIds = bookingSeedRunner.seed(performance(2));
 
         // then
-        assertThat(bookingSeedRunner.findSessionId(title)).contains(sessionId);
-        assertThat(seatCount("VIP")).isEqualTo(60);
-        assertThat(seatCount("R")).isEqualTo(100);
-        assertThat(seatCount("A")).isEqualTo(80);
-        assertThat(jdbc.queryForObject(
-                "select count(*) from session_grade_prices where session_id = ?", Integer.class, sessionId))
-                .isEqualTo(3);
+        assertThat(sessionIds).hasSize(2);
+        assertThat(bookingSeedRunner.findSessionIds(title)).containsExactlyElementsOf(sessionIds);
+        for (Long sessionId : sessionIds) {
+            assertThat(seatCount(sessionId, "VIP")).isEqualTo(60);
+            assertThat(seatCount(sessionId, "R")).isEqualTo(100);
+            assertThat(seatCount(sessionId, "A")).isEqualTo(80);
+            assertThat(jdbc.queryForObject(
+                    "select count(*) from session_grade_prices where session_id = ?", Integer.class, sessionId))
+                    .isEqualTo(3);
+        }
     }
 
     @Test
     @DisplayName("만든 회차는 판매 중이라 바로 예매할 수 있다")
     void seed_isBookable() {
         // given
-        sessionId = bookingSeedRunner.seed(title);
+        sessionIds = bookingSeedRunner.seed(performance(1));
+        Long sessionId = sessionIds.getFirst();
         Long seatId = jdbc.queryForObject("""
                 select ss.id
                 from session_seats ss
@@ -132,7 +139,11 @@ class BookingSeedRunnerIntegrationTest {
         assertThat(booking.seats().getFirst().label()).isEqualTo("A열 1번");
     }
 
-    private Integer seatCount(String grade) {
+    private BookingSeedRunner.SeedPerformance performance(int sessionCount) {
+        return new BookingSeedRunner.SeedPerformance(title, "musical", "뮤지컬", "테스트 공연장", sessionCount);
+    }
+
+    private Integer seatCount(Long sessionId, String grade) {
         return jdbc.queryForObject(
                 "select count(*) from session_seats where session_id = ? and grade = ? and status = 'AVAILABLE'",
                 Integer.class, sessionId, grade);
