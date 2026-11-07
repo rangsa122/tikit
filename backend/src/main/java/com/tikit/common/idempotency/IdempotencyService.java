@@ -22,8 +22,9 @@ public class IdempotencyService {
     private final IdempotencyRequestRepository idempotencyRequestRepository;
     private final Clock clock;
 
-    // 처리 시작: 새 요청이면 처리 중으로 저장하고 커밋 (다른 요청이 바로 볼 수 있게 별도 트랜잭션)
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    // 처리 시작: 새 요청이면 처리 중으로 저장
+    // (호출한 쪽에 트랜잭션이 없으면 여기서 바로 커밋, 있으면 그 트랜잭션에 합류)
+    @Transactional
     public IdempotencyStart start(Long memberId, String operationId, String idempotencyKey, String requestHash) {
         String detail = "memberId=" + memberId + ", operationId=" + operationId + ", idempotencyKey=" + idempotencyKey;
 

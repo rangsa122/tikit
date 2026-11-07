@@ -55,10 +55,10 @@ export default function PaymentSuccessPage() {
         refetchOnReconnect: false,
     })
 
-    // 202(처리 중·확인 중)이거나 응답을 못 받았으면 결과 조회로 전환
+    // 202(처리 중·확인 중), 응답 없음, 같은 승인 요청이 처리 중(409 IDEMPOTENCY_CONFLICT)이면 결과 조회로 전환
     const needsPolling = confirmQuery.data
         ? isInProgress(confirmQuery.data.status)
-        : isNoResponse(confirmQuery.error)
+        : isNoResponse(confirmQuery.error) || getErrorCode(confirmQuery.error) === 'IDEMPOTENCY_CONFLICT'
 
     // 결과 조회 (진행 중이면 3초마다, 결과가 나오면 멈춤)
     const pollQuery = useQuery({
