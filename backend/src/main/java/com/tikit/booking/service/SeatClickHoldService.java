@@ -57,6 +57,9 @@ public class SeatClickHoldService {
         if (result == HoldResult.LIMIT_EXCEEDED) {
             throw new BookingException(ErrorCode.BOOKING_LIMIT_EXCEEDED);
         }
+        if (result == HoldResult.ADMISSION_EXPIRED) {
+            throw new BookingException(ErrorCode.ADMISSION_INVALID);
+        }
     }
 
     // 내가 잡은 좌석이 아니면 아무 일도 하지 않음
@@ -95,7 +98,7 @@ public class SeatClickHoldService {
 
     private HoldResult holdSeat(Long seatId, String token, int maxSeats) {
         try {
-            return seatLockRepository.hold(seatId, token, maxSeats, FALLBACK_TTL);
+            return seatLockRepository.hold(seatId, token, maxSeats, admissionService.isRequired(), FALLBACK_TTL);
         } catch (DataAccessException e) {
             log.error("좌석 임시 선점 실패: seatId={}", seatId, e);
             throw new BookingException(ErrorCode.SERVICE_UNAVAILABLE);

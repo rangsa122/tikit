@@ -26,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -73,7 +74,9 @@ class SeatClickHoldServiceTest {
     void hold_passesRemainingSeats() {
         // given
         given(bookingRepository.sumSeatCount(eq(MEMBER_ID), eq(SESSION_ID), any())).willReturn(1L);
-        given(seatLockRepository.hold(eq(SEAT_ID), eq(ADMISSION_HEADER), eq(3), any())).willReturn(HoldResult.HELD);
+        given(admissionService.isRequired()).willReturn(true);
+        given(seatLockRepository.hold(eq(SEAT_ID), eq(ADMISSION_HEADER), eq(3), eq(true), any()))
+                .willReturn(HoldResult.HELD);
 
         // when, then
         assertThatCode(() -> service.hold(MEMBER_ID, ADMISSION_HEADER, SESSION_ID, SEAT_ID))
@@ -85,7 +88,7 @@ class SeatClickHoldServiceTest {
     @DisplayName("다른 사람이 잡은 좌석이면 SEAT_UNAVAILABLE이다")
     void hold_taken() {
         // given
-        given(seatLockRepository.hold(anyLong(), anyString(), anyInt(), any())).willReturn(HoldResult.TAKEN);
+        given(seatLockRepository.hold(anyLong(), anyString(), anyInt(), anyBoolean(), any())).willReturn(HoldResult.TAKEN);
 
         // when, then
         assertRejected(() -> service.hold(MEMBER_ID, ADMISSION_HEADER, SESSION_ID, SEAT_ID),
@@ -96,11 +99,23 @@ class SeatClickHoldServiceTest {
     @DisplayName("매수를 넘으면 BOOKING_LIMIT_EXCEEDED다")
     void hold_limitExceeded() {
         // given
-        given(seatLockRepository.hold(anyLong(), anyString(), anyInt(), any())).willReturn(HoldResult.LIMIT_EXCEEDED);
+        given(seatLockRepository.hold(anyLong(), anyString(), anyInt(), anyBoolean(), any())).willReturn(HoldResult.LIMIT_EXCEEDED);
 
         // when, then
         assertRejected(() -> service.hold(MEMBER_ID, ADMISSION_HEADER, SESSION_ID, SEAT_ID),
                 ErrorCode.BOOKING_LIMIT_EXCEEDED);
+    }
+
+    @Test
+    @DisplayName("잡는 순간 입장 권한이 사라졌으면 ADMISSION_INVALID다")
+    void hold_admissionExpiredWhileHolding() {
+        // given
+        given(seatLockRepository.hold(anyLong(), anyString(), anyInt(), anyBoolean(), any()))
+                .willReturn(HoldResult.ADMISSION_EXPIRED);
+
+        // when, then
+        assertRejected(() -> service.hold(MEMBER_ID, ADMISSION_HEADER, SESSION_ID, SEAT_ID),
+                ErrorCode.ADMISSION_INVALID);
     }
 
     @Test
@@ -153,7 +168,7 @@ class SeatClickHoldServiceTest {
     @DisplayName("Redis 장애면 503이다")
     void hold_redisDown() {
         // given
-        given(seatLockRepository.hold(anyLong(), anyString(), anyInt(), any()))
+        given(seatLockRepository.hold(anyLong(), anyString(), anyInt(), anyBoolean(), any()))
                 .willThrow(new RedisConnectionFailureException("down"));
 
         // when, then
