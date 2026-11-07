@@ -247,4 +247,56 @@ public class PaymentControllerTest {
         resultActions.andExpect(jsonPath("$.code").value(errorCode.name()));
         resultActions.andExpect(jsonPath("$.message").value("주문 번호 형식이 올바르지 않습니다."));
     }
+
+    @Test
+    @DisplayName("토근 없이 전체 취소 예상 금액을 조회하면 401을 반환")
+    void get_cancellation_quote_without_token() throws Exception {
+        // given
+
+        // when
+        ResultActions resultActions = mvc.perform(get("/api/v1/bookings/1/cancellation-quote"));
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        ErrorCode errorCode = ErrorCode.AUTHENTICATION_REQUIRED;
+
+        assertThat(httpStatusCode).isEqualTo(errorCode.getStatus().value());
+        resultActions.andExpect(jsonPath("$.code").value(errorCode.name()));
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 예매의 전체 취소 예상 금액을 조회하면 404를 반환")
+    void get_cancellation_quote_booking_not_found() throws Exception {
+        // given
+        Member member = Member.create(
+                "payment-test@example.com",
+                "encodedPassword",
+                "tester",
+                Role.MEMBER
+        );
+        ReflectionTestUtils.setField(member, "id", 1L);
+
+        String accessToken = jwtProvider.generateAccessToken(member);
+
+        // when
+        ResultActions resultActions = mvc.perform(
+                get("/api/v1/bookings/999999999/cancellation-quote")
+                        .header("Authorization", "Bearer " + accessToken)
+        );
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        ErrorCode errorCode = ErrorCode.RESOURCE_NOT_FOUND;
+
+        assertThat(httpStatusCode).isEqualTo(errorCode.getStatus().value());
+        resultActions.andExpect(jsonPath("$.code").value(errorCode.name()));
+    }
 }
