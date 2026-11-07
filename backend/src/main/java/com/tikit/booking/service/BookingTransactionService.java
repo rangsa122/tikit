@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class BookingTransactionService {
 
-    private static final List<BookingStatus> ACTIVE_STATUSES =
+    static final List<BookingStatus> ACTIVE_STATUSES =
             List.of(BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED);
 
     private final MemberRepository memberRepository;

@@ -111,6 +111,11 @@ public class SecurityConfig {
                                         "/api/v1/queue-entries/**"
                                 ).hasRole("MEMBER")
 
+                                // 좌석 임시 선점은 일반 회원만
+                                .requestMatchers(
+                                        "/api/v1/sessions/*/seats/*/hold"
+                                ).hasRole("MEMBER")
+
                                 // 예매 조회는 일반 회원만
                                 .requestMatchers(
                                         HttpMethod.GET,

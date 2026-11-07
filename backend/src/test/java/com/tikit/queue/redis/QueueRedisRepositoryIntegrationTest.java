@@ -1,5 +1,7 @@
 package com.tikit.queue.redis;
 
+import com.tikit.booking.redis.SeatLockRepository;
+import com.tikit.booking.redis.SeatLockRepository.HoldResult;
 import com.tikit.queue.entity.QueueEntryStatus;
 import com.tikit.queue.redis.QueueRedisRepository.Admission;
 import com.tikit.queue.redis.QueueRedisRepository.QueueLimits;
@@ -18,6 +20,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -44,10 +47,14 @@ class QueueRedisRepositoryIntegrationTest {
     private QueueRedisRepository repository;
 
     @Autowired
+    private SeatLockRepository seatLockRepository;
+
+    @Autowired
     private RedisTemplate<String, String> redisTemplate;
 
     private Long sessionId;
     private final List<QueueEntrySnapshot> created = new ArrayList<>();
+    private final List<String> seatKeys = new ArrayList<>();
 
     @BeforeEach
     void setup() {
@@ -64,6 +71,7 @@ class QueueRedisRepositoryIntegrationTest {
                 keys.add("admission:" + entry.admissionId());
             }
         }
+        keys.addAll(seatKeys);
         redisTemplate.delete(keys);
     }
 
@@ -190,6 +198,39 @@ class QueueRedisRepositoryIntegrationTest {
 
         // 입장 종료로 빈 정원에 새로 온 사람이 바로 입장
         assertThat(join(4L, NOW).status()).isEqualTo(QueueEntryStatus.ADMITTED);
+    }
+
+    @Test
+    @DisplayName("입장을 끝내면 그 입장 권한으로 잡은 좌석을 풀어서 재입장으로 매수 제한을 넘길 수 없다")
+    void leave_releasesHeldSeats() {
+        long seat = 9_000_000_000L + ThreadLocalRandom.current().nextLong(1_000_000_000L);
+        List<Long> seats = List.of(seat, seat + 1, seat + 2);
+        String otherToken = UUID.randomUUID().toString();
+        seatKeys.addAll(seats.stream().map(id -> "seat-hold:" + id).toList());
+        seatKeys.add("seat-selection:" + otherToken);
+
+        QueueEntrySnapshot first = join(1L, NOW);
+        String firstToken = first.admissionId().toString();
+        seatKeys.add("seat-selection:" + firstToken);
+        assertThat(seatLockRepository.hold(seat, firstToken, 2, true, Duration.ofMinutes(5)))
+                .isEqualTo(HoldResult.HELD);
+        assertThat(seatLockRepository.hold(seat + 1, firstToken, 2, true, Duration.ofMinutes(5)))
+                .isEqualTo(HoldResult.HELD);
+        assertThat(seatLockRepository.hold(seat + 2, otherToken, 2, false, Duration.ofMinutes(5)))
+                .isEqualTo(HoldResult.HELD);
+
+        repository.leave(first.queueEntryId(), 1L);
+
+        assertThat(seatLockRepository.findHolders(seats)).containsOnlyKeys(seat + 2);
+        assertThat(redisTemplate.hasKey("seat-selection:" + firstToken)).isFalse();
+
+        // 다시 들어와도 전에 잡은 좌석이 남아 있지 않아서 제한까지만 잡을 수 있음
+        QueueEntrySnapshot again = join(1L, NOW);
+        String againToken = again.admissionId().toString();
+        seatKeys.add("seat-selection:" + againToken);
+        assertThat(seatLockRepository.hold(seat, againToken, 2, true, Duration.ofMinutes(5)))
+                .isEqualTo(HoldResult.HELD);
+        assertThat(seatLockRepository.findHolders(seats)).containsOnlyKeys(seat, seat + 2);
     }
 
     @Test
