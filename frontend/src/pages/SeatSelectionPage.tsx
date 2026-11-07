@@ -1,10 +1,10 @@
 import {useState} from 'react'
 import type {ReactNode} from 'react'
-import {useQuery} from '@tanstack/react-query'
+import {useQuery, useQueryClient} from '@tanstack/react-query'
 import {useLocation, useNavigate, useParams} from 'react-router'
 import {BookingApiError, createBooking} from '../api/bookingApi'
 import {leaveQueue} from '../api/queueApi'
-import {getSessionSeats} from '../api/sessionSeatApi'
+import {getSessionSeats, holdSeat, releaseSeat} from '../api/sessionSeatApi'
 import type {SessionSeat} from '../api/sessionSeatApi'
 import checkIcon from '../assets/seat/check.svg'
 import chevronLeftIcon from '../assets/seat/chevron-left.svg'
@@ -22,6 +22,8 @@ const USE_MOCK_SEATS = false
 
 // 피그마 기준 최대 선택 매수 (회원별 실제 제한은 서버가 확인)
 const MAX_SEATS = 4
+// 다른 사람이 잡은 좌석을 화면에 반영하는 주기
+const SEATS_REFRESH_MS = 3000
 // 템플릿 A는 4번, 16번 좌석 뒤에 통로가 있음
 const AISLE_AFTER_SEATS = [4, 16]
 const GRADE_ORDER = ['VIP', 'R', 'A']
@@ -99,40 +101,105 @@ function SeatSelection({sessionId, admission, remainingLabel, pageState, onAdmis
     onAdmissionRejected: () => void
 }) {
     const navigate = useNavigate()
-    const [selectedIds, setSelectedIds] = useState<number[]>([])
+    const queryClient = useQueryClient()
     const [notice, setNotice] = useState<string | null>(null)
     const [submitting, setSubmitting] = useState(false)
+    const [pendingSeatId, setPendingSeatId] = useState<number | null>(null)
 
+    const seatsQueryKey = ['sessions', sessionId, 'seats']
     const seatsQuery = useQuery({
-        queryKey: ['sessions', sessionId, 'seats'],
-        queryFn: () => USE_MOCK_SEATS ? mockSessionSeats : getSessionSeats(Number(sessionId)),
+        queryKey: seatsQueryKey,
+        queryFn: () => USE_MOCK_SEATS
+            ? mockSessionSeats
+            : getSessionSeats(Number(sessionId), admission.admissionId),
         staleTime: 0,
         retry: false,
+        refetchInterval: USE_MOCK_SEATS ? false : SEATS_REFRESH_MS,
     })
     const seats = seatsQuery.data ?? []
-    // 다시 조회해서 팔린 좌석은 선택에서 빠짐
-    const selectedSeats = seats.filter(seat => selectedIds.includes(seat.seatId) && isAvailable(seat))
+    // 선택 상태는 서버가 기준이라 새로고침해도 유지되고, 만료된 좌석은 자동으로 빠짐
+    const selectedSeats = seats.filter(seat => seat.heldByMe && isAvailable(seat))
 
-    function toggleSeat(seat: SessionSeat) {
-        setNotice(null)
-        if (selectedIds.includes(seat.seatId)) {
-            setSelectedIds(ids => ids.filter(id => id !== seat.seatId))
-            return
-        }
+    // 응답을 기다리지 않고 화면에 바로 반영. 진행 중인 조회가 덮어쓰지 않게 먼저 취소
+    async function markSeats(seatIds: number[], heldByMe: boolean) {
+        await queryClient.cancelQueries({queryKey: seatsQueryKey})
+        queryClient.setQueryData<SessionSeat[]>(seatsQueryKey, current => current?.map(seat =>
+            seatIds.includes(seat.seatId) ? {...seat, heldByMe} : seat))
+    }
+
+    async function selectSeat(seat: SessionSeat) {
         if (selectedSeats.length >= MAX_SEATS) {
             setNotice(`한 번에 최대 ${MAX_SEATS}석까지 선택할 수 있어요.`)
             return
         }
-        setSelectedIds(ids => [...ids, seat.seatId])
+        try {
+            if (!USE_MOCK_SEATS) {
+                await holdSeat(Number(sessionId), seat.seatId, admission.admissionId)
+            }
+            await markSeats([seat.seatId], true)
+        } catch (error) {
+            handleHoldError(error)
+        }
     }
 
-    function resetSeats() {
+    async function deselectSeat(seat: SessionSeat) {
+        await markSeats([seat.seatId], false)
+        if (!USE_MOCK_SEATS) {
+            // 실패해도 입장 권한 만료 때 풀림
+            await releaseSeat(Number(sessionId), seat.seatId, admission.admissionId).catch(() => undefined)
+        }
+    }
+
+    function handleHoldError(error: unknown) {
+        if (!(error instanceof BookingApiError)) {
+            setNotice('좌석을 선택하지 못했어요. 다시 시도해 주세요.')
+            return
+        }
+        if (error.code === 'ADMISSION_INVALID') {
+            onAdmissionRejected()
+            return
+        }
+        if (error.code === 'SEAT_UNAVAILABLE') {
+            setNotice('이미 다른 분이 선택한 좌석이에요.')
+            void seatsQuery.refetch()
+            return
+        }
+        if (error.code === 'BOOKING_LIMIT_EXCEEDED') {
+            setNotice('이 회차에서 예매할 수 있는 매수를 넘었어요.')
+            return
+        }
+        setNotice(error.message)
+    }
+
+    async function toggleSeat(seat: SessionSeat) {
+        if (pendingSeatId !== null) {
+            return
+        }
         setNotice(null)
-        setSelectedIds([])
+        setPendingSeatId(seat.seatId)
+        await (seat.heldByMe ? deselectSeat(seat) : selectSeat(seat))
+        setPendingSeatId(null)
     }
 
-    // 나가면 입장 자리를 다음 사람에게 넘김. 실패해도 입장 권한 만료 때 정리됨
+    function releaseAll() {
+        if (USE_MOCK_SEATS) {
+            return
+        }
+        // 실패해도 입장 권한 만료 때 풀림
+        selectedSeats.forEach(seat => {
+            releaseSeat(Number(sessionId), seat.seatId, admission.admissionId).catch(() => undefined)
+        })
+    }
+
+    async function resetSeats() {
+        setNotice(null)
+        releaseAll()
+        await markSeats(selectedSeats.map(seat => seat.seatId), false)
+    }
+
+    // 나가면 잡아 둔 좌석을 풀고 입장 자리를 다음 사람에게 넘김
     function handleBack() {
+        releaseAll()
         clearAdmission(sessionId)
         if (!USE_MOCK_SEATS) {
             leaveQueue(admission.queueEntryId).catch(() => undefined)
@@ -166,12 +233,11 @@ function SeatSelection({sessionId, admission, remainingLabel, pageState, onAdmis
                 onAdmissionRejected()
                 return
             }
-            if (error.code === 'SEAT_UNAVAILABLE') {
-                setNotice('방금 다른 분이 선택한 좌석이 있어요. 좌석을 다시 골라 주세요.')
-                void seatsQuery.refetch()
-                return
-            }
-            setNotice(error.message)
+            // 실패하면 서버가 잡아 둔 좌석을 풀 수 있어서 다시 조회
+            void seatsQuery.refetch()
+            setNotice(error.code === 'SEAT_UNAVAILABLE'
+                ? '선택한 좌석을 잡지 못했어요. 좌석을 다시 골라 주세요.'
+                : error.message)
         }
     }
 

@@ -29,6 +29,7 @@ export const mockSessionSeats: SessionSeat[] = ROW_LABELS.flatMap((rowLabel, row
             y: rowIndex,
             // 일부 좌석은 이미 판매된 상태로 설정
             status: id % 7 === 3 ? "SOLD" : "AVAILABLE",
+            heldByMe: false,
         };
     })
 );
