@@ -2,6 +2,7 @@ package com.tikit.booking.controller.advice;
 
 import com.tikit.booking.controller.BookingController;
 import com.tikit.booking.controller.MyBookingController;
+import com.tikit.booking.controller.SeatHoldController;
 import com.tikit.booking.exception.BookingException;
 import com.tikit.common.ErrorCode;
 import com.tikit.common.dto.ResponseDTO;
@@ -13,7 +14,7 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @Slf4j
-@RestControllerAdvice(assignableTypes = {BookingController.class, MyBookingController.class})
+@RestControllerAdvice(assignableTypes = {BookingController.class, MyBookingController.class, SeatHoldController.class})
 public class BookingControllerAdvice {
 
     @ExceptionHandler(BookingException.class)
