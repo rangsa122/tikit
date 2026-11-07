@@ -12,12 +12,15 @@ import QueuePage from '../pages/queue/QueuePage'
 import PaymentSuccessPage from '../pages/payment/PaymentSuccessPage'
 import PaymentFailPage from '../pages/payment/PaymentFailPage'
 import mypageRoutes from './mypageRoutes'
-import PerformanceCreatePage from "../pages/manager/PerformanceCreatePage.tsx";
+import AdminGuard from '../pages/admin/AdminGuard'
+import AdminMembersPage from '../pages/admin/AdminMembersPage'
+import PerformanceCreatePage from '../pages/manager/PerformanceCreatePage'
 
 const router = createBrowserRouter([
   {
     element: <MainLayout />,
     children: [
+      {element: <AdminGuard />, children: [{path: '/admin/members', element: <AdminMembersPage />}]},
       {path: '/', element: <HomePage />},
       {path: '/categories/:categoryId', element: <CategoryPage />},
       {path: '/performances/:performanceId', element: <PerformanceDetailPage />},
