@@ -1,15 +1,9 @@
-
 import {Link} from 'react-router'
 import {useEffect, useState} from 'react'
 import {getMyProfile, type MemberProfile} from '../../api/memberApi'
+import { getMyBookings, type Booking } from '../../api/bookingApi'
 import MyPageSidebar from './MyPageSidebar'
 import axios from 'axios'
-
-// <<임시>> 공연 데이터
-const bookings = [
-  {id: 1, title: '뮤지컬 공연 예시', date: '2026.11.15', status: '예매 완료'},
-  {id: 2, title: '연극 공연 예시', date: '2026.11.20', status: '예매 완료'},
-]
 
 const favorites = [
   {id: 1, title: '관심 공연 1'},
@@ -23,6 +17,11 @@ export default function MyPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [isAuthError, setIsAuthError] = useState(false)
+
+  const [bookings, setBookings] = useState<Booking[]>([])
+  const [bookingCount, setBookingCount] = useState<number | null>(null)
+  const [isBookingsLoading, setIsBookingsLoading] = useState(true)
+  const [bookingError, setBookingError] = useState('')
 
   // 회원정보 조회
   useEffect(() => {
@@ -66,6 +65,36 @@ export default function MyPage() {
       active = false
     }
   }, [])
+
+  // 최근 예매 확정 3건 조회
+  useEffect(() => {
+    let active = true
+
+    async function loadBookings() {
+      try {
+        const data = await getMyBookings(0, 3, 'CONFIRMED')
+
+        if (!active) return
+
+        setBookings(data.items)
+        setBookingCount(data.totalElements)
+        setBookingError('')
+      } catch {
+        if (!active) return
+
+        setBookingError('예매 내역을 불러오지 못했습니다.')
+      } finally {
+        if (active) setIsBookingsLoading(false)
+      }
+    }
+
+    void loadBookings()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
 
   return (
     <div className="mx-auto w-full max-w-[1320px] px-5 py-10">
@@ -115,9 +144,10 @@ export default function MyPage() {
 
             <div className="flex gap-10">
               <div className="text-center">
-                <p className="text-[13px] text-[#666]">관람 예정</p>
+                <p className="text-[13px] text-[#666]">예매</p>
                 <p className="mt-2 text-[20px] font-semibold">
-                  2 <span className="text-[13px] font-normal">건</span>
+                  {bookingCount ?? '—'}{' '}
+                  <span className="text-[13px] font-normal">건</span>
                 </p>
               </div>
               <div className="text-center">
@@ -132,34 +162,64 @@ export default function MyPage() {
           {/* 예매 내역 */}
           <section className="mt-12">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-[20px] font-semibold">예매 내역</h2>
-              <span className="text-[13px] text-[#777]">
+              <h2 className="text-[20px] font-semibold">
+                예매 내역
+              </h2>
+
+              <Link
+                  to="/mypage/bookings"
+                  className="text-[13px] text-[#777] hover:text-[#4338CA]"
+              >
                 전체 보기 ›
-              </span>
+              </Link>
             </div>
 
             <div className="bg-[#f5f5f5] px-5 py-3 text-[13px] text-[#666]">
-              최근 3개월 예매 내역
+              최근 확정 예매 내역
             </div>
 
-            {bookings.map((booking) => (
-              <div
-                key={booking.id}
-                className="flex items-center justify-between gap-4 border-b border-[#eee] px-5 py-5"
-              >
-                <div>
-                  <p className="text-[15px] font-medium">
-                    {booking.title}
-                  </p>
-                  <p className="mt-2 text-[13px] text-[#888]">
-                    {booking.date}
-                  </p>
-                </div>
-                <span className="text-[13px] text-[#555]">
-                  {booking.status}
-                </span>
-              </div>
-            ))}
+            {isBookingsLoading ? (
+                <p className="py-8 text-center text-[14px] text-[#777]">
+                  예매 내역을 불러오는 중...
+                </p>
+            ) : bookingError ? (
+                <p role="alert" className="py-8 text-center text-[14px] text-red-600">
+                  {bookingError}
+                </p>
+            ) : bookings.length === 0 ? (
+                <p className="py-10 text-center text-[14px] text-[#777]">
+                  확정된 예매 내역이 없습니다.
+                </p>
+            ) : (
+                bookings.map((booking) => (
+                    <Link
+                        key={booking.bookingId}
+                        to={`/mypage/bookings/${booking.bookingId}`}
+                        className="flex items-center justify-between gap-4 border-b border-[#eee] px-5 py-5 hover:bg-[#fafafa]"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-[15px] font-medium text-[#222]">
+                          {booking.performanceTitle}
+                        </p>
+
+                        <p className="mt-2 text-[13px] text-[#888]">
+                          {new Date(booking.startsAt).toLocaleString('ko-KR', {
+                            timeZone: 'Asia/Seoul',
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </p>
+                      </div>
+
+                      <span className="shrink-0 rounded bg-[#eeecff] px-3 py-1 text-[12px] font-medium text-[#4338CA]">
+                        예매 확정
+                      </span>
+                    </Link>
+                ))
+            )}
           </section>
 
           {/* 관심 공연 */}

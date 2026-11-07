@@ -180,7 +180,9 @@ export default function BookingDetailPage() {
     return (
         <div className="mx-auto w-full max-w-[1320px] px-5 py-10">
             <h1 className="border-b border-[#333] pb-5 text-[28px] font-semibold">
-                마이페이지
+                <Link to="/mypage" className="cursor-pointer">
+                    마이페이지
+                </Link>
             </h1>
 
             <div className="mt-8 flex flex-col gap-10 md:flex-row">
