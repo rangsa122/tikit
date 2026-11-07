@@ -102,3 +102,80 @@ export async function createBooking(sessionId: number, seatIds: number[], admiss
         throw error
     }
 }
+
+/** 내 예매 목록 페이지 응답 */
+export interface BookingPage {
+    items: Booking[]
+    page: number
+    size: number
+    totalElements: number
+    totalPages: number
+}
+
+/**
+ * 내 예매 목록 조회
+ * GET /api/v1/me/bookings
+ */
+export async function getMyBookings(
+    page: number = 0,
+    size: number = 20,
+    status?: BookingStatus,
+): Promise<BookingPage> {
+    const response = await apiClient.get<ApiResponse<BookingPage>>(
+        '/api/v1/me/bookings',
+        {
+            params: {
+                page,
+                size,
+                ...(status ? { status } : {}),
+            },
+        },
+    )
+
+    if (response.data.code !== 'SUCCESS' || !response.data.data) {
+        throw new Error(
+            response.data.message || '예매 내역을 불러오지 못했습니다.',
+        )
+    }
+
+    return response.data.data
+}
+
+/** 티켓 상태 */
+export type TicketStatus = 'VALID' | 'VOID'
+
+/** 발급 티켓 정보 */
+export interface TicketItem {
+    ticketId: number
+    bookingId: number
+    seatId: number
+    seatLabel: string
+    performanceTitle: string
+    startsAt: string
+    status: TicketStatus
+}
+
+/** 티켓 목록 응답 */
+export interface TicketListResponse {
+    items: TicketItem[]
+}
+
+/**
+ * 예매별 발급 티켓 조회
+ * GET /api/v1/bookings/{bookingId}/tickets
+ */
+export async function getTickets(
+    bookingId: string,
+): Promise<TicketListResponse> {
+    const response = await apiClient.get<ApiResponse<TicketListResponse>>(
+        `/api/v1/bookings/${encodeURIComponent(bookingId)}/tickets`,
+    )
+
+    if (response.data.code !== 'SUCCESS' || !response.data.data) {
+        throw new Error(
+            response.data.message || '발급 티켓을 불러오지 못했습니다.',
+        )
+    }
+
+    return response.data.data
+}
