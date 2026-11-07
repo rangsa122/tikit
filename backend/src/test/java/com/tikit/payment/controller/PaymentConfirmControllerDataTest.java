@@ -36,6 +36,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.UUID;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -43,6 +44,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -94,6 +96,7 @@ public class PaymentConfirmControllerDataTest {
         ResultActions resultActions = mvc.perform(
                 post("/api/v1/payment-attempts/" + paymentAttemptId + "/confirmation")
                         .header("Authorization", "Bearer " + accessTokenFor(memberId))
+                        .header("Idempotency-Key", newIdempotencyKey())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(confirmRequestBody(orderId, AMOUNT))
         );
@@ -152,6 +155,7 @@ public class PaymentConfirmControllerDataTest {
         ResultActions resultActions = mvc.perform(
                 post("/api/v1/payment-attempts/" + paymentAttemptId + "/confirmation")
                         .header("Authorization", "Bearer " + accessTokenFor(memberId))
+                        .header("Idempotency-Key", newIdempotencyKey())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(confirmRequestBody(orderId, AMOUNT))
         );
@@ -190,6 +194,7 @@ public class PaymentConfirmControllerDataTest {
         ResultActions resultActions = mvc.perform(
                 post("/api/v1/payment-attempts/" + paymentAttemptId + "/confirmation")
                         .header("Authorization", "Bearer " + accessTokenFor(memberId))
+                        .header("Idempotency-Key", newIdempotencyKey())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(confirmRequestBody(orderId, AMOUNT))
         );
@@ -227,6 +232,7 @@ public class PaymentConfirmControllerDataTest {
         ResultActions resultActions = mvc.perform(
                 post("/api/v1/payment-attempts/" + paymentAttemptId + "/confirmation")
                         .header("Authorization", "Bearer " + accessTokenFor(memberId))
+                        .header("Idempotency-Key", newIdempotencyKey())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(confirmRequestBody(orderId, AMOUNT))
         );
@@ -267,6 +273,7 @@ public class PaymentConfirmControllerDataTest {
         ResultActions resultActions = mvc.perform(
                 post("/api/v1/payment-attempts/" + paymentAttemptId + "/confirmation")
                         .header("Authorization", "Bearer " + accessTokenFor(memberId))
+                        .header("Idempotency-Key", newIdempotencyKey())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(confirmRequestBody(orderId, AMOUNT))
         );
@@ -301,6 +308,7 @@ public class PaymentConfirmControllerDataTest {
         ResultActions resultActions = mvc.perform(
                 post("/api/v1/payment-attempts/" + paymentAttemptId + "/confirmation")
                         .header("Authorization", "Bearer " + accessTokenFor(memberId))
+                        .header("Idempotency-Key", newIdempotencyKey())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(confirmRequestBody(orderId, 1000L))
         );
@@ -338,6 +346,7 @@ public class PaymentConfirmControllerDataTest {
         ResultActions resultActions = mvc.perform(
                 post("/api/v1/payment-attempts/" + paymentAttemptId + "/confirmation")
                         .header("Authorization", "Bearer " + accessTokenFor(memberId))
+                        .header("Idempotency-Key", newIdempotencyKey())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(confirmRequestBody(orderId, AMOUNT))
         );
@@ -374,6 +383,7 @@ public class PaymentConfirmControllerDataTest {
         ResultActions resultActions = mvc.perform(
                 post("/api/v1/payment-attempts/" + paymentAttemptId + "/confirmation")
                         .header("Authorization", "Bearer " + accessTokenFor(memberId))
+                        .header("Idempotency-Key", newIdempotencyKey())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(confirmRequestBody(orderId, AMOUNT))
         );
@@ -411,6 +421,7 @@ public class PaymentConfirmControllerDataTest {
         ResultActions resultActions = mvc.perform(
                 post("/api/v1/payment-attempts/" + paymentAttemptId + "/confirmation")
                         .header("Authorization", "Bearer " + accessTokenFor(otherMemberId))
+                        .header("Idempotency-Key", newIdempotencyKey())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(confirmRequestBody(orderId, AMOUNT))
         );
@@ -434,6 +445,95 @@ public class PaymentConfirmControllerDataTest {
     }
 
     // 승인 요청 본문 (paymentKey는 결제창 인증 후 Toss가 주는 값이라 테스트에서는 임의 값)
+    @Test
+    @DisplayName("같은 멱등키로 다시 승인 요청하면 Toss를 다시 부르지 않고 현재 결제 상태(200 APPROVED)로 응답")
+    void confirm_payment_same_idempotency_key_replays() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = dataHelper.createBooking(memberId, BookingStatus.PENDING_PAYMENT,
+                Instant.now().plus(5, ChronoUnit.MINUTES), AMOUNT);
+        Long paymentAttemptId = dataHelper.createPaymentAttempt(bookingId, PaymentAttemptStatus.READY, AMOUNT);
+        String orderId = entityManager.find(PaymentAttempt.class, paymentAttemptId).getOrderId();
+        String idempotencyKey = newIdempotencyKey();
+
+        OffsetDateTime approvedAt = OffsetDateTime.now(ZoneOffset.ofHours(9));
+        given(tossPaymentClient.confirmPayment(any(), any()))
+                .willReturn(tossApprovedResponse(orderId, AMOUNT, approvedAt));
+
+        mvc.perform(
+                post("/api/v1/payment-attempts/" + paymentAttemptId + "/confirmation")
+                        .header("Authorization", "Bearer " + accessTokenFor(memberId))
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(confirmRequestBody(orderId, AMOUNT))
+        );
+
+        // when
+        ResultActions resultActions = mvc.perform(
+                post("/api/v1/payment-attempts/" + paymentAttemptId + "/confirmation")
+                        .header("Authorization", "Bearer " + accessTokenFor(memberId))
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(confirmRequestBody(orderId, AMOUNT))
+        );
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        assertThat(httpStatusCode).isEqualTo(200);
+        resultActions.andExpect(jsonPath("$.data.status").value("APPROVED"));
+        then(tossPaymentClient).should(times(1)).confirmPayment(any(), any());
+    }
+
+    @Test
+    @DisplayName("같은 멱등키로 다른 내용(금액)을 보내면 409 IDEMPOTENCY_CONFLICT")
+    void confirm_payment_same_idempotency_key_different_body_conflict() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = dataHelper.createBooking(memberId, BookingStatus.PENDING_PAYMENT,
+                Instant.now().plus(5, ChronoUnit.MINUTES), AMOUNT);
+        Long paymentAttemptId = dataHelper.createPaymentAttempt(bookingId, PaymentAttemptStatus.READY, AMOUNT);
+        String orderId = entityManager.find(PaymentAttempt.class, paymentAttemptId).getOrderId();
+        String idempotencyKey = newIdempotencyKey();
+
+        OffsetDateTime approvedAt = OffsetDateTime.now(ZoneOffset.ofHours(9));
+        given(tossPaymentClient.confirmPayment(any(), any()))
+                .willReturn(tossApprovedResponse(orderId, AMOUNT, approvedAt));
+
+        mvc.perform(
+                post("/api/v1/payment-attempts/" + paymentAttemptId + "/confirmation")
+                        .header("Authorization", "Bearer " + accessTokenFor(memberId))
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(confirmRequestBody(orderId, AMOUNT))
+        );
+
+        // when
+        ResultActions resultActions = mvc.perform(
+                post("/api/v1/payment-attempts/" + paymentAttemptId + "/confirmation")
+                        .header("Authorization", "Bearer " + accessTokenFor(memberId))
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(confirmRequestBody(orderId, AMOUNT + 1000))
+        );
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        ErrorCode errorCode = ErrorCode.IDEMPOTENCY_CONFLICT;
+
+        assertThat(httpStatusCode).isEqualTo(errorCode.getStatus().value());
+        resultActions.andExpect(jsonPath("$.code").value(errorCode.name()));
+    }
+
     private String confirmRequestBody(String orderId, Long amount) {
         return """
                 {
@@ -465,5 +565,10 @@ public class PaymentConfirmControllerDataTest {
         Member member = Member.create("token-" + memberId + "@example.com", "encodedPassword", "tester", Role.MEMBER);
         ReflectionTestUtils.setField(member, "id", memberId);
         return jwtProvider.generateAccessToken(member);
+    }
+
+    // 테스트마다 겹치지 않는 멱등키 (프론트는 confirm-{paymentKey} 형식)
+    private String newIdempotencyKey() {
+        return "confirm-" + UUID.randomUUID();
     }
 }

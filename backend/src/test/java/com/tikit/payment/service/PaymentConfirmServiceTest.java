@@ -1,5 +1,8 @@
 package com.tikit.payment.service;
 
+import com.tikit.common.idempotency.IdempotencyHasher;
+import com.tikit.common.idempotency.IdempotencyService;
+import com.tikit.common.idempotency.IdempotencyStart;
 import com.tikit.payment.client.TossPaymentClient;
 import com.tikit.payment.dto.request.PaymentConfirmRequestDTO;
 import com.tikit.payment.dto.response.PaymentAttemptResponseDTO;
@@ -19,6 +22,9 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
@@ -37,10 +43,13 @@ class PaymentConfirmServiceTest {
     private static final Instant APPROVED_AT = Instant.parse("2026-11-02T03:00:00Z");
     private static final String FAILURE_CODE = "REJECT_CARD_COMPANY";
     private static final String ALREADY_PROCESSED_PAYMENT = "ALREADY_PROCESSED_PAYMENT";
+    private static final String IDEMPOTENCY_KEY = "confirm-test-payment-key";
+    private static final Long IDEMPOTENCY_REQUEST_ID = 100L;
 
     private PaymentConfirmTxService paymentConfirmTxService;
     private TossPaymentClient tossPaymentClient;
     private PaymentService paymentService;
+    private IdempotencyService idempotencyService;
     private PaymentConfirmService paymentConfirmService;
     private PaymentConfirmRequestDTO request;
     private TossConfirmRequestDTO tossRequest;
@@ -50,7 +59,9 @@ class PaymentConfirmServiceTest {
         paymentConfirmTxService = mock(PaymentConfirmTxService.class);
         tossPaymentClient = mock(TossPaymentClient.class);
         paymentService = mock(PaymentService.class);
-        paymentConfirmService = new PaymentConfirmService(paymentConfirmTxService, tossPaymentClient, paymentService);
+        idempotencyService = mock(IdempotencyService.class);
+        paymentConfirmService = new PaymentConfirmService(
+                paymentConfirmTxService, tossPaymentClient, paymentService, idempotencyService);
 
         request = new PaymentConfirmRequestDTO(PAYMENT_KEY, ORDER_ID, AMOUNT);
         tossRequest = new TossConfirmRequestDTO(PAYMENT_KEY, ORDER_ID, AMOUNT);
@@ -64,6 +75,10 @@ class PaymentConfirmServiceTest {
                         AMOUNT,
                         PG_IDEMPOTENCY_KEY
                 ));
+
+        // 기본: 처음 온 멱등키 (새로 처리)
+        given(idempotencyService.start(eq(MEMBER_ID), eq("PAYMENT_CONFIRM"), eq(IDEMPOTENCY_KEY), anyString()))
+                .willReturn(IdempotencyStart.started(IDEMPOTENCY_REQUEST_ID));
     }
 
     @Test
@@ -77,7 +92,7 @@ class PaymentConfirmServiceTest {
                 .willReturn(paymentAttempt(PaymentAttemptStatus.APPROVED));
 
         // when
-        PaymentConfirmResult result = paymentConfirmService.confirm(PAYMENT_ATTEMPT_ID, MEMBER_ID, request);
+        PaymentConfirmResult result = paymentConfirmService.confirm(PAYMENT_ATTEMPT_ID, MEMBER_ID, request, IDEMPOTENCY_KEY);
         System.out.println("테스트: approved=" + result.approved() + ", status=" + result.paymentAttempt().getStatus());
 
         // then
@@ -96,7 +111,7 @@ class PaymentConfirmServiceTest {
 
         // when
         Throwable thrown = catchThrowable(() ->
-                paymentConfirmService.confirm(PAYMENT_ATTEMPT_ID, MEMBER_ID, request));
+                paymentConfirmService.confirm(PAYMENT_ATTEMPT_ID, MEMBER_ID, request, IDEMPOTENCY_KEY));
         System.out.println("테스트: thrown=" + thrown);
 
         // then
@@ -115,7 +130,7 @@ class PaymentConfirmServiceTest {
                 .willReturn(paymentAttempt(PaymentAttemptStatus.RECONCILING));
 
         // when
-        PaymentConfirmResult result = paymentConfirmService.confirm(PAYMENT_ATTEMPT_ID, MEMBER_ID, request);
+        PaymentConfirmResult result = paymentConfirmService.confirm(PAYMENT_ATTEMPT_ID, MEMBER_ID, request, IDEMPOTENCY_KEY);
         System.out.println("테스트: approved=" + result.approved() + ", status=" + result.paymentAttempt().getStatus());
 
         // then
@@ -136,7 +151,7 @@ class PaymentConfirmServiceTest {
                 .willReturn(paymentAttempt(PaymentAttemptStatus.RECONCILING));
 
         // when
-        PaymentConfirmResult result = paymentConfirmService.confirm(PAYMENT_ATTEMPT_ID, MEMBER_ID, request);
+        PaymentConfirmResult result = paymentConfirmService.confirm(PAYMENT_ATTEMPT_ID, MEMBER_ID, request, IDEMPOTENCY_KEY);
         System.out.println("테스트: approved=" + result.approved() + ", status=" + result.paymentAttempt().getStatus());
 
         // then
@@ -162,7 +177,7 @@ class PaymentConfirmServiceTest {
                 .willReturn(paymentAttempt(PaymentAttemptStatus.APPROVED));
 
         // when
-        PaymentConfirmResult result = paymentConfirmService.confirm(PAYMENT_ATTEMPT_ID, MEMBER_ID, request);
+        PaymentConfirmResult result = paymentConfirmService.confirm(PAYMENT_ATTEMPT_ID, MEMBER_ID, request, IDEMPOTENCY_KEY);
         System.out.println("테스트: approved=" + result.approved() + ", status=" + result.paymentAttempt().getStatus());
 
         // then
@@ -181,7 +196,7 @@ class PaymentConfirmServiceTest {
                 .willReturn(paymentAttempt(PaymentAttemptStatus.RECONCILING));
 
         // when
-        PaymentConfirmResult result = paymentConfirmService.confirm(PAYMENT_ATTEMPT_ID, MEMBER_ID, request);
+        PaymentConfirmResult result = paymentConfirmService.confirm(PAYMENT_ATTEMPT_ID, MEMBER_ID, request, IDEMPOTENCY_KEY);
         System.out.println("테스트: approved=" + result.approved() + ", status=" + result.paymentAttempt().getStatus());
 
         // then
@@ -201,13 +216,92 @@ class PaymentConfirmServiceTest {
                 .willReturn(paymentAttempt(PaymentAttemptStatus.RECONCILING));
 
         // when
-        PaymentConfirmResult result = paymentConfirmService.confirm(PAYMENT_ATTEMPT_ID, MEMBER_ID, request);
+        PaymentConfirmResult result = paymentConfirmService.confirm(PAYMENT_ATTEMPT_ID, MEMBER_ID, request, IDEMPOTENCY_KEY);
         System.out.println("테스트: approved=" + result.approved() + ", status=" + result.paymentAttempt().getStatus());
 
         // then
         then(paymentConfirmTxService).should(never()).completeApproval(any(), any(), any());
         then(paymentConfirmTxService).should().recordReconciling(PAYMENT_ATTEMPT_ID, MEMBER_ID);
         assertThat(result.approved()).isFalse();
+    }
+
+    @Test
+    @DisplayName("멱등키: 같은 키·같은 내용으로 이미 처리된 요청이면 다시 처리하지 않고 현재 결제 상태로 응답한다")
+    void confirm_idempotencyReplay_returnsCurrentResult() {
+        // given
+        // setup의 멱등키 결과를 재사용(replay)으로 덮어씀
+        given(idempotencyService.start(eq(MEMBER_ID), eq("PAYMENT_CONFIRM"), eq(IDEMPOTENCY_KEY), anyString()))
+                .willReturn(IdempotencyStart.replay(IDEMPOTENCY_REQUEST_ID, "PAYMENT_ATTEMPT", PAYMENT_ATTEMPT_ID));
+        given(paymentService.getPaymentAttempt(PAYMENT_ATTEMPT_ID, MEMBER_ID))
+                .willReturn(paymentAttempt(PaymentAttemptStatus.APPROVED));
+
+        // when
+        PaymentConfirmResult result = paymentConfirmService.confirm(PAYMENT_ATTEMPT_ID, MEMBER_ID, request, IDEMPOTENCY_KEY);
+        System.out.println("테스트: approved=" + result.approved() + ", status=" + result.paymentAttempt().getStatus());
+
+        // then
+        assertThat(result.approved()).isTrue();
+        then(paymentConfirmTxService).should(never()).startConfirmation(any(), any(), any());
+        then(tossPaymentClient).should(never()).confirmPayment(any(), any());
+        then(idempotencyService).should(never()).succeed(anyLong(), anyString(), anyLong());
+    }
+
+    @Test
+    @DisplayName("멱등키: 대상 결제 시도와 요청 본문(paymentKey·orderId·amount)으로 같은 요청인지 판단한다")
+    void confirm_idempotencyHash_includesTargetAndBody() {
+        // given
+        // setup에서 이미 셋팅
+        given(tossPaymentClient.confirmPayment(tossRequest, PG_IDEMPOTENCY_KEY))
+                .willReturn(tossResponse("DONE", TOSS_APPROVED_AT));
+        given(paymentService.getPaymentAttempt(PAYMENT_ATTEMPT_ID, MEMBER_ID))
+                .willReturn(paymentAttempt(PaymentAttemptStatus.APPROVED));
+        String expectedHash = IdempotencyHasher.hash(
+                "PAYMENT_ATTEMPT:" + PAYMENT_ATTEMPT_ID, PAYMENT_KEY + "|" + ORDER_ID + "|" + AMOUNT);
+
+        // when
+        paymentConfirmService.confirm(PAYMENT_ATTEMPT_ID, MEMBER_ID, request, IDEMPOTENCY_KEY);
+        System.out.println("테스트: expectedHash=" + expectedHash);
+
+        // then
+        then(idempotencyService).should().start(MEMBER_ID, "PAYMENT_CONFIRM", IDEMPOTENCY_KEY, expectedHash);
+    }
+
+    @Test
+    @DisplayName("멱등키: 승인 처리가 끝나면 결제 시도를 결과로 성공 기록한다")
+    void confirm_processed_recordsIdempotencySucceeded() {
+        // given
+        // setup에서 이미 셋팅
+        given(tossPaymentClient.confirmPayment(tossRequest, PG_IDEMPOTENCY_KEY))
+                .willReturn(tossResponse("DONE", TOSS_APPROVED_AT));
+        given(paymentService.getPaymentAttempt(PAYMENT_ATTEMPT_ID, MEMBER_ID))
+                .willReturn(paymentAttempt(PaymentAttemptStatus.APPROVED));
+
+        // when
+        paymentConfirmService.confirm(PAYMENT_ATTEMPT_ID, MEMBER_ID, request, IDEMPOTENCY_KEY);
+        System.out.println("테스트: 승인 처리 완료");
+
+        // then
+        then(idempotencyService).should().succeed(IDEMPOTENCY_REQUEST_ID, "PAYMENT_ATTEMPT", PAYMENT_ATTEMPT_ID);
+        then(idempotencyService).should(never()).fail(anyLong());
+    }
+
+    @Test
+    @DisplayName("멱등키: Toss가 거절해 예외가 나면 실패 기록하고 예외를 그대로 던진다")
+    void confirm_tossDeclined_recordsIdempotencyFailed() {
+        // given
+        // setup에서 이미 셋팅
+        willThrow(new TossApiException(400, FAILURE_CODE, "카드사 거절"))
+                .given(tossPaymentClient).confirmPayment(tossRequest, PG_IDEMPOTENCY_KEY);
+
+        // when
+        Throwable thrown = catchThrowable(() ->
+                paymentConfirmService.confirm(PAYMENT_ATTEMPT_ID, MEMBER_ID, request, IDEMPOTENCY_KEY));
+        System.out.println("테스트: " + thrown);
+
+        // then
+        assertThat(thrown).isInstanceOf(TossApiException.class);
+        then(idempotencyService).should().fail(IDEMPOTENCY_REQUEST_ID);
+        then(idempotencyService).should(never()).succeed(anyLong(), anyString(), anyLong());
     }
 
     // Toss 승인 응답 (status, approvedAt만 테스트마다 바꿈)
