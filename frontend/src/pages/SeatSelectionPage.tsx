@@ -197,9 +197,8 @@ function SeatSelection({sessionId, admission, remainingLabel, pageState, onAdmis
         await markSeats(selectedSeats.map(seat => seat.seatId), false)
     }
 
-    // 나가면 잡아 둔 좌석을 풀고 입장 자리를 다음 사람에게 넘김
+    // 나가면 입장 자리를 다음 사람에게 넘김. 잡아 둔 좌석은 서버가 함께 풂
     function handleBack() {
-        releaseAll()
         clearAdmission(sessionId)
         if (!USE_MOCK_SEATS) {
             leaveQueue(admission.queueEntryId).catch(() => undefined)

@@ -180,7 +180,19 @@ public class QueueRedisRepository {
 
     // ARGV: entryId, memberId
     // 0 = 본인 항목 없음, 1 = 처리함 (이미 끝난 항목이면 아무것도 바꾸지 않음)
+    // 입장을 끝내면 그 입장 권한으로 잡은 좌석도 함께 풂. 남겨 두면 재입장으로 매수 제한을 넘길 수 있음
     private static final DefaultRedisScript<Long> LEAVE_SCRIPT = new DefaultRedisScript<>(COMMON + """
+            local function releaseSeats(admissionId)
+                local selection = 'seat-selection:' .. admissionId
+                for _, seatId in ipairs(redis.call('SMEMBERS', selection)) do
+                    local seat = 'seat-hold:' .. seatId
+                    if redis.call('GET', seat) == admissionId then
+                        redis.call('DEL', seat)
+                    end
+                end
+                redis.call('DEL', selection)
+            end
+
             local id, memberId = ARGV[1], ARGV[2]
             local f = redis.call('HMGET', ek(id), 'memberId', 'sessionId', 'status', 'admissionId')
             if not f[1] or f[1] ~= memberId then
@@ -192,7 +204,10 @@ public class QueueRedisRepository {
                 finish(sid, id, 'LEFT')
             elseif f[3] == 'ADMITTED' then
                 redis.call('ZREM', qk(sid, 'admitted'), id)
-                if f[4] then redis.call('DEL', 'admission:' .. f[4]) end
+                if f[4] then
+                    redis.call('DEL', 'admission:' .. f[4])
+                    releaseSeats(f[4])
+                end
                 finish(sid, id, 'LEFT')
             end
             return 1
