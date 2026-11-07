@@ -53,3 +53,30 @@ export async function createPerformance(
     }
     return response.data.data
 }
+
+export interface PageResponse<T> {
+    items: T[]
+    page: number
+    size: number
+    totalElements: number
+    totalPages: number
+}
+
+export interface ManagerPerformanceListParams {
+    page?: number
+    size?: number
+    publicationStatus?: 'DRAFT' | 'PUBLISHED'
+}
+
+export async function getManagerPerformances(
+    params: ManagerPerformanceListParams = {},
+): Promise<PageResponse<ManagerPerformance>> {
+    const response = await apiClient.get<ApiResponse<PageResponse<ManagerPerformance>>>(
+        '/api/v1/manager/performances',
+        { params },
+    )
+    if (response.data.code !== 'SUCCESS' || !response.data.data) {
+        throw new Error(response.data.message || '공연 목록을 불러오지 못했습니다')
+    }
+    return response.data.data
+}
