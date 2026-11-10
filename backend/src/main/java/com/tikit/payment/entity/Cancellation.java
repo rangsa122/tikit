@@ -94,4 +94,47 @@ public class Cancellation {
 
         return cancellation;
     }
+
+    // Toss 취소 요청 직전: 접수 -> 처리 중 (1차 트랜잭션에서 커밋)
+    public void startProcessing() {
+        if (status != CancellationStatus.REQUESTED) {
+            throw new IllegalStateException(
+                    "REQUESTED 상태에서만 취소 처리를 시작할 수 있습니다. status=" + status);
+        }
+        this.status = CancellationStatus.PROCESSING;
+    }
+
+    // 환불 성공: Toss 취소 거래 키와 완료 시각 저장 (처리 중 또는 결과 확인 중에서만)
+    public void succeed(String pgTransactionKey, Instant completedAt) {
+        requireInProgress("환불 성공 처리");
+        if (pgTransactionKey == null || pgTransactionKey.isBlank()) {
+            throw new IllegalArgumentException("환불 성공에는 Toss 취소 거래 키가 필요합니다.");
+        }
+        this.pgTransactionKey = pgTransactionKey;
+        this.completedAt = completedAt;
+        this.status = CancellationStatus.SUCCEEDED;
+    }
+
+    // 환불 실패: Toss가 거절 (처리 중 또는 결과 확인 중에서만)
+    public void fail(String failureCode) {
+        requireInProgress("환불 실패 처리");
+        this.failureCode = failureCode;
+        this.status = CancellationStatus.FAILED;
+    }
+
+    // 응답 유실·Toss 장애: 환불됐는지 모름 -> 결과 확인 중 (처리 중에서만)
+    public void markReconciling() {
+        if (status != CancellationStatus.PROCESSING) {
+            throw new IllegalStateException(
+                    "PROCESSING 상태에서만 결과 확인 중으로 바꿀 수 있습니다. status=" + status);
+        }
+        this.status = CancellationStatus.RECONCILING;
+    }
+
+    private void requireInProgress(String action) {
+        if (status != CancellationStatus.PROCESSING && status != CancellationStatus.RECONCILING) {
+            throw new IllegalStateException(
+                    action + "는 PROCESSING 또는 RECONCILING 상태에서만 가능합니다. status=" + status);
+        }
+    }
 }
