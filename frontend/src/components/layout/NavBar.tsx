@@ -122,8 +122,8 @@ export default function NavBar() {
           <PerformanceSearch key={keyword} initialKeyword={keyword} />
 
           <div className="flex h-full shrink-0 items-center gap-3 px-1">
-            <button
-              type="button"
+            <Link
+              to="/mypage/favorites"
               aria-label="관심 공연"
               className="flex h-6 w-[18.236px] items-center justify-center"
             >
@@ -132,7 +132,7 @@ export default function NavBar() {
                 alt=""
                 className="max-w-none shrink-0"
               />
-            </button>
+            </Link>
 
             <AccountPopover key={location.key} />
 
