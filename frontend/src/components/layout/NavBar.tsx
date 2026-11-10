@@ -5,6 +5,7 @@ import type {FormEvent} from 'react'
 import searchIcon from '../../assets/navigation/search.svg'
 import heartIcon from '../../assets/navigation/heart.svg'
 import tikitLogo from '../../assets/navigation/tikit-logo.png'
+import NotificationPopover from './NotificationPopover'
 import AccountPopover from './AccountPopover'
 import {categories} from '../../constants/categories'
 
@@ -136,13 +137,9 @@ export default function NavBar() {
 
             <AccountPopover key={location.key} />
 
-            <button
-              type="button"
-              aria-label="예매 내역"
-              className="flex items-center justify-center"
-            >
-              <img src={shoppingBagIcon} alt="" />
-            </button>
+            <div className="-ml-1">
+              <NotificationPopover />
+            </div>
           </div>
         </div>
       </div>
