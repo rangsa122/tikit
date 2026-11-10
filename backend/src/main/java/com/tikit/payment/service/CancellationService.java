@@ -1,8 +1,10 @@
 package com.tikit.payment.service;
 
+import com.tikit.common.idempotency.IdempotencyHasher;
+import com.tikit.common.idempotency.IdempotencyService;
+import com.tikit.common.idempotency.IdempotencyStart;
 import com.tikit.payment.client.TossPaymentClient;
 import com.tikit.payment.dto.request.CancellationCreateRequestDTO;
-import com.tikit.payment.dto.response.CancellationResponseDTO;
 import com.tikit.payment.dto.toss.TossCancelRequestDTO;
 import com.tikit.payment.dto.toss.TossPaymentResponseDTO;
 import com.tikit.payment.exception.TossApiException;
@@ -14,7 +16,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.Optional;
 
-// 예매 전체 취소 지휘: 1차 트랜잭션 -> Toss 환불(트랜잭션 밖) -> 결과별 2차 트랜잭션 -> 현재 결과 조회
+// 예매 전체 취소 지휘: 멱등키 확인 -> 1차 트랜잭션 -> Toss 환불(트랜잭션 밖) -> 결과별 2차 트랜잭션 -> 현재 결과 조회
 // @Transactional 없음: Toss를 기다리는 동안 DB 잠금과 커넥션을 잡고 있지 않으려고
 @Slf4j
 @Service
@@ -22,20 +24,45 @@ import java.util.Optional;
 public class CancellationService {
 
     private static final String ALREADY_CANCELED_PAYMENT = "ALREADY_CANCELED_PAYMENT";
+    private static final String OPERATION_CANCEL = "BOOKING_CANCEL";
+    private static final String TARGET_BOOKING = "BOOKING";
+    private static final String RESOURCE_CANCELLATION = "CANCELLATION";
 
     private final CancellationTxService cancellationTxService;
     private final CancellationQueryService cancellationQueryService;
     private final TossPaymentClient tossPaymentClient;
+    private final IdempotencyService idempotencyService;
 
-    public CancellationResponseDTO cancel(Long bookingId, Long memberId, CancellationCreateRequestDTO request) {
-        // 1. 1차 트랜잭션 (검사 실패면 PaymentException이 그대로 Advice로 감, Toss 호출 없음)
-        CancellationStart start = cancellationTxService.startCancellation(bookingId, memberId, request);
+    public CancellationResult cancel(Long bookingId, Long memberId,
+                                     CancellationCreateRequestDTO request, String idempotencyKey) {
+        // 0. 서버 멱등키: 같은 키·같은 내용으로 이미 처리된 요청이면 Toss를 다시 부르지 않고 그 취소의 현재 상태로 응답
+        //    (같은 키가 처리 중이거나 다른 내용이면 IdempotencyException -> 409)
+        IdempotencyStart idempotency = idempotencyService.start(
+                memberId, OPERATION_CANCEL, idempotencyKey, requestHash(bookingId, request));
+        if (idempotency.replay()) {
+            return new CancellationResult(
+                    cancellationQueryService.getCancellation(idempotency.resourceId(), bookingId, memberId), true);
+        }
 
-        // 2. Toss 환불 요청 후 결과별 기록
+        CancellationStart start;
+        try {
+            // 1. 1차 트랜잭션 (검사 실패면 PaymentException이 그대로 Advice로 감, Toss 호출 없음)
+            start = cancellationTxService.startCancellation(bookingId, memberId, request);
+        } catch (RuntimeException e) {
+            // 검사 실패 -> 멱등 실패 기록 (같은 키로 다시 요청하면 다시 처리)
+            idempotencyService.fail(idempotency.requestId());
+            throw e;
+        }
+
+        // 2. Toss 환불 요청 후 결과별 기록 (Toss 거절·결과 모름도 예외 없이 상태로 기록)
         refundWithToss(start, memberId);
 
-        // 3. 어떤 경우든 마지막에 DB의 현재 상태로 응답
-        return cancellationQueryService.getCancellation(start.cancellationId(), bookingId, memberId);
+        // 3. 처리 끝 (성공·실패·결과 확인 중 모두) -> 같은 키 재요청은 이 취소 건의 현재 상태로 응답
+        idempotencyService.succeed(idempotency.requestId(), RESOURCE_CANCELLATION, start.cancellationId());
+
+        // 4. 어떤 경우든 마지막에 DB의 현재 상태로 응답
+        return new CancellationResult(
+                cancellationQueryService.getCancellation(start.cancellationId(), bookingId, memberId), false);
     }
 
     // Toss 취소 요청 후 결과별로 2차 트랜잭션 기록
@@ -95,5 +122,12 @@ public class CancellationService {
                 .filter(cancel -> refundAmount.equals(cancel.cancelAmount()))
                 .filter(cancel -> cancel.transactionKey() != null && cancel.canceledAt() != null)
                 .reduce((first, second) -> second);
+    }
+
+    // 대상(예매)과 요청 본문으로 같은 요청인지 판단하는 해시
+    private String requestHash(Long bookingId, CancellationCreateRequestDTO request) {
+        return IdempotencyHasher.hash(
+                TARGET_BOOKING + ":" + bookingId,
+                request.getReason() + "|" + request.getExpectedRefundAmount() + "|" + request.getPolicyVersion());
     }
 }

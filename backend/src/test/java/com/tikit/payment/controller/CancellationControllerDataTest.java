@@ -1,5 +1,6 @@
 package com.tikit.payment.controller;
 
+import com.jayway.jsonpath.JsonPath;
 import com.tikit.auth.entity.Member;
 import com.tikit.auth.entity.MemberStatus;
 import com.tikit.auth.entity.Role;
@@ -12,7 +13,6 @@ import com.tikit.payment.dto.toss.TossCancelRequestDTO;
 import com.tikit.payment.dto.toss.TossPaymentResponseDTO;
 import com.tikit.payment.entity.Cancellation;
 import com.tikit.payment.entity.CancellationStatus;
-import com.tikit.payment.entity.PaymentAttempt;
 import com.tikit.payment.entity.PaymentAttemptStatus;
 import com.tikit.payment.exception.TossApiException;
 import com.tikit.payment.exception.TossResultUnknownException;
@@ -31,7 +31,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.RequestBuilder;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -39,6 +41,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -46,6 +49,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
@@ -87,7 +91,7 @@ public class CancellationControllerDataTest {
         given(tossPaymentClient.cancelPayment(any(), any(), any())).willReturn(tossCanceledResponse(AMOUNT));
 
         // when
-        ResultActions resultActions = mvc.perform(cancelRequest(bookingId, memberId, AMOUNT, "v1"));
+        ResultActions resultActions = mvc.perform(cancelRequest(bookingId, memberId, AMOUNT, "v1", newIdempotencyKey()));
 
         String responseBody = resultActions.andReturn().getResponse().getContentAsString();
         int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
@@ -121,7 +125,7 @@ public class CancellationControllerDataTest {
         Long bookingId = confirmedBooking(memberId);
 
         // when
-        ResultActions resultActions = mvc.perform(cancelRequest(bookingId, memberId, 1000L, "v1"));
+        ResultActions resultActions = mvc.perform(cancelRequest(bookingId, memberId, 1000L, "v1", newIdempotencyKey()));
 
         String responseBody = resultActions.andReturn().getResponse().getContentAsString();
         int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
@@ -147,7 +151,7 @@ public class CancellationControllerDataTest {
                 Instant.now().plus(5, ChronoUnit.MINUTES), AMOUNT);
 
         // when
-        ResultActions resultActions = mvc.perform(cancelRequest(bookingId, memberId, AMOUNT, "v1"));
+        ResultActions resultActions = mvc.perform(cancelRequest(bookingId, memberId, AMOUNT, "v1", newIdempotencyKey()));
 
         String responseBody = resultActions.andReturn().getResponse().getContentAsString();
         int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
@@ -173,7 +177,7 @@ public class CancellationControllerDataTest {
                 .willThrow(new TossApiException(400, "NOT_CANCELABLE_PAYMENT", "취소할 수 없는 결제입니다."));
 
         // when
-        ResultActions resultActions = mvc.perform(cancelRequest(bookingId, memberId, AMOUNT, "v1"));
+        ResultActions resultActions = mvc.perform(cancelRequest(bookingId, memberId, AMOUNT, "v1", newIdempotencyKey()));
 
         String responseBody = resultActions.andReturn().getResponse().getContentAsString();
         int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
@@ -202,7 +206,7 @@ public class CancellationControllerDataTest {
                 .willThrow(new TossResultUnknownException("Read timed out"));
 
         // when
-        ResultActions resultActions = mvc.perform(cancelRequest(bookingId, memberId, AMOUNT, "v1"));
+        ResultActions resultActions = mvc.perform(cancelRequest(bookingId, memberId, AMOUNT, "v1", newIdempotencyKey()));
 
         String responseBody = resultActions.andReturn().getResponse().getContentAsString();
         int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
@@ -218,17 +222,17 @@ public class CancellationControllerDataTest {
     }
 
     @Test
-    @DisplayName("결과 확인 중인 취소가 있는데 다시 요청하면 409 CANCELLATION_IN_PROGRESS")
+    @DisplayName("결과 확인 중인 취소가 있는데 다른 키로 다시 요청하면 409 CANCELLATION_IN_PROGRESS")
     void cancel_booking_in_progress() throws Exception {
         // given
         Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
         Long bookingId = confirmedBooking(memberId);
         given(tossPaymentClient.cancelPayment(any(), any(), any()))
                 .willThrow(new TossResultUnknownException("Read timed out"));
-        mvc.perform(cancelRequest(bookingId, memberId, AMOUNT, "v1"));
+        mvc.perform(cancelRequest(bookingId, memberId, AMOUNT, "v1", newIdempotencyKey()));
 
         // when
-        ResultActions resultActions = mvc.perform(cancelRequest(bookingId, memberId, AMOUNT, "v1"));
+        ResultActions resultActions = mvc.perform(cancelRequest(bookingId, memberId, AMOUNT, "v1", newIdempotencyKey()));
 
         String responseBody = resultActions.andReturn().getResponse().getContentAsString();
         int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
@@ -252,7 +256,7 @@ public class CancellationControllerDataTest {
         Long bookingId = confirmedBooking(ownerId);
 
         // when
-        ResultActions resultActions = mvc.perform(cancelRequest(bookingId, otherMemberId, AMOUNT, "v1"));
+        ResultActions resultActions = mvc.perform(cancelRequest(bookingId, otherMemberId, AMOUNT, "v1", newIdempotencyKey()));
 
         String responseBody = resultActions.andReturn().getResponse().getContentAsString();
         int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
@@ -268,6 +272,96 @@ public class CancellationControllerDataTest {
         then(tossPaymentClient).should(never()).cancelPayment(any(), any(), any());
     }
 
+    @Test
+    @DisplayName("같은 멱등키로 다시 취소 요청하면 Toss를 다시 부르지 않고 200과 같은 취소 건의 현재 상태를 반환")
+    void cancel_booking_same_idempotency_key_replays() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = confirmedBooking(memberId);
+        String idempotencyKey = newIdempotencyKey();
+        given(tossPaymentClient.cancelPayment(any(), any(), any())).willReturn(tossCanceledResponse(AMOUNT));
+
+        String firstBody = mvc.perform(cancelRequest(bookingId, memberId, AMOUNT, "v1", idempotencyKey))
+                .andReturn().getResponse().getContentAsString();
+        Integer firstCancellationId = JsonPath.read(firstBody, "$.data.cancellationId");
+
+        // when
+        ResultActions resultActions = mvc.perform(cancelRequest(bookingId, memberId, AMOUNT, "v1", idempotencyKey));
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        assertThat(httpStatusCode).isEqualTo(200);
+        resultActions.andExpect(jsonPath("$.data.cancellationId").value(firstCancellationId));
+        resultActions.andExpect(jsonPath("$.data.status").value("SUCCEEDED"));
+        then(tossPaymentClient).should(times(1)).cancelPayment(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("같은 멱등키로 다른 내용(사유)을 보내면 409 IDEMPOTENCY_CONFLICT")
+    void cancel_booking_same_idempotency_key_different_body_conflict() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = confirmedBooking(memberId);
+        String idempotencyKey = newIdempotencyKey();
+        given(tossPaymentClient.cancelPayment(any(), any(), any())).willReturn(tossCanceledResponse(AMOUNT));
+        mvc.perform(cancelRequest(bookingId, memberId, AMOUNT, "v1", idempotencyKey));
+
+        // when
+        ResultActions resultActions = mvc.perform(
+                post("/api/v1/bookings/" + bookingId + "/cancellations")
+                        .header("Authorization", "Bearer " + accessTokenFor(memberId))
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody("다른 사유", AMOUNT, "v1"))
+        );
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        ErrorCode errorCode = ErrorCode.IDEMPOTENCY_CONFLICT;
+
+        assertThat(httpStatusCode).isEqualTo(errorCode.getStatus().value());
+        resultActions.andExpect(jsonPath("$.code").value(errorCode.name()));
+    }
+
+    @Test
+    @DisplayName("Idempotency-Key 헤더 없이 취소하면 400 VALIDATION_ERROR")
+    void cancel_booking_without_idempotency_key() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = confirmedBooking(memberId);
+
+        // when
+        ResultActions resultActions = mvc.perform(
+                post("/api/v1/bookings/" + bookingId + "/cancellations")
+                        .header("Authorization", "Bearer " + accessTokenFor(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody("개인 사정", AMOUNT, "v1"))
+        );
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        ErrorCode errorCode = ErrorCode.VALIDATION_ERROR;
+
+        assertThat(httpStatusCode).isEqualTo(errorCode.getStatus().value());
+        resultActions.andExpect(jsonPath("$.message").value("Idempotency-Key 헤더가 필요합니다."));
+        then(tossPaymentClient).should(never()).cancelPayment(any(), any(), any());
+    }
+
     // 기한 전 확정 예매 + 승인된 결제 (좌석 SOLD, 티켓 1장)
     private Long confirmedBooking(Long memberId) {
         Long bookingId = dataHelper.createBooking(memberId, BookingStatus.CONFIRMED,
@@ -276,18 +370,29 @@ public class CancellationControllerDataTest {
         return bookingId;
     }
 
-    private org.springframework.test.web.servlet.RequestBuilder cancelRequest(
-            Long bookingId, Long memberId, Long expectedRefundAmount, String policyVersion) {
-        return post("/api/v1/bookings/" + bookingId + "/cancellations")
+    private RequestBuilder cancelRequest(Long bookingId, Long memberId, Long expectedRefundAmount,
+                                         String policyVersion, String idempotencyKey) {
+        MockHttpServletRequestBuilder builder = post("/api/v1/bookings/" + bookingId + "/cancellations")
                 .header("Authorization", "Bearer " + accessTokenFor(memberId))
+                .header("Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                        {
-                          "reason": "개인 사정",
-                          "expectedRefundAmount": %d,
-                          "policyVersion": "%s"
-                        }
-                        """.formatted(expectedRefundAmount, policyVersion));
+                .content(requestBody("개인 사정", expectedRefundAmount, policyVersion));
+        return builder;
+    }
+
+    private String requestBody(String reason, Long expectedRefundAmount, String policyVersion) {
+        return """
+                {
+                  "reason": "%s",
+                  "expectedRefundAmount": %d,
+                  "policyVersion": "%s"
+                }
+                """.formatted(reason, expectedRefundAmount, policyVersion);
+    }
+
+    // 테스트마다 겹치지 않는 멱등키
+    private String newIdempotencyKey() {
+        return "cancel-" + UUID.randomUUID();
     }
 
     private Cancellation latestCancellation(Long bookingId) {

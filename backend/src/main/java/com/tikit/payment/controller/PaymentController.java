@@ -98,17 +98,25 @@ public class PaymentController {
                 .body(ResponseDTO.success("전체 취소 예상 금액 조회 성공", response));
     }
 
-    // 예매 전체 취소와 환불 (접수 202, 처리 결과는 data.status: SUCCEEDED, FAILED, RECONCILING
+    // 예매 전체 취소와 환불 (새 요청 202, 같은 멱등키 재요청 200, 처리 결과는 data.status)
     @PostMapping("/bookings/{bookingId}/cancellations")
     public ResponseEntity<ResponseDTO<CancellationResponseDTO>> createCancellation(
             @PathVariable Long bookingId,
             @Valid @RequestBody CancellationCreateRequestDTO request,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
             @AuthenticationPrincipal String accountId
-            ) {
-        CancellationResponseDTO response = cancellationService.cancel(bookingId, Long.valueOf(accountId), request);
+    ) {
+        CancellationResult result =
+                cancellationService.cancel(bookingId, Long.valueOf(accountId), request, idempotencyKey);
+
+        if (result.replay()) {
+            return ResponseEntity
+                    .status(HttpStatus.OK)
+                    .body(ResponseDTO.success("이미 처리된 전체 취소 요청입니다.", result.response()));
+        }
 
         return ResponseEntity
                 .status(HttpStatus.ACCEPTED)
-                .body(ResponseDTO.success("전체 취소 요청이 접수되었습니다.", response));
+                .body(ResponseDTO.success("전체 취소 요청이 접수되었습니다.", result.response()));
     }
 }

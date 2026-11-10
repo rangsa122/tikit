@@ -1,11 +1,14 @@
 package com.tikit.payment.service;
 
+import com.tikit.common.ErrorCode;
+import com.tikit.common.idempotency.IdempotencyHasher;
+import com.tikit.common.idempotency.IdempotencyService;
+import com.tikit.common.idempotency.IdempotencyStart;
 import com.tikit.payment.client.TossPaymentClient;
 import com.tikit.payment.dto.request.CancellationCreateRequestDTO;
 import com.tikit.payment.dto.response.CancellationResponseDTO;
 import com.tikit.payment.dto.toss.TossCancelRequestDTO;
 import com.tikit.payment.dto.toss.TossPaymentResponseDTO;
-import com.tikit.common.ErrorCode;
 import com.tikit.payment.exception.PaymentException;
 import com.tikit.payment.exception.TossApiException;
 import com.tikit.payment.exception.TossResultUnknownException;
@@ -23,6 +26,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
@@ -38,11 +42,14 @@ class CancellationServiceTest {
     private static final String PAYMENT_KEY = "test-payment-key";
     private static final String PG_IDEMPOTENCY_KEY = "cancel-test-key";
     private static final String TRANSACTION_KEY = "cancel-transaction-key";
+    private static final String IDEMPOTENCY_KEY = "cancel-request-key";
+    private static final Long IDEMPOTENCY_REQUEST_ID = 300L;
     private static final OffsetDateTime CANCELED_AT = OffsetDateTime.of(2026, 11, 20, 14, 0, 0, 0, ZoneOffset.ofHours(9));
 
     private CancellationTxService cancellationTxService;
     private CancellationQueryService cancellationQueryService;
     private TossPaymentClient tossPaymentClient;
+    private IdempotencyService idempotencyService;
     private CancellationService service;
     private CancellationCreateRequestDTO request;
     private CancellationResponseDTO currentResult;
@@ -52,11 +59,15 @@ class CancellationServiceTest {
         cancellationTxService = mock(CancellationTxService.class);
         cancellationQueryService = mock(CancellationQueryService.class);
         tossPaymentClient = mock(TossPaymentClient.class);
-        service = new CancellationService(cancellationTxService, cancellationQueryService, tossPaymentClient);
+        idempotencyService = mock(IdempotencyService.class);
+        service = new CancellationService(cancellationTxService, cancellationQueryService, tossPaymentClient,
+                idempotencyService);
 
         request = new CancellationCreateRequestDTO("개인 사정", AMOUNT, "v1");
 
-        // 기본: 1차 통과 + 마지막 조회 결과
+        // 기본: 처음 온 멱등키 + 1차 통과 + 마지막 조회 결과
+        given(idempotencyService.start(eq(MEMBER_ID), eq("BOOKING_CANCEL"), eq(IDEMPOTENCY_KEY), anyString()))
+                .willReturn(IdempotencyStart.started(IDEMPOTENCY_REQUEST_ID));
         given(cancellationTxService.startCancellation(BOOKING_ID, MEMBER_ID, request))
                 .willReturn(new CancellationStart(CANCELLATION_ID, BOOKING_ID, PAYMENT_KEY, "개인 사정", AMOUNT, PG_IDEMPOTENCY_KEY));
         currentResult = CancellationResponseDTO.builder().cancellationId(CANCELLATION_ID).build();
@@ -71,14 +82,15 @@ class CancellationServiceTest {
         given(tossPaymentClient.cancelPayment(any(), any(), any())).willReturn(tossCanceledResponse(AMOUNT));
 
         // when
-        CancellationResponseDTO result = service.cancel(BOOKING_ID, MEMBER_ID, request);
+        CancellationResult result = service.cancel(BOOKING_ID, MEMBER_ID, request, IDEMPOTENCY_KEY);
         System.out.println("테스트: " + result);
 
         // then
         then(tossPaymentClient).should().cancelPayment(PAYMENT_KEY, new TossCancelRequestDTO("개인 사정", AMOUNT), PG_IDEMPOTENCY_KEY);
         then(cancellationTxService).should()
                 .completeRefund(CANCELLATION_ID, BOOKING_ID, MEMBER_ID, TRANSACTION_KEY, CANCELED_AT.toInstant());
-        assertThat(result).isSameAs(currentResult);
+        assertThat(result.response()).isSameAs(currentResult);
+        assertThat(result.replay()).isFalse();
     }
 
     @Test
@@ -90,13 +102,13 @@ class CancellationServiceTest {
                 .given(tossPaymentClient).cancelPayment(any(), any(), any());
 
         // when
-        CancellationResponseDTO result = service.cancel(BOOKING_ID, MEMBER_ID, request);
+        CancellationResult result = service.cancel(BOOKING_ID, MEMBER_ID, request, IDEMPOTENCY_KEY);
         System.out.println("테스트: " + result);
 
         // then
         then(cancellationTxService).should().recordFailure(CANCELLATION_ID, "NOT_CANCELABLE_PAYMENT");
         then(cancellationTxService).should(never()).completeRefund(any(), any(), any(), any(), any());
-        assertThat(result).isSameAs(currentResult);
+        assertThat(result.response()).isSameAs(currentResult);
     }
 
     @Test
@@ -108,7 +120,7 @@ class CancellationServiceTest {
                 .given(tossPaymentClient).cancelPayment(any(), any(), any());
 
         // when
-        service.cancel(BOOKING_ID, MEMBER_ID, request);
+        service.cancel(BOOKING_ID, MEMBER_ID, request, IDEMPOTENCY_KEY);
         System.out.println("테스트: ALREADY_CANCELED_PAYMENT 처리");
 
         // then
@@ -125,7 +137,7 @@ class CancellationServiceTest {
                 .given(tossPaymentClient).cancelPayment(any(), any(), any());
 
         // when
-        service.cancel(BOOKING_ID, MEMBER_ID, request);
+        service.cancel(BOOKING_ID, MEMBER_ID, request, IDEMPOTENCY_KEY);
         System.out.println("테스트: 응답 없음 처리");
 
         // then
@@ -141,7 +153,7 @@ class CancellationServiceTest {
                 .given(tossPaymentClient).cancelPayment(any(), any(), any());
 
         // when
-        service.cancel(BOOKING_ID, MEMBER_ID, request);
+        service.cancel(BOOKING_ID, MEMBER_ID, request, IDEMPOTENCY_KEY);
         System.out.println("테스트: Toss 장애 처리");
 
         // then
@@ -156,7 +168,7 @@ class CancellationServiceTest {
         given(tossPaymentClient.cancelPayment(any(), any(), any())).willReturn(tossCanceledResponse(10000L));
 
         // when
-        service.cancel(BOOKING_ID, MEMBER_ID, request);
+        service.cancel(BOOKING_ID, MEMBER_ID, request, IDEMPOTENCY_KEY);
         System.out.println("테스트: 환불 거래 없음 처리");
 
         // then
@@ -174,16 +186,16 @@ class CancellationServiceTest {
                 .given(cancellationTxService).completeRefund(any(), any(), any(), any(), any());
 
         // when
-        CancellationResponseDTO result = service.cancel(BOOKING_ID, MEMBER_ID, request);
+        CancellationResult result = service.cancel(BOOKING_ID, MEMBER_ID, request, IDEMPOTENCY_KEY);
         System.out.println("테스트: " + result);
 
         // then
         then(cancellationTxService).should().recordReconciling(CANCELLATION_ID);
-        assertThat(result).isSameAs(currentResult);
+        assertThat(result.response()).isSameAs(currentResult);
     }
 
     @Test
-    @DisplayName("1차 검사에서 막히면(견적 변경 등) Toss를 부르지 않고 예외를 그대로 던진다")
+    @DisplayName("1차 검사에서 막히면(견적 변경 등) Toss를 부르지 않고 멱등 실패 기록 후 예외를 그대로 던진다")
     void cancel_startRejected_noToss() {
         // given
         // setup에서 이미 셋팅
@@ -191,12 +203,66 @@ class CancellationServiceTest {
                 .given(cancellationTxService).startCancellation(BOOKING_ID, MEMBER_ID, request);
 
         // when
-        Throwable thrown = catchThrowable(() -> service.cancel(BOOKING_ID, MEMBER_ID, request));
+        Throwable thrown = catchThrowable(() -> service.cancel(BOOKING_ID, MEMBER_ID, request, IDEMPOTENCY_KEY));
         System.out.println("테스트: " + thrown);
 
         // then
         assertThat(thrown).hasFieldOrPropertyWithValue("errorCode", ErrorCode.CANCELLATION_QUOTE_CHANGED);
         then(tossPaymentClient).should(never()).cancelPayment(any(), any(), any());
+        then(idempotencyService).should().fail(IDEMPOTENCY_REQUEST_ID);
+        then(idempotencyService).should(never()).succeed(anyLong(), anyString(), anyLong());
+    }
+
+    @Test
+    @DisplayName("멱등키: 처리가 끝나면(성공·실패·결과 확인 중 모두) 취소 건을 결과로 성공 기록한다")
+    void cancel_processed_recordsIdempotencySucceeded() {
+        // given
+        // setup에서 이미 셋팅
+        willThrow(new TossApiException(400, "NOT_CANCELABLE_PAYMENT", "취소할 수 없는 결제입니다."))
+                .given(tossPaymentClient).cancelPayment(any(), any(), any());
+
+        // when
+        service.cancel(BOOKING_ID, MEMBER_ID, request, IDEMPOTENCY_KEY);
+        System.out.println("테스트: Toss 거절로 끝난 요청의 멱등 기록");
+
+        // then
+        then(idempotencyService).should().succeed(IDEMPOTENCY_REQUEST_ID, "CANCELLATION", CANCELLATION_ID);
+        then(idempotencyService).should(never()).fail(anyLong());
+    }
+
+    @Test
+    @DisplayName("멱등키: 같은 키·같은 내용으로 이미 처리된 요청이면 다시 취소하지 않고 그 취소의 현재 상태로 응답한다")
+    void cancel_idempotencyReplay_returnsCurrentResult() {
+        // given
+        // setup의 멱등키 결과를 재사용(replay)으로 덮어씀
+        given(idempotencyService.start(eq(MEMBER_ID), eq("BOOKING_CANCEL"), eq(IDEMPOTENCY_KEY), anyString()))
+                .willReturn(IdempotencyStart.replay(IDEMPOTENCY_REQUEST_ID, "CANCELLATION", CANCELLATION_ID));
+
+        // when
+        CancellationResult result = service.cancel(BOOKING_ID, MEMBER_ID, request, IDEMPOTENCY_KEY);
+        System.out.println("테스트: " + result);
+
+        // then
+        assertThat(result.replay()).isTrue();
+        assertThat(result.response()).isSameAs(currentResult);
+        then(cancellationTxService).should(never()).startCancellation(any(), any(), any());
+        then(tossPaymentClient).should(never()).cancelPayment(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("멱등키: 대상 예매와 요청 본문(사유·예상 환불액·정책 버전)으로 같은 요청인지 판단한다")
+    void cancel_idempotencyHash_includesTargetAndBody() {
+        // given
+        // setup에서 이미 셋팅
+        given(tossPaymentClient.cancelPayment(any(), any(), any())).willReturn(tossCanceledResponse(AMOUNT));
+        String expectedHash = IdempotencyHasher.hash("BOOKING:" + BOOKING_ID, "개인 사정|" + AMOUNT + "|v1");
+
+        // when
+        service.cancel(BOOKING_ID, MEMBER_ID, request, IDEMPOTENCY_KEY);
+        System.out.println("테스트: expectedHash=" + expectedHash);
+
+        // then
+        then(idempotencyService).should().start(MEMBER_ID, "BOOKING_CANCEL", IDEMPOTENCY_KEY, expectedHash);
     }
 
     // Toss 취소 성공 응답 (cancels[]에 주어진 금액의 거래 하나)
