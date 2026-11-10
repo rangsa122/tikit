@@ -5,12 +5,12 @@ import com.tikit.performance.entity.FavoritePerformance;
 import com.tikit.performance.entity.FavoritePerformanceId;
 import com.tikit.performance.entity.PublicationStatus;
 import com.tikit.performance.entity.Visibility;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-
-import java.util.List;
 
 public interface FavoritePerformanceRepository
         extends JpaRepository<FavoritePerformance, FavoritePerformanceId> {
@@ -39,19 +39,31 @@ public interface FavoritePerformanceRepository
             @Param("performanceId") Long performanceId
     );
 
-    // 로그인한 사용자의 공개 관심 공연 목록 조회
-    @Query("""
-            SELECT f
-            FROM FavoritePerformance f
-            JOIN FETCH f.performance p
-            WHERE f.id.memberId = :memberId
-              AND p.publicationStatus = :publicationStatus
-              AND p.visibility = :visibility
-            ORDER BY f.createdAt DESC
-            """)
-    List<FavoritePerformance> findPublicFavorites(
+    // 공개 상태인 관심 공연 목록 페이지 조회
+    @Query(
+            value = """
+                    SELECT f
+                    FROM FavoritePerformance f
+                    JOIN FETCH f.performance p
+                    JOIN FETCH p.genre
+                    WHERE f.member.id = :memberId
+                      AND p.publicationStatus = :publicationStatus
+                      AND p.visibility = :visibility
+                    ORDER BY f.createdAt DESC
+                    """,
+            countQuery = """
+                    SELECT COUNT(f)
+                    FROM FavoritePerformance f
+                    JOIN f.performance p
+                    WHERE f.member.id = :memberId
+                      AND p.publicationStatus = :publicationStatus
+                      AND p.visibility = :visibility
+                    """
+    )
+    Page<FavoritePerformance> findPublicFavorites(
             @Param("memberId") Long memberId,
             @Param("publicationStatus") PublicationStatus publicationStatus,
-            @Param("visibility") Visibility visibility
+            @Param("visibility") Visibility visibility,
+            Pageable pageable
     );
 }

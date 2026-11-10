@@ -7,19 +7,27 @@ import {
   type FavoritePerformance,
 } from '../../api/favoritePerformanceApi'
 
+const PAGE_SIZE = 20
+
 export default function FavoritePerformancesPage() {
   const [favorites, setFavorites] = useState<FavoritePerformance[]>([])
+  const [page, setPage] = useState(0)
+  const [totalElements, setTotalElements] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [removingId, setRemovingId] = useState<number | null>(null)
+  const [removingId, setRemovingId] = useState<string | null>(null)
 
   const loadFavorites = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
 
-      const data = await getFavoritePerformances()
-      setFavorites(data)
+      const data = await getFavoritePerformances(page, PAGE_SIZE)
+
+      setFavorites(data.items)
+      setTotalElements(data.totalElements)
+      setTotalPages(data.totalPages)
     } catch (err) {
       setError(
         err instanceof Error
@@ -29,13 +37,13 @@ export default function FavoritePerformancesPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [page])
 
   useEffect(() => {
     void loadFavorites()
   }, [loadFavorites])
 
-  const handleRemove = async (performanceId: number) => {
+  const handleRemove = async (performanceId: string) => {
     if (removingId !== null) return
 
     try {
@@ -44,9 +52,12 @@ export default function FavoritePerformancesPage() {
 
       await removeFavoritePerformance(performanceId)
 
-      setFavorites((previous) =>
-        previous.filter((item) => item.id !== performanceId),
-      )
+      // 마지막 공연을 해제한 경우 이전 페이지로 이동
+      if (favorites.length === 1 && page > 0) {
+        setPage((previous) => previous - 1)
+      } else {
+        await loadFavorites()
+      }
     } catch (err) {
       setError(
         err instanceof Error
@@ -57,6 +68,9 @@ export default function FavoritePerformancesPage() {
       setRemovingId(null)
     }
   }
+
+  const formatPrice = (price: number) =>
+    `${price.toLocaleString('ko-KR')}원부터`
 
   return (
     <div className="mx-auto w-full max-w-[1320px] px-5 py-10">
@@ -72,7 +86,7 @@ export default function FavoritePerformancesPage() {
 
           {!loading && !error && (
             <span className="text-sm text-[#777]">
-              총 {favorites.length}개
+              총 {totalElements}개
             </span>
           )}
         </div>
@@ -84,7 +98,7 @@ export default function FavoritePerformancesPage() {
           >
             <p className="text-sm text-red-700">{error}</p>
 
-            {!loading && favorites.length === 0 && (
+            {!loading && (
               <button
                 type="button"
                 onClick={() => void loadFavorites()}
@@ -123,60 +137,94 @@ export default function FavoritePerformancesPage() {
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {favorites.map((performance) => (
-              <div
-                key={performance.id}
-                className="overflow-hidden rounded-lg border border-[#ddd] bg-white"
-              >
-                <Link
-                  to={`/performances/${performance.id}`}
-                  className="block"
+          <>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              {favorites.map((performance) => (
+                <div
+                  key={performance.performanceId}
+                  className="overflow-hidden rounded-lg border border-[#ddd] bg-white"
                 >
-                  <div className="aspect-[3/4] bg-[#f5f5f5]">
-                    {performance.posterUrl ? (
-                      <img
-                        src={performance.posterUrl}
-                        alt={`${performance.title} 포스터`}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-sm text-[#999]">
-                        포스터 없음
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="p-4">
-                    <h3 className="line-clamp-2 text-base font-semibold text-[#111]">
-                      {performance.title}
-                    </h3>
-
-                    <p className="mt-2 text-sm text-[#666]">
-                      {performance.venue}
-                    </p>
-
-                    <p className="mt-1 text-sm text-[#888]">
-                      {performance.period}
-                    </p>
-                  </div>
-                </Link>
-
-                <div className="px-4 pb-4">
-                  <button
-                    type="button"
-                    onClick={() => void handleRemove(performance.id)}
-                    disabled={removingId !== null}
-                    className="w-full rounded-md border border-[#ddd] px-4 py-2 text-sm font-medium text-[#555] hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-50"
+                  <Link
+                    to={`/performances/${performance.performanceId}`}
+                    className="block"
                   >
-                    {removingId === performance.id
-                      ? '해제 중...'
-                      : '관심 공연 해제'}
-                  </button>
+                    <div className="aspect-[3/4] bg-[#f5f5f5]">
+                      {performance.posterUrl ? (
+                        <img
+                          src={performance.posterUrl}
+                          alt={`${performance.title} 포스터`}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-sm text-[#999]">
+                          포스터 없음
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="p-4">
+                      <h3 className="line-clamp-2 text-base font-semibold text-[#111]">
+                        {performance.title}
+                      </h3>
+
+                      <p className="mt-2 text-sm text-[#666]">
+                        {performance.venueName}
+                      </p>
+
+                      <p className="mt-1 text-sm text-[#888]">
+                        {performance.startDate} ~ {performance.endDate}
+                      </p>
+
+                      <p className="mt-2 text-sm font-semibold text-[#333]">
+                        {formatPrice(performance.minPrice)}
+                      </p>
+                    </div>
+                  </Link>
+
+                  <div className="px-4 pb-4">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void handleRemove(performance.performanceId)
+                      }
+                      disabled={removingId !== null}
+                      className="w-full rounded-md border border-[#ddd] px-4 py-2 text-sm font-medium text-[#555] hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {removingId === performance.performanceId
+                        ? '해제 중...'
+                        : '관심 공연 해제'}
+                    </button>
+                  </div>
                 </div>
+              ))}
+            </div>
+
+            {totalPages > 1 && (
+              <div className="mt-10 flex items-center justify-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => setPage((previous) => previous - 1)}
+                  disabled={page === 0 || loading}
+                  className="rounded-md border border-[#ddd] px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  이전
+                </button>
+
+                <span className="text-sm text-[#555]">
+                  {page + 1} / {totalPages}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => setPage((previous) => previous + 1)}
+                  disabled={page >= totalPages - 1 || loading}
+                  className="rounded-md border border-[#ddd] px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  다음
+                </button>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
       </div>
     </div>

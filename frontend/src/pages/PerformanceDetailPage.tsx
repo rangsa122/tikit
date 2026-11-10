@@ -1,4 +1,3 @@
-
 import {useEffect, useState} from 'react'
 import {Link, useParams} from 'react-router'
 import {mockPerformances} from '../mocks/performances'
@@ -237,30 +236,39 @@ export default function PerformanceDetailPage() {
 
     setFavoriteLoading(true)
 
-    void getFavoritePerformances()
-      .then(favorites => {
+    const checkFavoriteStatus = async () => {
+      try {
+        const targetId = String(numericPerformanceId)
+        let currentPage = 0
+        let found = false
+        let totalPages = 1
+
+        // 관심 공연이 여러 페이지에 있어도 정확히 확인합니다.
+        while (currentPage < totalPages && !found && !cancelled) {
+          const result = await getFavoritePerformances(currentPage, 100)
+          if (cancelled) return
+
+          found = result.items.some(
+            item => item.performanceId === targetId,
+          )
+          totalPages = result.totalPages
+          currentPage += 1
+        }
+
         if (cancelled) return
-
-        setIsFavorite(
-          favorites.some(
-            item => item.id === numericPerformanceId,
-          ),
-        )
-
+        setIsFavorite(found)
         setFavoriteStateReady(true)
-      })
-      .catch(() => {
+      } catch {
         if (cancelled) return
-
-        setFavoriteError(
-          '관심 공연 상태를 확인하지 못했습니다.',
-        )
-      })
-      .finally(() => {
+        setFavoriteError('관심 공연 상태를 확인하지 못했습니다.')
+      } finally {
         if (!cancelled) {
           setFavoriteLoading(false)
         }
-      })
+      }
+    }
+
+    void checkFavoriteStatus()
 
     return () => {
       cancelled = true
@@ -685,3 +693,4 @@ export default function PerformanceDetailPage() {
     </main>
   )
 }
+

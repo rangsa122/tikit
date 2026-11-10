@@ -8,20 +8,44 @@ interface ApiResponse<T> {
 }
 
 export interface FavoritePerformance {
-  id: number
+  performanceId: string
   title: string
-  venue: string
-  period: string
-  posterUrl?: string | null
+  genreCode: string
+  venueName: string
+  posterUrl: string | null
+  startDate: string
+  endDate: string
+  minPrice: number
+  salesStatus: string
+  nextSalesOpenAt: string | null
+}
+
+export interface FavoritePerformancePage {
+  items: FavoritePerformance[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
+export interface FavoriteRegistrationResponse {
+  performanceId: string
+  favorited: boolean
 }
 
 /**
  * 내 관심 공연 목록 조회
- * GET /api/v1/me/favorites
+ * GET /api/v1/me/favorites?page=0&size=20
  */
-export async function getFavoritePerformances(): Promise<FavoritePerformance[]> {
-  const response = await apiClient.get<ApiResponse<FavoritePerformance[]>>(
+export async function getFavoritePerformances(
+  page = 0,
+  size = 20,
+): Promise<FavoritePerformancePage> {
+  const response = await apiClient.get<ApiResponse<FavoritePerformancePage>>(
     '/api/v1/me/favorites',
+    {
+      params: {page, size},
+    },
   )
 
   if (response.data.code !== 'SUCCESS') {
@@ -30,11 +54,19 @@ export async function getFavoritePerformances(): Promise<FavoritePerformance[]> 
     )
   }
 
-  if (!Array.isArray(response.data.data)) {
+  const data = response.data.data
+
+  if (
+    !data ||
+    !Array.isArray(data.items) ||
+    typeof data.page !== 'number' ||
+    typeof data.totalElements !== 'number' ||
+    typeof data.totalPages !== 'number'
+  ) {
     throw new Error('관심 공연 목록 응답 형식이 올바르지 않습니다.')
   }
 
-  return response.data.data
+  return data
 }
 
 /**
@@ -42,13 +74,16 @@ export async function getFavoritePerformances(): Promise<FavoritePerformance[]> 
  * PUT /api/v1/me/favorites/{performanceId}
  */
 export async function addFavoritePerformance(
-  performanceId: number,
+  performanceId: number | string,
 ): Promise<void> {
-  const response = await apiClient.put<ApiResponse<null>>(
+  const response = await apiClient.put<ApiResponse<FavoriteRegistrationResponse>>(
     `/api/v1/me/favorites/${performanceId}`,
   )
 
-  if (response.data.code !== 'SUCCESS') {
+  if (
+    response.data.code !== 'SUCCESS' ||
+    response.data.data?.favorited !== true
+  ) {
     throw new Error(
       response.data.message || '관심 공연 등록에 실패했습니다.',
     )
@@ -58,12 +93,9 @@ export async function addFavoritePerformance(
 /**
  * 관심 공연 해제
  * DELETE /api/v1/me/favorites/{performanceId}
- *
- * 백엔드는 204 No Content를 반환하므로
- * 응답 본문을 검사하지 않습니다.
  */
 export async function removeFavoritePerformance(
-  performanceId: number,
+  performanceId: number | string,
 ): Promise<void> {
   await apiClient.delete(
     `/api/v1/me/favorites/${performanceId}`,

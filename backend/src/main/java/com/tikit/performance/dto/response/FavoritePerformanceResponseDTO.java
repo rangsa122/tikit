@@ -3,23 +3,38 @@ package com.tikit.performance.dto.response;
 
 import com.tikit.performance.entity.Performance;
 
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+
 public record FavoritePerformanceResponseDTO(
-        Long id,
+        String performanceId,
         String title,
-        String venue,
-        String period,
-        String posterUrl
+        String genreCode,
+        String venueName,
+        String posterUrl,
+        LocalDate startDate,
+        LocalDate endDate,
+        Long minPrice,
+        String salesStatus,
+        OffsetDateTime nextSalesOpenAt
 ) {
 
     public static FavoritePerformanceResponseDTO from(
-            Performance performance
+            Performance performance,
+            Long minPrice,
+            OffsetDateTime nextSalesOpenAt
     ) {
         return new FavoritePerformanceResponseDTO(
-                performance.getId(),
+                performance.getId().toString(),
                 performance.getTitle(),
+                performance.getGenre().getCode(),
                 performance.getVenueName(),
-                performance.getStartDate() + " ~ " + performance.getEndDate(),
-                performance.getPosterUrl()
+                performance.getPosterUrl(),
+                performance.getStartDate(),
+                performance.getEndDate(),
+                minPrice,
+                performance.getSalesStatus().name(),
+                nextSalesOpenAt
         );
     }
 }
