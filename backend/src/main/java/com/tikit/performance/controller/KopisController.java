@@ -1,6 +1,7 @@
 package com.tikit.performance.controller;
 
 import com.tikit.common.dto.ResponseDTO;
+import com.tikit.performance.dto.response.KopisPerformanceDetailResponseDTO;
 import com.tikit.performance.dto.response.KopisPerformanceSearchResponseDTO;
 import com.tikit.performance.service.KopisSearchService;
 import lombok.RequiredArgsConstructor;
@@ -29,5 +30,13 @@ public class KopisController {
             @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(ResponseDTO.success("KOPIS 공연 검색에 성공했습니다",
                 service.search(Long.valueOf(memberId), startDate, endDate, title, genreCode, page, size)));
+    }
+
+    @GetMapping("/performances/{kopisId}")
+    public ResponseEntity<ResponseDTO<KopisPerformanceDetailResponseDTO>> getKopisPerformance(
+            @AuthenticationPrincipal String memberId,
+            @PathVariable String kopisId) {
+        return ResponseEntity.ok(ResponseDTO.success("KOPIS 공연 상세 조회에 성공했습니다",
+                service.getDetail(Long.valueOf(memberId), kopisId)));
     }
 }
