@@ -30,7 +30,27 @@ export default function MyPageSidebar() {
 
                 <nav className="flex flex-col gap-4">
                     {bookingMenus.map((menu) => {
-                        // 관심 공연 메뉴만 목록 페이지로 연결
+                        if (menu === '예매 내역') {
+                            const isActive =
+                                location.pathname === '/mypage/bookings' ||
+                                location.pathname.startsWith('/mypage/bookings/')
+
+                            return (
+                                <Link
+                                    key={menu}
+                                    to="/mypage/bookings"
+                                    aria-current={isActive ? 'page' : undefined}
+                                    className={
+                                        isActive
+                                            ? 'rounded bg-[#eeeeee] px-2 py-2 text-[14px] text-[#111]'
+                                            : 'text-[14px] text-[#555] hover:text-black'
+                                    }
+                                >
+                                    {menu}
+                                </Link>
+                            )
+                        }
+
                         if (menu === '관심 공연') {
                             const isActive = location.pathname === '/mypage/favorites'
 
@@ -50,7 +70,7 @@ export default function MyPageSidebar() {
                             )
                         }
 
-                        // 아직 연결되지 않은 예매 메뉴
+                        // TODO : 취소/환불 내역
                         return (
                             <span
                                 key={menu}
