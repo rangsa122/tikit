@@ -2,6 +2,7 @@ package com.tikit.payment.service;
 
 import com.tikit.booking.entity.Booking;
 import com.tikit.booking.entity.BookingStatus;
+import com.tikit.booking.service.BookingCancelService;
 import com.tikit.common.ErrorCode;
 import com.tikit.payment.dto.request.CancellationCreateRequestDTO;
 import com.tikit.payment.entity.Cancellation;
@@ -34,9 +35,10 @@ public class CancellationTxService {
 
     private final PaymentAttemptRepository paymentAttemptRepository;
     private final CancellationRepository cancellationRepository;
+    private final BookingCancelService bookingCancelService;
     private final Clock clock;
 
-    // 1차: 예매, 결제 잠금 -> 취소 가능, 견적 재검증 -> 취소 요청 저장(처리 중) -> 커밋
+    // 1차: 예매·결제 잠금 -> 취소 가능·견적 재검증 -> 취소 요청 저장(처리 중) -> 커밋
     @Transactional
     public CancellationStart startCancellation(Long bookingId, Long memberId, CancellationCreateRequestDTO request) {
         String detail = "bookingId=" + bookingId + ", memberId=" + memberId;
@@ -54,7 +56,7 @@ public class CancellationTxService {
         // 3. 승인된 결제 잠금 (확정 예매인데 없으면 데이터 불일치)
         PaymentAttempt approved = lockApprovedAttempt(bookingId, detail);
 
-        // 4. 진행 중 취소가 있으면 거절(이중 환불 방지)
+        // 4. 진행 중 취소가 있으면 거절 (이중 환불 방지)
         if (cancellationRepository.existsByPaymentAttemptIdAndStatusIn(approved.getId(), IN_PROGRESS)) {
             throw new PaymentException(ErrorCode.CANCELLATION_IN_PROGRESS, detail);
         }
@@ -88,11 +90,74 @@ public class CancellationTxService {
                 request.getReason(), refundAmount, cancellation.getPgIdempotencyKey());
     }
 
+    // 2차(환불 성공): 예매 잠금 -> 취소 잠금 -> 환불 성공 기록 + 예매 전체 취소(좌석 해제, 티켓 무효)
+    // 예매 취소가 실패하면 환불 성공 기록까지 롤백 -> 호출한 쪽이 결과 확인 중으로 기록 (복구 작업이 다시 확정)
+    @Transactional
+    public void completeRefund(Long cancellationId, Long bookingId, Long memberId,
+                               String pgTransactionKey, Instant completedAt) {
+        String detail = "cancellationId=" + cancellationId + ", bookingId=" + bookingId + ", memberId=" + memberId;
+
+        // 1. 예매 잠금 -> 취소 잠금 (1차와 같은 순서, A파트 cancelConfirmed는 예매 행이 잠겨 있어야 함)
+        Booking booking = paymentAttemptRepository.findOwnedBookingForUpdate(bookingId, memberId)
+                .orElseThrow(() -> new IllegalStateException("취소할 예매를 찾을 수 없습니다. " + detail));
+        Cancellation cancellation = lockCancellation(cancellationId, detail);
+
+        // 2. 복구 작업이 먼저 성공 처리했으면 이미 끝난 일 (예매 취소도 함께 끝난 상태)
+        if (cancellation.getStatus() == CancellationStatus.SUCCEEDED) {
+            log.info("refund already succeeded: {}", detail);
+            return;
+        }
+
+        // 3. 환불 성공 기록 + 예매 전체 취소 (같은 트랜잭션, 하나라도 실패하면 함께 롤백)
+        cancellation.succeed(pgTransactionKey, completedAt);
+        bookingCancelService.cancelConfirmed(booking, completedAt);
+
+        log.info("refund succeeded: {}, pgTransactionKey={}", detail, pgTransactionKey);
+    }
+
+    // 2차(Toss 거절): 실패 기록 (예매·좌석·티켓은 그대로, 같은 예매로 다시 취소 가능)
+    @Transactional
+    public void recordFailure(Long cancellationId, String failureCode) {
+        String detail = "cancellationId=" + cancellationId;
+        Cancellation cancellation = lockCancellation(cancellationId, detail);
+
+        // 이미 성공·실패로 끝났으면 바꾸지 않음 (성공을 실패로 덮으면 환불됐는데 예매가 살아 있게 됨)
+        if (cancellation.getStatus() != CancellationStatus.PROCESSING
+                && cancellation.getStatus() != CancellationStatus.RECONCILING) {
+            log.error("finished cancellation cannot be failed: {}, status={}, failureCode={}",
+                    detail, cancellation.getStatus(), failureCode);
+            return;
+        }
+
+        cancellation.fail(failureCode);
+        log.info("refund failed: {}, failureCode={}", detail, failureCode);
+    }
+
+    // 2차(결과 모름): 응답 유실·Toss 장애 -> 결과 확인 중 (복구 작업이 Toss 조회로 확정할 때까지 재시도)
+    @Transactional
+    public void recordReconciling(Long cancellationId) {
+        String detail = "cancellationId=" + cancellationId;
+        Cancellation cancellation = lockCancellation(cancellationId, detail);
+
+        if (cancellation.getStatus() != CancellationStatus.PROCESSING) {
+            log.info("cancellation not in processing, skip reconciling: {}, status={}", detail, cancellation.getStatus());
+            return;
+        }
+
+        cancellation.markReconciling();
+        log.warn("refund result unknown, reconciling: {}", detail);
+    }
+
     private PaymentAttempt lockApprovedAttempt(Long bookingId, String detail) {
         PaymentAttempt approved = paymentAttemptRepository
                 .findFirstByBookingIdAndStatus(bookingId, PaymentAttemptStatus.APPROVED)
                 .orElseThrow(() -> new IllegalStateException("확정 예매에 승인된 결제가 없습니다. " + detail));
         return paymentAttemptRepository.findByIdForUpdate(approved.getId())
                 .orElseThrow(() -> new IllegalStateException("승인된 결제를 잠글 수 없습니다. " + detail));
+    }
+
+    private Cancellation lockCancellation(Long cancellationId, String detail) {
+        return cancellationRepository.findByIdForUpdate(cancellationId)
+                .orElseThrow(() -> new IllegalStateException("취소 요청을 찾을 수 없습니다. " + detail));
     }
 }

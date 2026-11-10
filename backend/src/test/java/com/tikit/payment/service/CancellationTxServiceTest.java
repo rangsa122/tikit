@@ -2,6 +2,8 @@ package com.tikit.payment.service;
 
 import com.tikit.booking.entity.Booking;
 import com.tikit.booking.entity.BookingStatus;
+import com.tikit.booking.service.BookingCancelService;
+import com.tikit.payment.entity.CancellationInitiatorRole;
 import com.tikit.common.ErrorCode;
 import com.tikit.payment.dto.request.CancellationCreateRequestDTO;
 import com.tikit.payment.entity.Cancellation;
@@ -27,6 +29,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 
@@ -35,6 +38,7 @@ class CancellationTxServiceTest {
     private static final Long MEMBER_ID = 1L;
     private static final Long BOOKING_ID = 100L;
     private static final Long PAYMENT_ATTEMPT_ID = 10L;
+    private static final Long CANCELLATION_ID = 20L;
     private static final Long AMOUNT = 50000L;
     private static final String PAYMENT_KEY = "test-payment-key";
     private static final Instant NOW = Instant.parse("2026-11-20T05:00:00Z");
@@ -42,6 +46,7 @@ class CancellationTxServiceTest {
 
     private PaymentAttemptRepository paymentAttemptRepository;
     private CancellationRepository cancellationRepository;
+    private BookingCancelService bookingCancelService;
     private CancellationTxService service;
     private Booking booking;
     private PaymentAttempt approved;
@@ -51,6 +56,7 @@ class CancellationTxServiceTest {
     void setup() {
         paymentAttemptRepository = mock(PaymentAttemptRepository.class);
         cancellationRepository = mock(CancellationRepository.class);
+        bookingCancelService = mock(BookingCancelService.class);
         service = serviceAt(NOW);
 
         // 기본: 기한 전 확정 예매 + 승인된 결제 5만 원 + 진행 중 취소 없음 + 견적과 같은 요청
@@ -74,7 +80,8 @@ class CancellationTxServiceTest {
     }
 
     private CancellationTxService serviceAt(Instant now) {
-        return new CancellationTxService(paymentAttemptRepository, cancellationRepository, Clock.fixed(now, ZoneOffset.UTC));
+        return new CancellationTxService(paymentAttemptRepository, cancellationRepository, bookingCancelService,
+                Clock.fixed(now, ZoneOffset.UTC));
     }
 
     @Test
@@ -198,5 +205,122 @@ class CancellationTxServiceTest {
         // then
         assertThat(thrown).hasFieldOrPropertyWithValue("errorCode", ErrorCode.CANCELLATION_QUOTE_CHANGED);
         then(cancellationRepository).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("환불 성공: 취소를 성공으로 기록하고 Toss 취소 시각으로 예매 전체 취소를 호출한다")
+    void completeRefund_processing_succeedsAndCancelsBooking() {
+        // given
+        // setup에서 이미 셋팅
+        Cancellation processing = cancellation(CancellationStatus.PROCESSING);
+
+        // when
+        service.completeRefund(CANCELLATION_ID, BOOKING_ID, MEMBER_ID, "cancel-transaction-key", NOW);
+        System.out.println("테스트: " + processing.getStatus() + ", " + processing.getPgTransactionKey());
+
+        // then
+        assertThat(processing.getStatus()).isEqualTo(CancellationStatus.SUCCEEDED);
+        assertThat(processing.getPgTransactionKey()).isEqualTo("cancel-transaction-key");
+        then(bookingCancelService).should().cancelConfirmed(booking, NOW);
+    }
+
+    @Test
+    @DisplayName("환불 성공: 이미 성공 처리된 취소면 예매 취소를 다시 호출하지 않는다")
+    void completeRefund_alreadySucceeded_skips() {
+        // given
+        // setup에서 이미 셋팅
+        cancellation(CancellationStatus.SUCCEEDED);
+
+        // when
+        service.completeRefund(CANCELLATION_ID, BOOKING_ID, MEMBER_ID, "cancel-transaction-key", NOW);
+        System.out.println("테스트: 이미 성공한 취소로 completeRefund 실행");
+
+        // then
+        then(bookingCancelService).should(never()).cancelConfirmed(any(), any());
+    }
+
+    @Test
+    @DisplayName("환불 성공: 예매 취소가 실패하면 예외를 그대로 던져 성공 기록까지 롤백되게 한다")
+    void completeRefund_bookingCancelFails_throws() {
+        // given
+        // setup에서 이미 셋팅
+        cancellation(CancellationStatus.PROCESSING);
+        willThrow(new IllegalStateException("해제된 좌석 수가 맞지 않습니다."))
+                .given(bookingCancelService).cancelConfirmed(booking, NOW);
+
+        // when
+        Throwable thrown = catchThrowable(() ->
+                service.completeRefund(CANCELLATION_ID, BOOKING_ID, MEMBER_ID, "cancel-transaction-key", NOW));
+        System.out.println("테스트: " + thrown);
+
+        // then
+        assertThat(thrown).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("Toss 거절: 처리 중인 취소는 실패 코드로 기록한다")
+    void recordFailure_processing_fails() {
+        // given
+        // setup에서 이미 셋팅
+        Cancellation processing = cancellation(CancellationStatus.PROCESSING);
+
+        // when
+        service.recordFailure(CANCELLATION_ID, "NOT_CANCELABLE_PAYMENT");
+        System.out.println("테스트: " + processing.getStatus() + ", " + processing.getFailureCode());
+
+        // then
+        assertThat(processing.getStatus()).isEqualTo(CancellationStatus.FAILED);
+        assertThat(processing.getFailureCode()).isEqualTo("NOT_CANCELABLE_PAYMENT");
+    }
+
+    @Test
+    @DisplayName("Toss 거절: 이미 성공한 취소는 실패로 바꾸지 않는다")
+    void recordFailure_succeeded_keepsSucceeded() {
+        // given
+        // setup에서 이미 셋팅
+        Cancellation succeeded = cancellation(CancellationStatus.SUCCEEDED);
+
+        // when
+        service.recordFailure(CANCELLATION_ID, "NOT_CANCELABLE_PAYMENT");
+        System.out.println("테스트: " + succeeded.getStatus());
+
+        // then
+        assertThat(succeeded.getStatus()).isEqualTo(CancellationStatus.SUCCEEDED);
+    }
+
+    @Test
+    @DisplayName("결과 모름: 처리 중인 취소는 결과 확인 중으로 바꾸고, 이미 성공한 취소는 그대로 둔다")
+    void recordReconciling_onlyProcessing() {
+        // given
+        // setup에서 이미 셋팅
+        Cancellation processing = cancellation(CancellationStatus.PROCESSING);
+
+        // when
+        service.recordReconciling(CANCELLATION_ID);
+        Cancellation succeeded = cancellation(CancellationStatus.SUCCEEDED);
+        service.recordReconciling(CANCELLATION_ID);
+        System.out.println("테스트: " + processing.getStatus() + " / " + succeeded.getStatus());
+
+        // then
+        assertThat(processing.getStatus()).isEqualTo(CancellationStatus.RECONCILING);
+        assertThat(succeeded.getStatus()).isEqualTo(CancellationStatus.SUCCEEDED);
+    }
+
+    // 상태를 맞춘 실제 취소 엔티티 (잠금 조회 결과로 사용)
+    private Cancellation cancellation(CancellationStatus status) {
+        Cancellation cancellation = Cancellation.create(PAYMENT_ATTEMPT_ID, MEMBER_ID, CancellationInitiatorRole.MEMBER,
+                "개인 사정", AMOUNT, 0L, "v1", "cancel-test-key");
+        if (status != CancellationStatus.REQUESTED) {
+            cancellation.startProcessing();
+        }
+        switch (status) {
+            case SUCCEEDED -> cancellation.succeed("cancel-transaction-key", NOW);
+            case FAILED -> cancellation.fail("REJECT");
+            case RECONCILING -> cancellation.markReconciling();
+            default -> {
+            }
+        }
+        given(cancellationRepository.findByIdForUpdate(CANCELLATION_ID)).willReturn(Optional.of(cancellation));
+        return cancellation;
     }
 }
