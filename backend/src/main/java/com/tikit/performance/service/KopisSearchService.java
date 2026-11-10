@@ -88,7 +88,7 @@ public class KopisSearchService {
         if (endDate.isBefore(startDate)) {
             throw new PerformanceException(ErrorCode.VALIDATION_ERROR);
         }
-        if (ChronoUnit.DAYS.between(startDate, endDate) > MAX_RANGE_DAYS) {
+        if (ChronoUnit.DAYS.between(startDate, endDate) >= MAX_RANGE_DAYS) {
             throw new PerformanceException(ErrorCode.VALIDATION_ERROR);
         }
     }
