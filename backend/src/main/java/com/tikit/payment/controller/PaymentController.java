@@ -1,9 +1,12 @@
 package com.tikit.payment.controller;
 
 import com.tikit.common.dto.ResponseDTO;
+import com.tikit.payment.dto.request.CancellationCreateRequestDTO;
 import com.tikit.payment.dto.request.PaymentConfirmRequestDTO;
 import com.tikit.payment.dto.response.CancellationQuoteResponseDTO;
+import com.tikit.payment.dto.response.CancellationResponseDTO;
 import com.tikit.payment.dto.response.PaymentAttemptResponseDTO;
+import com.tikit.payment.entity.Cancellation;
 import com.tikit.payment.service.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +30,7 @@ public class PaymentController {
     private final PaymentService paymentService;
     private final PaymentConfirmService paymentConfirmService;
     private final CancellationQuoteService cancellationQuoteService;
+    private final CancellationService cancellationService;
 
     // 결제 준비 (새 결제 시도면 201, 기존 READY 결제 시도면 200)
     @PostMapping("/bookings/{bookingId}/payment-attempts")
@@ -95,5 +99,19 @@ public class PaymentController {
         return ResponseEntity
                 .status(HttpStatus.OK)
                 .body(ResponseDTO.success("전체 취소 예상 금액 조회 성공", response));
+    }
+
+    // 예매 전체 취소와 환불 (접수 202, 처리 결과는 data.status: SUCCEEDED, FAILED, RECONCILING
+    @PostMapping("/bookings/{bookingId}/cancellations")
+    public ResponseEntity<ResponseDTO<CancellationResponseDTO>> createCancellation(
+            @PathVariable Long bookingId,
+            @Valid @RequestBody CancellationCreateRequestDTO request,
+            @AuthenticationPrincipal String accountId
+            ) {
+        CancellationResponseDTO response = cancellationService.cancel(bookingId, Long.valueOf(accountId), request);
+
+        return ResponseEntity
+                .status(HttpStatus.ACCEPTED)
+                .body(ResponseDTO.success("전체 취소 요청이 접수되었습니다.", response));
     }
 }
