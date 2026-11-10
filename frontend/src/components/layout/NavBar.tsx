@@ -4,7 +4,7 @@ import {Link, NavLink, useLocation, useNavigate, useSearchParams} from 'react-ro
 import type {FormEvent} from 'react'
 import searchIcon from '../../assets/navigation/search.svg'
 import heartIcon from '../../assets/navigation/heart.svg'
-import shoppingBagIcon from '../../assets/navigation/shopping-bag.svg'
+import tikitLogo from '../../assets/navigation/tikit-logo.png'
 import AccountPopover from './AccountPopover'
 import {categories} from '../../constants/categories'
 
@@ -115,7 +115,7 @@ export default function NavBar() {
           aria-label="TIKIT 홈"
           className="flex h-10 items-center text-[32px] leading-[normal] font-semibold"
         >
-          TIKIT
+          <img src={tikitLogo} alt="" className="block h-10 w-auto object-contain"/>
         </Link>
 
         <div className="flex h-10 w-[400px] max-w-full items-center justify-between gap-4 max-sm:w-full">
