@@ -160,4 +160,13 @@ public class Performance {
         this.visibility = visibility;
     }
 
+    // 게시: 공개 상태로 바꾸고 게시 정보를 남긴다(실제 예매 오픈 시각은 sale_openings가 결정한다.)
+    public void publish(Member publishedBy, Instant publishedAt) {
+        this.publicationStatus = PublicationStatus.PUBLISHED;
+        this.visibility = Visibility.PUBLIC;
+        this.salesStatus = SalesStatus.ENABLED;
+        this.publishedBy = publishedBy;
+        this.publishedAt = publishedAt;
+    }
+
 }

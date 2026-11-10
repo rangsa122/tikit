@@ -2,13 +2,11 @@ package com.tikit.performance.controller;
 
 import com.tikit.common.dto.PageResponseDTO;
 import com.tikit.common.dto.ResponseDTO;
-import com.tikit.performance.dto.request.PerformanceCreateRequestDTO;
-import com.tikit.performance.dto.request.PerformanceUpdateRequestDTO;
-import com.tikit.performance.dto.request.SalesStatusUpdateRequestDTO;
-import com.tikit.performance.dto.request.VisibilityUpdateRequestDTO;
+import com.tikit.performance.dto.request.*;
 import com.tikit.performance.dto.response.PerformancePublicationResponseDTO;
 import com.tikit.performance.dto.response.PerformanceResponseDTO;
 import com.tikit.performance.entity.PublicationStatus;
+import com.tikit.performance.service.PerformancePublishFacade;
 import com.tikit.performance.service.PerformanceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 public class PerformanceController {
 
     private final PerformanceService service;
+    private final PerformancePublishFacade publishFacade;
 
     @PostMapping
     public ResponseEntity<ResponseDTO<PerformanceResponseDTO>> createPerformance(
@@ -70,6 +69,16 @@ public class PerformanceController {
             @Valid @RequestBody VisibilityUpdateRequestDTO request){
         return ResponseEntity.ok(ResponseDTO.success("공개 상태가 변경되었습니다",
                 service.changeVisibility(Long.valueOf(memberId), performanceId, request)));
+    }
+
+    @PostMapping("/{performanceId}/publication")
+    public ResponseEntity<ResponseDTO<PerformancePublicationResponseDTO>> publishPerformance(
+            @AuthenticationPrincipal String memberId, @PathVariable Long performanceId,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @Valid @RequestBody PerformancePublishRequestDTO request){
+        return ResponseEntity.ok(ResponseDTO.success("공연이 게시되었습니다",
+                publishFacade.publish(Long.valueOf(memberId), performanceId,
+                        request.getExpectedVersion(), idempotencyKey)));
     }
 }
 
