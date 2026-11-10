@@ -3,6 +3,7 @@ package com.tikit.payment.controller;
 import com.tikit.auth.entity.Member;
 import com.tikit.auth.entity.MemberStatus;
 import com.tikit.auth.entity.Role;
+import com.tikit.booking.entity.Booking;
 import com.tikit.booking.entity.BookingStatus;
 import com.tikit.common.ErrorCode;
 import com.tikit.payment.client.TossPaymentClient;
@@ -13,6 +14,7 @@ import com.tikit.payment.exception.TossApiException;
 import com.tikit.payment.exception.TossResultUnknownException;
 import com.tikit.payment.exception.TossUnavailableException;
 import com.tikit.payment.support.PaymentTestDataHelper;
+import com.tikit.performance.entity.SeatStatus;
 import com.tikit.util.JWTProvider;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -109,6 +111,28 @@ public class PaymentConfirmControllerDataTest {
         PaymentAttempt attempt = entityManager.find(PaymentAttempt.class, paymentAttemptId);
         assertThat(attempt.getApprovedAt()).isEqualTo(approvedAt.toInstant());
         then(tossPaymentClient).should().confirmPayment(any(), eq(attempt.getPgIdempotencyKey()));
+
+        // 예매 확정: CONFIRMED, 확정 시각 = Toss 승인 시각
+        Booking booking = entityManager.find(Booking.class, bookingId);
+        assertThat(booking.getStatus()).isEqualTo(BookingStatus.CONFIRMED);
+        assertThat(booking.getConfirmedAt()).isEqualTo(approvedAt.toInstant());
+
+        // 좌석 SOLD
+        List<SeatStatus> seatStatuses = entityManager.createQuery("""
+                        select s.status from SessionSeat s where s.currentBookingId = :bookingId
+                        """, SeatStatus.class)
+                .setParameter("bookingId", bookingId)
+                .getResultList();
+        assertThat(seatStatuses).containsExactly(SeatStatus.SOLD);
+
+        // 좌석 수만큼 티켓 발급
+        Long ticketCount = entityManager.createQuery("""
+                        select count(t) from Ticket t
+                        where t.bookingSeatId in (select bs.id from BookingSeat bs where bs.bookingId = :bookingId)
+                        """, Long.class)
+                .setParameter("bookingId", bookingId)
+                .getSingleResult();
+        assertThat(ticketCount).isEqualTo(1L);
     }
 
     @Test

@@ -67,6 +67,7 @@ public class BookingService {
             if (result.created()) {
                 // 좌석을 잡았으니 대기열 정원을 다음 사람에게 넘김
                 admissionService.consume(admissionId);
+                clearSelection(lockToken, seatIds);
             }
             return result;
         } catch (RuntimeException e) {
@@ -98,6 +99,15 @@ public class BookingService {
             seatLockRepository.unlockAll(seatIds, lockToken);
         } catch (DataAccessException e) {
             log.warn("Redis 좌석 락 해제 실패, TTL 만료로 해제됨: seatIds={}", seatIds, e);
+        }
+    }
+
+    // 눌렀지만 예매에 넣지 않은 좌석을 풂. 실패해도 입장 권한 만료 때 풀리므로 예매를 막지 않음
+    private void clearSelection(String lockToken, List<Long> seatIds) {
+        try {
+            seatLockRepository.clearSelection(lockToken, seatIds);
+        } catch (DataAccessException e) {
+            log.warn("좌석 선택 정리 실패, TTL 만료로 해제됨: seatIds={}", seatIds, e);
         }
     }
 

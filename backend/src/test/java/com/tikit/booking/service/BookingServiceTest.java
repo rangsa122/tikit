@@ -183,6 +183,36 @@ class BookingServiceTest {
     }
 
     @Test
+    @DisplayName("새 예매를 만들면 예매에 넣지 않은 임시 선점 좌석을 정리한다")
+    void create_clearsSelection() {
+        // given
+        given(bookingTransactionService.create(MEMBER_ID, ADMISSION_ID, SESSION_ID, SEAT_IDS, NOW, EXPIRES_AT))
+                .willReturn(new BookingResult(null, true));
+
+        // when
+        bookingService.create(MEMBER_ID, ADMISSION_HEADER, REQUEST);
+
+        // then
+        then(seatLockRepository).should().clearSelection(LOCK_TOKEN, SEAT_IDS);
+    }
+
+    @Test
+    @DisplayName("임시 선점 정리가 실패해도 예매는 성공한다")
+    void create_clearSelectionFailure_keepsBooking() {
+        // given
+        given(bookingTransactionService.create(MEMBER_ID, ADMISSION_ID, SESSION_ID, SEAT_IDS, NOW, EXPIRES_AT))
+                .willReturn(new BookingResult(null, true));
+        willThrow(new RedisConnectionFailureException("down"))
+                .given(seatLockRepository).clearSelection(LOCK_TOKEN, SEAT_IDS);
+
+        // when
+        BookingResult result = bookingService.create(MEMBER_ID, ADMISSION_HEADER, REQUEST);
+
+        // then
+        assertThat(result.created()).isTrue();
+    }
+
+    @Test
     @DisplayName("좌석 선점이 실패하면 입장 권한을 소비하지 않아 다시 고를 수 있다")
     void create_failure_keepsAdmission() {
         // given

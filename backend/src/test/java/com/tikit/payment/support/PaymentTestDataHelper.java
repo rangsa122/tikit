@@ -4,14 +4,11 @@ import com.tikit.auth.entity.Member;
 import com.tikit.auth.entity.MemberStatus;
 import com.tikit.auth.entity.Role;
 import com.tikit.booking.entity.Booking;
+import com.tikit.booking.entity.BookingSeat;
 import com.tikit.booking.entity.BookingStatus;
 import com.tikit.payment.entity.PaymentAttempt;
 import com.tikit.payment.entity.PaymentAttemptStatus;
-import com.tikit.performance.entity.Genre;
-import com.tikit.performance.entity.Performance;
-import com.tikit.performance.entity.PerformanceSession;
-import com.tikit.performance.entity.SaleOpening;
-import com.tikit.performance.entity.SeatTemplate;
+import com.tikit.performance.entity.*;
 import jakarta.persistence.EntityManager;
 
 import java.time.Instant;
@@ -24,6 +21,9 @@ public class PaymentTestDataHelper {
 
     public static final String PERFORMANCE_TITLE = "테스트 공연";
     public static final String TEST_FAILURE_CODE = "TEST_FAILURE";
+
+    private static final String SEAT_GRADE = "R";
+    private static final String SEAT_LABEL = "A1";
 
     private final EntityManager entityManager;
 
@@ -80,6 +80,8 @@ public class PaymentTestDataHelper {
         entityManager.persist(booking);
         entityManager.flush();
 
+        createBookingSeat(session, seatTemplate, booking, status, totalAmount);
+
         if (pastDeadline) {
             entityManager.createQuery("""
                             UPDATE Booking b
@@ -117,6 +119,45 @@ public class PaymentTestDataHelper {
         entityManager.persist(attempt);
         entityManager.flush();
         return attempt.getId();
+    }
+
+    // 좌석 1개 생성: 등급 가격 -> 템플릿 좌석 -> 회차 좌석 -> 예매 좌석 (외래키 순서)
+    // 템플릿 좌석, 회차 좌석은 엔티티 생성 메서드가 없어 SQL로 저장
+    private void createBookingSeat(PerformanceSession session, SeatTemplate seatTemplate,
+                                   Booking booking, BookingStatus status, Long price) {
+        entityManager.persist(SessionGradePrice.create(session, SEAT_GRADE, price));
+        entityManager.flush();
+
+        Long templateSeatId = ((Number) entityManager.createNativeQuery("""
+                        INSERT INTO template_seats (template_id, seat_code, label, row_label, seat_number, grade, x, y)
+                        VALUES (:templateId, :seatCode, :label, 'A', 1, :grade, 0, 0)
+                        RETURNING id
+                        """)
+                .setParameter("templateId", seatTemplate.getId())
+                .setParameter("seatCode", SEAT_LABEL)
+                .setParameter("label", SEAT_LABEL)
+                .setParameter("grade", SEAT_GRADE)
+                .getSingleResult()).longValue();
+
+        // 확정 예매는 판매(SOLD), 그 외는 선점(HELD) 상태로 이 예매에 연결
+        String seatStatus = status == BookingStatus.CONFIRMED ? "SOLD" : "HELD";
+
+        Long sessionSeatId = ((Number) entityManager.createNativeQuery("""
+                        INSERT INTO session_seats (session_id, seat_template_id, template_seat_id, grade, status, current_booking_id)
+                        VALUES (:sessionId, :seatTemplateId, :templateSeatId, :grade, :status, :bookingId)
+                        RETURNING id
+                        """)
+                .setParameter("sessionId", session.getId())
+                .setParameter("seatTemplateId", seatTemplate.getId())
+                .setParameter("templateSeatId", templateSeatId)
+                .setParameter("grade", SEAT_GRADE)
+                .setParameter("status", seatStatus)
+                .setParameter("bookingId", booking.getId())
+                .getSingleResult()).longValue();
+
+        entityManager.persist(BookingSeat.create(booking.getId(), session.getId(), sessionSeatId,
+                SEAT_LABEL, SEAT_GRADE, price));
+        entityManager.flush();
     }
 
     // 예매 상태를 엔티티 메서드로 변경 (PENDING_PAYMENT면 그대로)
