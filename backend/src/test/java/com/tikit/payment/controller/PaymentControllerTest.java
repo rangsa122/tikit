@@ -1,5 +1,9 @@
 package com.tikit.payment.controller;
 
+import com.tikit.common.idempotency.IdempotencyService;
+import com.tikit.common.idempotency.IdempotencyStart;
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import com.tikit.auth.entity.Member;
 import com.tikit.auth.entity.Role;
 import com.tikit.common.ErrorCode;
@@ -18,6 +22,8 @@ import org.springframework.test.web.servlet.ResultActions;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @ActiveProfiles("local")
@@ -38,6 +44,15 @@ public class PaymentControllerTest {
 
     @Autowired
     private JWTProvider jwtProvider;
+
+    // 컨트롤러 테스트는 DB 회원이 없는 가짜 토큰을 써서, 멱등 기록 저장(회원 FK)은 가짜로 대체
+    @MockitoBean
+    private IdempotencyService idempotencyService;
+
+    @BeforeEach
+    void setup() {
+        given(idempotencyService.start(any(), any(), any(), any())).willReturn(IdempotencyStart.started(1L));
+    }
 
     @Test
     @DisplayName("토큰 없이 결제를 준비하면 401을 반환")
@@ -153,6 +168,7 @@ public class PaymentControllerTest {
         // when
         ResultActions resultActions = mvc.perform(
                 post("/api/v1/payment-attempts/1/confirmation")
+                        .header("Idempotency-Key", "confirm-controller-test-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_CONFIRM_BODY)
         );
@@ -187,6 +203,7 @@ public class PaymentControllerTest {
         ResultActions resultActions = mvc.perform(
                 post("/api/v1/payment-attempts/999999999/confirmation")
                         .header("Authorization", "Bearer " + accessToken)
+                        .header("Idempotency-Key", "confirm-controller-test-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_CONFIRM_BODY)
         );
@@ -230,6 +247,7 @@ public class PaymentControllerTest {
         ResultActions resultActions = mvc.perform(
                 post("/api/v1/payment-attempts/999999999/confirmation")
                         .header("Authorization", "Bearer " + accessToken)
+                        .header("Idempotency-Key", "confirm-controller-test-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(invalidBody)
         );
@@ -249,7 +267,42 @@ public class PaymentControllerTest {
     }
 
     @Test
-    @DisplayName("토근 없이 전체 취소 예상 금액을 조회하면 401을 반환")
+    @DisplayName("Idempotency-Key 헤더 없이 결제를 승인하면 400 VALIDATION_ERROR를 반환")
+    void confirm_payment_without_idempotency_key() throws Exception {
+        // given
+        Member member = Member.create(
+                "payment-test@example.com",
+                "encodedPassword",
+                "tester",
+                Role.MEMBER
+        );
+        ReflectionTestUtils.setField(member, "id", 1L);
+
+        String accessToken = jwtProvider.generateAccessToken(member);
+
+        // when
+        ResultActions resultActions = mvc.perform(
+                post("/api/v1/payment-attempts/1/confirmation")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_CONFIRM_BODY)
+        );
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        ErrorCode errorCode = ErrorCode.VALIDATION_ERROR;
+
+        assertThat(httpStatusCode).isEqualTo(errorCode.getStatus().value());
+        resultActions.andExpect(jsonPath("$.code").value(errorCode.name()));
+        resultActions.andExpect(jsonPath("$.message").value("Idempotency-Key 헤더가 필요합니다."));
+    }
+
+    @Test
+    @DisplayName("토큰 없이 전체 취소 예상 금액을 조회하면 401을 반환")
     void get_cancellation_quote_without_token() throws Exception {
         // given
 
