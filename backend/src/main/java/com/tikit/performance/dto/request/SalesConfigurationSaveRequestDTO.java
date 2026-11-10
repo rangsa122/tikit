@@ -11,7 +11,7 @@ import java.util.List;
 
 public record SalesConfigurationSaveRequestDTO(
         @NotNull
-        @Min(1)
+        @Min(0)
         Long expectedVersion,
 
         @NotNull

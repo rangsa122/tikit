@@ -76,6 +76,13 @@ public class Performance {
     @Column(name = "booking_limit_per_member", nullable = false)
     private short bookingLimitPerMember;
 
+    @Column(name = "published_at")
+    private Instant publishedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "published_by")
+    private Member publishedBy;
+
     @Version
     private Long version;
 
@@ -141,6 +148,16 @@ public class Performance {
 
     public void changeBookingLimit(short bookingLimitPerMember){
         this.bookingLimitPerMember = bookingLimitPerMember;
+    }
+
+    // 신규 판매 상태 변경 (규칙 검사는 서비스에서 한다)
+    public void changeSalesStatus(SalesStatus salesStatus) {
+        this.salesStatus = salesStatus;
+    }
+
+    // 공개 상태 변경 (규칙 검사는 서비스에서 한다)
+    public void changeVisibility(Visibility visibility) {
+        this.visibility = visibility;
     }
 
 }
