@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
@@ -24,10 +25,11 @@ public class SessionSeatController {
 
     @GetMapping("/{sessionId}/seats")
     public ResponseEntity<ResponseDTO<List<SessionSeatResponseDTO>>> getSeats(
-            @PathVariable Long sessionId) {
+            @PathVariable Long sessionId,
+            @RequestHeader(value = "X-Admission-Id", required = false) String admissionId) {
 
         List<SessionSeatResponseDTO> seats =
-                sessionSeatService.getSeats(sessionId);
+                sessionSeatService.getSeats(sessionId, admissionId);
 
         return ResponseEntity.ok(
                 ResponseDTO.success("조회 성공", seats)

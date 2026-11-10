@@ -5,9 +5,13 @@ import com.tikit.auth.entity.MemberStatus;
 import com.tikit.auth.entity.Role;
 import com.tikit.auth.repository.MemberRepository;
 import com.tikit.common.ErrorCode;
-import com.tikit.performance.dto.*;
+import com.tikit.performance.dto.PerformanceSessionListDTO;
+import com.tikit.performance.dto.PublicPerformanceDetailDTO;
 import com.tikit.performance.dto.request.PerformanceCreateRequestDTO;
 import com.tikit.performance.dto.request.PerformanceUpdateRequestDTO;
+import com.tikit.performance.dto.request.SalesStatusUpdateRequestDTO;
+import com.tikit.performance.dto.request.VisibilityUpdateRequestDTO;
+import com.tikit.performance.dto.response.PerformancePublicationResponseDTO;
 import com.tikit.performance.dto.response.PerformanceResponseDTO;
 import com.tikit.performance.dto.response.PerformanceSessionResponseDTO;
 import com.tikit.performance.entity.*;
@@ -169,6 +173,20 @@ public class PerformanceServiceTest {
         assertThatThrownBy(action::run)
                 .isInstanceOf(PerformanceException.class)
                 .extracting("errorCode").isEqualTo(expected);
+    }
+
+    private SalesStatusUpdateRequestDTO salesStatusRequest(SalesStatus status, Long expectedVersion) {
+        SalesStatusUpdateRequestDTO dto = new SalesStatusUpdateRequestDTO();
+        ReflectionTestUtils.setField(dto, "salesStatus", status);
+        ReflectionTestUtils.setField(dto, "expectedVersion", expectedVersion);
+        return dto;
+    }
+
+    private VisibilityUpdateRequestDTO visibilityRequest(Visibility visibility, Long expectedVersion) {
+        VisibilityUpdateRequestDTO dto = new VisibilityUpdateRequestDTO();
+        ReflectionTestUtils.setField(dto, "visibility", visibility);
+        ReflectionTestUtils.setField(dto, "expectedVersion", expectedVersion);
+        return dto;
     }
 
     /**
@@ -508,5 +526,226 @@ public class PerformanceServiceTest {
                 sessionGradePriceRepository,
                 sessionSeatRepository
         );
+    }
+
+
+    // =====================================================
+    // 신규 판매 중단 / 재개
+    // =====================================================
+
+    @Test
+    @DisplayName("게시되고 공개된 공연은 판매를 재개할 수 있다")
+    void salesStatus_resume_success() {
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
+        Performance p = publicPerformance();   // PUBLISHED + PUBLIC, 판매는 STOPPED
+
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findForSave(PERFORMANCE_ID)).thenReturn(Optional.of(p));
+
+        service.changeSalesStatus(MEMBER_ID, PERFORMANCE_ID, salesStatusRequest(SalesStatus.ENABLED, 0L));
+
+        assertThat(p.getSalesStatus()).isEqualTo(SalesStatus.ENABLED);
+        verify(performanceRepository).flush();
+    }
+
+    @Test
+    @DisplayName("게시된 공연은 신규 판매를 중단할 수 있다")
+    void salesStatus_stop_success() {
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
+        Performance p = publicPerformance();
+        ReflectionTestUtils.setField(p, "salesStatus", SalesStatus.ENABLED);
+
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findForSave(PERFORMANCE_ID)).thenReturn(Optional.of(p));
+
+        service.changeSalesStatus(MEMBER_ID, PERFORMANCE_ID, salesStatusRequest(SalesStatus.STOPPED, 0L));
+
+        assertThat(p.getSalesStatus()).isEqualTo(SalesStatus.STOPPED);
+        verify(performanceRepository).flush();
+    }
+
+    @Test
+    @DisplayName("게시 전 공연은 판매를 재개할 수 없다")
+    void salesStatus_resume_draft_denied() {
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
+
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findForSave(PERFORMANCE_ID))
+                .thenReturn(Optional.of(draftPerformance(manager)));
+
+        assertFails(() -> service.changeSalesStatus(
+                        MEMBER_ID, PERFORMANCE_ID, salesStatusRequest(SalesStatus.ENABLED, 0L)),
+                ErrorCode.SALE_RESUME_NOT_ALLOWED);
+    }
+
+    @Test
+    @DisplayName("게시가 중단된(HIDDEN) 공연은 판매를 재개할 수 없다")
+    void salesStatus_resume_hidden_denied() {
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
+        Performance p = publicPerformance();
+        ReflectionTestUtils.setField(p, "visibility", Visibility.HIDDEN);
+
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findForSave(PERFORMANCE_ID)).thenReturn(Optional.of(p));
+
+        assertFails(() -> service.changeSalesStatus(
+                        MEMBER_ID, PERFORMANCE_ID, salesStatusRequest(SalesStatus.ENABLED, 0L)),
+                ErrorCode.SALE_RESUME_NOT_ALLOWED);
+    }
+
+    @Test
+    @DisplayName("게시 전 공연은 판매를 중단할 수 없다")
+    void salesStatus_stop_draft_denied() {
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
+
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findForSave(PERFORMANCE_ID))
+                .thenReturn(Optional.of(draftPerformance(manager)));
+
+        assertFails(() -> service.changeSalesStatus(
+                        MEMBER_ID, PERFORMANCE_ID, salesStatusRequest(SalesStatus.STOPPED, 0L)),
+                ErrorCode.PERFORMANCE_NOT_PUBLISHED);
+    }
+
+    @Test
+    @DisplayName("expectedVersion이 다르면 판매 상태를 바꿀 수 없다")
+    void salesStatus_versionConflict() {
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
+
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findForSave(PERFORMANCE_ID))
+                .thenReturn(Optional.of(publicPerformance()));   // version 0
+
+        assertFails(() -> service.changeSalesStatus(
+                        MEMBER_ID, PERFORMANCE_ID, salesStatusRequest(SalesStatus.STOPPED, 5L)),
+                ErrorCode.VERSION_CONFLICT);
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 공연은 판매 상태를 바꿀 수 없다")
+    void salesStatus_notFound() {
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
+
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findForSave(PERFORMANCE_ID)).thenReturn(Optional.empty());
+
+        assertFails(() -> service.changeSalesStatus(
+                        MEMBER_ID, PERFORMANCE_ID, salesStatusRequest(SalesStatus.STOPPED, 0L)),
+                ErrorCode.RESOURCE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("ADMIN은 판매 상태를 바꿀 수 없다")
+    void salesStatus_admin_denied() {
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member(Role.ADMIN, MemberStatus.ACTIVE)));
+
+        assertFails(() -> service.changeSalesStatus(
+                        MEMBER_ID, PERFORMANCE_ID, salesStatusRequest(SalesStatus.STOPPED, 0L)),
+                ErrorCode.ACCESS_DENIED);
+        verify(performanceRepository, never()).flush();
+    }
+
+    // =====================================================
+    // K-08 게시 중단 / 복구
+    // =====================================================
+
+    @Test
+    @DisplayName("게시된 공연을 이용자 화면에서 내릴 수 있다")
+    void visibility_hide_success() {
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
+        Performance p = publicPerformance();   // PUBLISHED + PUBLIC
+
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findForSave(PERFORMANCE_ID)).thenReturn(Optional.of(p));
+
+        PerformancePublicationResponseDTO result = service.changeVisibility(
+                MEMBER_ID, PERFORMANCE_ID, visibilityRequest(Visibility.HIDDEN, 0L));
+
+        assertThat(p.getVisibility()).isEqualTo(Visibility.HIDDEN);
+        assertThat(result.visibility()).isEqualTo(Visibility.HIDDEN);
+        assertThat(result.publishedAt()).isNull();   // 게시 API 구현 전이라 아직 없음
+        verify(performanceRepository).flush();
+    }
+
+    @Test
+    @DisplayName("내린 공연을 다시 공개할 수 있다")
+    void visibility_restore_success() {
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
+        Performance p = publicPerformance();
+        ReflectionTestUtils.setField(p, "visibility", Visibility.HIDDEN);
+
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findForSave(PERFORMANCE_ID)).thenReturn(Optional.of(p));
+
+        service.changeVisibility(MEMBER_ID, PERFORMANCE_ID,
+                visibilityRequest(Visibility.PUBLIC, 0L));
+
+        assertThat(p.getVisibility()).isEqualTo(Visibility.PUBLIC);
+    }
+
+    @Test
+    @DisplayName("게시 전 공연은 공개 상태를 바꿀 수 없다")
+    void visibility_draft_denied() {
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
+
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findForSave(PERFORMANCE_ID))
+                .thenReturn(Optional.of(draftPerformance(manager)));
+
+        assertFails(() -> service.changeVisibility(
+                        MEMBER_ID, PERFORMANCE_ID, visibilityRequest(Visibility.HIDDEN, 0L)),
+                ErrorCode.PERFORMANCE_NOT_PUBLISHED);
+    }
+
+    @Test
+    @DisplayName("이 API로는 PRIVATE을 지정할 수 없다")
+    void visibility_private_denied() {
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member(Role.MANAGER, MemberStatus.ACTIVE)));
+
+        assertFails(() -> service.changeVisibility(
+                        MEMBER_ID, PERFORMANCE_ID, visibilityRequest(Visibility.PRIVATE, 0L)),
+                ErrorCode.VALIDATION_ERROR);
+        verify(performanceRepository, never()).findForSave(any());
+    }
+
+    @Test
+    @DisplayName("expectedVersion이 다르면 공개 상태를 바꿀 수 없다")
+    void visibility_versionConflict() {
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
+
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findForSave(PERFORMANCE_ID))
+                .thenReturn(Optional.of(publicPerformance()));   // version 0
+
+        assertFails(() -> service.changeVisibility(
+                        MEMBER_ID, PERFORMANCE_ID, visibilityRequest(Visibility.HIDDEN, 5L)),
+                ErrorCode.VERSION_CONFLICT);
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 공연은 공개 상태를 바꿀 수 없다")
+    void visibility_notFound() {
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
+
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findForSave(PERFORMANCE_ID)).thenReturn(Optional.empty());
+
+        assertFails(() -> service.changeVisibility(
+                        MEMBER_ID, PERFORMANCE_ID, visibilityRequest(Visibility.HIDDEN, 0L)),
+                ErrorCode.RESOURCE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("ADMIN은 공개 상태를 바꿀 수 없다")
+    void visibility_admin_denied() {
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member(Role.ADMIN, MemberStatus.ACTIVE)));
+
+        assertFails(() -> service.changeVisibility(
+                        MEMBER_ID, PERFORMANCE_ID, visibilityRequest(Visibility.HIDDEN, 0L)),
+                ErrorCode.ACCESS_DENIED);
+        verify(performanceRepository, never()).flush();
     }
 }

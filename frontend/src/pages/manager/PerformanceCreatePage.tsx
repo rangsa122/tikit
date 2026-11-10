@@ -3,17 +3,16 @@ import type {ChangeEvent, FocusEvent, FormEvent, ReactNode} from 'react'
 import axios from 'axios'
 import {createPerformance} from '../../api/managerPerformanceApi.ts'
 
-// TODO: 장르 시드가 확정되면 코드값을 맞춘다. (순서와 이름은 헤더 메뉴와 같다)
 const GENRES = [
-    {code: 'THEATER', name: '연극'},
-    {code: 'DANCE', name: '무용'},
-    {code: 'POPULAR_DANCE', name: '대중무용'},
-    {code: 'CLASSICAL', name: '클래식'},
-    {code: 'KOREAN_TRADITIONAL', name: '국악'},
-    {code: 'POPULAR_MUSIC', name: '대중음악'},
-    {code: 'COMPLEX', name: '복합'},
-    {code: 'CIRCUS_MAGIC', name: '서커스/마술'},
-    {code: 'MUSICAL', name: '뮤지컬'},
+    {code: 'theater', name: '연극'},
+    {code: 'dance', name: '무용'},
+    {code: 'popular_dance', name: '대중무용'},
+    {code: 'classical', name: '클래식'},
+    {code: 'korean_traditional', name: '국악'},
+    {code: 'concert', name: '콘서트'},
+    {code: 'complex', name: '복합'},
+    {code: 'circus_magic', name: '서커스/마술'},
+    {code: 'musical', name: '뮤지컬'},
 ]
 
 interface FormState {

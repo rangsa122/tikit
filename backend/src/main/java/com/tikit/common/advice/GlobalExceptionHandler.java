@@ -2,13 +2,17 @@ package com.tikit.common.advice;
 
 import com.tikit.common.ErrorCode;
 import com.tikit.common.dto.ResponseDTO;
+import com.tikit.common.idempotency.IdempotencyException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -42,5 +46,28 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(errorCode.getStatus())
                 .body(ResponseDTO.fail(errorCode, message));
+    }
+
+    // 멱등키 충돌 (같은 키 다른 내용, 같은 키 처리 중) → 409 IDEMPOTENCY_CONFLICT
+    @ExceptionHandler(IdempotencyException.class)
+    public ResponseEntity<ResponseDTO<Void>> handleIdempotencyException(IdempotencyException e) {
+        log.warn("idempotency conflict: code={}, {}", e.getErrorCode().name(), e.getMessage());
+
+        ErrorCode errorCode = e.getErrorCode();
+
+        return ResponseEntity
+                .status(errorCode.getStatus())
+                .body(ResponseDTO.fail(errorCode));
+    }
+
+    // 필수 헤더 누락 (예: Idempotency-Key) → 400 VALIDATION_ERROR
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<ResponseDTO<Void>> handleMissingHeader(MissingRequestHeaderException e) {
+
+        ErrorCode errorCode = ErrorCode.VALIDATION_ERROR;
+
+        return ResponseEntity
+                .status(errorCode.getStatus())
+                .body(ResponseDTO.fail(errorCode, e.getHeaderName() + " 헤더가 필요합니다."));
     }
 }

@@ -11,6 +11,7 @@ public record SessionSeatResponseDTO(
         Long price,
         Integer x,
         Integer y,
-        String status
+        String status,
+        boolean heldByMe
 ) {
 }

@@ -12,15 +12,23 @@ import QueuePage from '../pages/queue/QueuePage'
 import PaymentSuccessPage from '../pages/payment/PaymentSuccessPage'
 import PaymentFailPage from '../pages/payment/PaymentFailPage'
 import mypageRoutes from './mypageRoutes'
+
 import AdminGuard from '../pages/admin/AdminGuard'
 import AdminMembersPage from '../pages/admin/AdminMembersPage'
 import PerformanceCreatePage from '../pages/manager/PerformanceCreatePage'
+import PerformanceListPage from '../pages/manager/PerformanceListPage'
+import RoleRoute from '../components/auth/RoleRoute'
 
 const router = createBrowserRouter([
   {
     element: <MainLayout />,
     children: [
-      {element: <AdminGuard />, children: [{path: '/admin/members', element: <AdminMembersPage />}]},
+      {
+        element: <AdminGuard />,
+        children: [
+          {path: '/admin/members', element: <AdminMembersPage />},
+        ],
+      },
       {path: '/', element: <HomePage />},
       {path: '/categories/:categoryId', element: <CategoryPage />},
       {path: '/performances/:performanceId', element: <PerformanceDetailPage />},
@@ -29,11 +37,26 @@ const router = createBrowserRouter([
       {path: '/bookings/:bookingId/payment', element: <PaymentPage />},
       {path: '/bookings/:bookingId/payment/success', element: <PaymentSuccessPage />},
       {path: '/bookings/:bookingId/payment/fail', element: <PaymentFailPage />},
-      {path: '/manager/performances/new', element: <PerformanceCreatePage /> },
+      {
+        path: '/manager/performances',
+        element: (
+          <RoleRoute roles={['MANAGER', 'ADMIN']}>
+            <PerformanceListPage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: '/manager/performances/new',
+        element: (
+          <RoleRoute roles={['MANAGER']}>
+            <PerformanceCreatePage />
+          </RoleRoute>
+        ),
+      },
       ...mypageRoutes,
     ],
   },
-  // 대기열과 좌석 선택은 피그마에서 전용 헤더를 쓰므로 사이트 메뉴 없이 따로 둠
+  // 대기열과 좌석 선택은 전용 헤더를 사용
   {path: '/sessions/:sessionId/queue', element: <QueuePage />},
   {path: '/sessions/:sessionId/seats', element: <SeatSelectionPage />},
 ])
