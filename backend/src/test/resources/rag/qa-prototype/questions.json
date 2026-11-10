@@ -1,0 +1,102 @@
+{
+  "fixtureVersion": 1,
+  "description": "대표 질문과 검색·답변 평가 기준. expectedAnswer는 의미 비교용이며 생성 답변의 문자열 완전 일치를 요구하지 않는다.",
+  "questions": [
+    {
+      "questionId": "refund-fee",
+      "question": "예매를 취소하면 수수료가 얼마인가요?",
+      "answerable": true,
+      "expectedChunkIds": ["refund-v1-01"],
+      "expectedDocumentIds": ["fixture-refund-v1"],
+      "expectedAnswer": "v1 정책에서 취소 가능한 예매는 수수료가 0원이고 결제 금액 전액을 환불합니다. 확정·결제 승인 여부, 진행 중인 취소 여부와 예매에 저장된 취소 기한을 확인해야 합니다."
+    },
+    {
+      "questionId": "refund-amount",
+      "question": "취소 가능한 예매에 5만원을 결제했는데 얼마 돌려받나요?",
+      "answerable": true,
+      "expectedChunkIds": ["refund-v1-01"],
+      "expectedDocumentIds": ["fixture-refund-v1"],
+      "expectedAnswer": "v1 정책에서 수수료 0원, 환불 예정 금액은 50,000원입니다."
+    },
+    {
+      "questionId": "refund-deadline-boundary",
+      "question": "취소 기한이 오후 6시면 정확히 오후 6시에도 취소할 수 있나요?",
+      "answerable": true,
+      "expectedChunkIds": ["refund-v1-02"],
+      "expectedDocumentIds": ["fixture-refund-v1"],
+      "expectedAnswer": "아니요. 현재 시각이 취소 기한보다 빨라야 하므로 정확히 오후 6시부터는 취소할 수 없습니다."
+    },
+    {
+      "questionId": "refund-quote-only",
+      "question": "환불 예상 금액만 조회해도 예매가 취소되나요?",
+      "answerable": true,
+      "expectedChunkIds": ["refund-v1-03"],
+      "expectedDocumentIds": ["fixture-refund-v1"],
+      "expectedAnswer": "아니요. 예상 금액 조회는 조회 기능이며 실제 취소나 환불을 실행하지 않습니다."
+    },
+    {
+      "questionId": "refund-unconfirmed",
+      "question": "아직 확정되지 않은 예매도 환불받을 수 있나요?",
+      "answerable": true,
+      "expectedChunkIds": ["refund-v1-03"],
+      "expectedDocumentIds": ["fixture-refund-v1"],
+      "expectedAnswer": "전체 취소 예상 금액 조회에서 확정되지 않은 예매는 취소 불가로 안내합니다. 이 안내만으로 결제 전 임시 예매 해제 방법을 설명할 수는 없습니다."
+    },
+    {
+      "questionId": "booking-how-to",
+      "question": "공연을 예매하려면 어떻게 해야 하나요?",
+      "answerable": true,
+      "expectedChunkIds": ["booking-v1-01", "booking-v1-02"],
+      "expectedDocumentIds": ["fixture-booking-v1"],
+      "expectedAnswer": "활성 일반 회원으로 판매 중인 공연의 회차와 좌석을 선택합니다. 입장 권한 검사가 켜져 있으면 대기열 입장 권한이 필요합니다. 임시 예매 생성 후 5분 안에 결제 승인을 완료해 예매를 확정합니다."
+    },
+    {
+      "questionId": "booking-hold-time",
+      "question": "좌석을 잡은 뒤 결제할 수 있는 시간은 몇 분인가요?",
+      "answerable": true,
+      "expectedChunkIds": ["booking-v1-02"],
+      "expectedDocumentIds": ["fixture-booking-v1"],
+      "expectedAnswer": "임시 예매 생성 시점부터 5분입니다. 제한시간 안에 결제 승인을 완료해야 합니다."
+    },
+    {
+      "questionId": "booking-confirmation",
+      "question": "좌석만 선택하면 티켓이 발급되나요?",
+      "answerable": true,
+      "expectedChunkIds": ["booking-v1-02"],
+      "expectedDocumentIds": ["fixture-booking-v1"],
+      "expectedAnswer": "아니요. 좌석 선택이나 임시 예매 생성만으로 확정되지 않습니다. 결제 승인 후 예매 확정 처리에서 좌석별 티켓을 발급합니다."
+    },
+    {
+      "questionId": "booking-sales-close",
+      "question": "판매 마감 시각이 되면 예매할 수 있나요?",
+      "answerable": true,
+      "expectedChunkIds": ["booking-v1-01"],
+      "expectedDocumentIds": ["fixture-booking-v1"],
+      "expectedAnswer": "아니요. 판매 오픈 시각부터 마감 시각 직전까지만 예매할 수 있습니다."
+    },
+    {
+      "questionId": "booking-seat-limit",
+      "question": "한 사람이 예매할 수 있는 좌석 수는 어떻게 정해지나요?",
+      "answerable": true,
+      "expectedChunkIds": ["booking-v1-03"],
+      "expectedDocumentIds": ["fixture-booking-v1"],
+      "expectedAnswer": "공연별 회원당 회차 예매 한도를 따르며, 결제 대기 중인 예매와 확정 예매 좌석 수를 합산합니다. 공통 고정 매수는 안내할 수 없습니다."
+    },
+    {
+      "questionId": "unsupported-refund-days",
+      "question": "환불금이 카드에 들어오는 데 며칠 걸리나요?",
+      "answerable": false,
+      "expectedChunkIds": [],
+      "expectedDocumentIds": [],
+      "expectedAnswer": "등록된 안내 문서에서 확인할 수 없습니다"
+    },
+    {
+      "questionId": "unsupported-parking",
+      "question": "공연장 무료 주차는 몇 시간 가능한가요?",
+      "answerable": false,
+      "expectedChunkIds": [],
+      "expectedDocumentIds": [],
+      "expectedAnswer": "등록된 안내 문서에서 확인할 수 없습니다"
+    }
+  ]
+}
