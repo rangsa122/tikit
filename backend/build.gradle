@@ -46,5 +46,23 @@ dependencies {
 }
 
 tasks.named('test') {
-	useJUnitPlatform()
+	useJUnitPlatform {
+		excludeTags 'local-db'
+	}
+
+	exclude '**/PostgreSQLConnectionTest.class'
+}
+
+tasks.register('localDbTest', Test) {
+	description = 'Runs PostgreSQL integration tests.'
+	group = 'verification'
+
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+
+	useJUnitPlatform {
+		includeTags 'local-db'
+	}
+
+	shouldRunAfter tasks.named('test')
 }

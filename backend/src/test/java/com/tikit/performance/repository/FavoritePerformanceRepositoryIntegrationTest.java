@@ -16,8 +16,11 @@ import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import org.junit.jupiter.api.Tag;
 
 import static org.junit.jupiter.api.Assertions.*;
+
+@Tag("local-db")
 
 @DataJpaTest(properties = {
         "spring.flyway.enabled=false",
