@@ -178,11 +178,11 @@ export default function CancellationHistoryPage() {
                                 className="overflow-hidden rounded-xl border border-[#ddd] bg-white"
                             >
                                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e5e5e5] bg-[#fafafa] px-5 py-4">
-                                    <span className="text-[13px] font-semibold text-[#222]">
+                                    <span className="text-[14px] font-semibold text-[#222]">
                                         {formatBookingDate(booking.createdAt)} 예매
                                     </span>
 
-                                    <span className="text-[12px] text-[#999]">
+                                    <span className="text-[13px] text-[#999]">
                                         예매번호 {booking.bookingId}
                                     </span>
                                 </div>
@@ -235,7 +235,7 @@ export default function CancellationHistoryPage() {
 
                                         <Link
                                             to={`/mypage/bookings/${booking.bookingId}`}
-                                            className="whitespace-nowrap rounded-md border border-[#4338CA] px-4 py-2 text-[13px] font-semibold text-[#4338CA] transition-colors hover:bg-[#f8f7ff]"
+                                            className="whitespace-nowrap rounded-md border border-[#4338CA] px-5 py-2 text-[13px] font-semibold text-[#4338CA] transition-colors hover:bg-[#f8f7ff]"
                                         >
                                             상세보기
                                         </Link>
