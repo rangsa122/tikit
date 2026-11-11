@@ -11,6 +11,9 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 
 
@@ -61,7 +64,44 @@ public class NotificationService {
                     );
         }
 
-        return notifications.map(NotificationResponseDTO::from);
+    // 알림 목록의 예매 시작 일정 ID 수집
+    List<Long> openingIds = notifications.getContent()
+            .stream()
+            .map(Notification::getOpeningId)
+            .distinct()
+            .toList();
+
+    // 공연 제목 일괄 조회
+    Map<Long, String> performanceTitles = getPerformanceTitles(openingIds);
+
+    // 공연 제목을 포함한 DTO 반환
+
+    return notifications.map(notification ->
+            NotificationResponseDTO.from(
+                    notification,
+                    performanceTitles.get(notification.getOpeningId())
+            )
+        );
+    }
+
+    // 예매 시작 일정별 공연 제목 조회
+    private Map<Long, String> getPerformanceTitles(
+            List<Long> openingIds
+    ) {
+        Map<Long, String> titles = new HashMap<>();
+
+        if (openingIds.isEmpty()) {
+            return titles;
+        }
+
+        // 여러 공연 제목을 한 번에 조회
+        var results = notificationRepository.findPerformanceTitlesByOpeningIds(openingIds);
+
+        for (var result : results) {
+            titles.put(result.getOpeningId(), result.getPerformanceTitle());
+        }
+
+        return titles;
     }
 
     // 내 알림 읽음 처리

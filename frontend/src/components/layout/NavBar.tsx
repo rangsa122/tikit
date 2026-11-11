@@ -4,7 +4,8 @@ import {Link, NavLink, useLocation, useNavigate, useSearchParams} from 'react-ro
 import type {FormEvent} from 'react'
 import searchIcon from '../../assets/navigation/search.svg'
 import heartIcon from '../../assets/navigation/heart.svg'
-import shoppingBagIcon from '../../assets/navigation/shopping-bag.svg'
+import tikitLogo from '../../assets/navigation/tikit-logo.png'
+import NotificationPopover from './NotificationPopover'
 import AccountPopover from './AccountPopover'
 import {categories} from '../../constants/categories'
 
@@ -115,15 +116,15 @@ export default function NavBar() {
           aria-label="TIKIT 홈"
           className="flex h-10 items-center text-[32px] leading-[normal] font-semibold"
         >
-          TIKIT
+          <img src={tikitLogo} alt="" className="block h-10 w-auto object-contain"/>
         </Link>
 
         <div className="flex h-10 w-[400px] max-w-full items-center justify-between gap-4 max-sm:w-full">
           <PerformanceSearch key={keyword} initialKeyword={keyword} />
 
           <div className="flex h-full shrink-0 items-center gap-3 px-1">
-            <button
-              type="button"
+            <Link
+              to="/mypage/favorites"
               aria-label="관심 공연"
               className="flex h-6 w-[18.236px] items-center justify-center"
             >
@@ -132,17 +133,13 @@ export default function NavBar() {
                 alt=""
                 className="max-w-none shrink-0"
               />
-            </button>
+            </Link>
 
             <AccountPopover key={location.key} />
 
-            <button
-              type="button"
-              aria-label="예매 내역"
-              className="flex items-center justify-center"
-            >
-              <img src={shoppingBagIcon} alt="" />
-            </button>
+            <div className="-ml-1">
+              <NotificationPopover />
+            </div>
           </div>
         </div>
       </div>
