@@ -191,13 +191,19 @@ export default function PerformanceListPage() {
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">공연 관리</h1>
                     <p className="mt-1 text-sm text-gray-500">
-                        등록한 공연을 확인하고 판매 설정과 게시를 관리해요.
+                        등록한 공연을 확인하고 판매 설정과 게시를 관리합니다.
                     </p>
                 </div>
-                <button onClick={goCreate}
-                        className="h-11 shrink-0 rounded-lg bg-indigo-700 px-5 font-semibold text-white">
-                    공연 등록
-                </button>
+                <div className="flex shrink-0 gap-2">
+                    <button onClick={goCreate}
+                            className="h-11 shrink-0 rounded-lg bg-indigo-700 px-5 font-semibold text-white">
+                        공연 등록
+                    </button>
+                    <button onClick={() => navigate('/manager/performances/kopis')}
+                            className="h-11 rounded-lg border border-gray-300 px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                        KOPIS에서 등록
+                    </button>
+                </div>
             </div>
 
             <div className="mt-6 flex gap-2">
@@ -229,7 +235,7 @@ export default function PerformanceListPage() {
 
                 {!loading && !error && data && data.items.length === 0 && (
                     <div className="px-6 py-16 text-center">
-                        <p className="text-sm text-gray-500">등록된 공연이 없어요.</p>
+                        <p className="text-sm text-gray-500">등록된 공연이 없습니다.</p>
                         <button onClick={goCreate} className="mt-3 text-sm font-semibold text-indigo-700">
                             첫 공연 등록하기
                         </button>

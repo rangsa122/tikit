@@ -7,7 +7,8 @@ interface ApiResponse<T>{
 }
 
 export interface PerformanceCreateRequest{
-    source: 'MANUAL'
+    source: 'MANUAL' | 'KOPIS'
+    kopisId?: string
     title: string
     genreCode: string
     venueName: string
