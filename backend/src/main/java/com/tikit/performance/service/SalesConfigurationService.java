@@ -91,7 +91,7 @@ public class SalesConfigurationService {
                                                                 SalesConfigurationSaveRequestDTO request) {
         accessChecker.requireManager(memberId);
 
-        Performance performance = performanceRepository.findForSave(performanceId)
+        Performance performance = performanceRepository.findById(performanceId)
                 .orElseThrow(() -> new PerformanceException(ErrorCode.RESOURCE_NOT_FOUND));
 
         if (performance.getPublicationStatus() != PublicationStatus.DRAFT) {
@@ -181,16 +181,19 @@ public class SalesConfigurationService {
                 needSeats = true;
             }
 
-            if(needSeats){
+            // 좌석에 (session_id, grade) 외래키가 걸려 있어 가격을 먼저 저장해야 한다
+            sessionGradePriceRepository.saveAll(s.gradePrices().stream()
+                    .map(p -> SessionGradePrice.create(session, p.grade(), p.price()))
+                    .toList());
+            sessionGradePriceRepository.flush();
+
+            if (needSeats) {
                 List<TemplateSeat> templateSeats = seatsByTemplate.computeIfAbsent(
                         s.seatTemplateId(), templateSeatRepository::findByTemplateId);
                 sessionSeatRepository.saveAll(templateSeats.stream()
                         .map(ts -> SessionSeat.create(session, ts))
                         .toList());
             }
-            sessionGradePriceRepository.saveAll(s.gradePrices().stream()
-                    .map(p->SessionGradePrice.create(session, p.grade(), p.price()))
-                    .toList());
         }
 
         performanceRepository.flush();

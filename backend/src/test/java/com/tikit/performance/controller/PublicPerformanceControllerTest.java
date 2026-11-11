@@ -1,8 +1,11 @@
 
 package com.tikit.performance.controller;
 
+import com.tikit.common.ErrorCode;
+import com.tikit.performance.controller.advice.PerformanceControllerAdvice;
 import com.tikit.performance.dto.PerformanceSessionListDTO;
 import com.tikit.performance.dto.PublicPerformanceDetailDTO;
+import com.tikit.performance.exception.PerformanceException;
 import com.tikit.performance.service.PerformanceService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,6 +33,7 @@ class PublicPerformanceControllerTest {
                 .standaloneSetup(
                         new PublicPerformanceController(performanceService)
                 )
+                .setControllerAdvice(new PerformanceControllerAdvice())
                 .build();
     }
 
@@ -84,5 +88,48 @@ class PublicPerformanceControllerTest {
                 .andExpect(jsonPath("$.data.items").isEmpty());
 
         verify(performanceService).getPublicSessions(10L);
+    }
+
+    @Test
+    void getPerformanceDetail_notFound() throws Exception {
+        when(performanceService.getPublicDetail(999999L))
+                .thenThrow(new PerformanceException(
+                        ErrorCode.RESOURCE_NOT_FOUND
+                ));
+
+        mockMvc.perform(get("/api/v1/performances/999999")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(
+                        ErrorCode.RESOURCE_NOT_FOUND.name()
+                ));
+
+        verify(performanceService).getPublicDetail(999999L);
+    }
+
+    @Test
+    void getPerformanceDetail_invalidId() throws Exception {
+        mockMvc.perform(get("/api/v1/performances/abc")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(performanceService);
+    }
+
+    @Test
+    void getPerformanceSessions_notFound() throws Exception {
+        when(performanceService.getPublicSessions(999999L))
+                .thenThrow(new PerformanceException(
+                        ErrorCode.RESOURCE_NOT_FOUND
+                ));
+
+        mockMvc.perform(get("/api/v1/performances/999999/sessions")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(
+                        ErrorCode.RESOURCE_NOT_FOUND.name()
+                ));
+
+        verify(performanceService).getPublicSessions(999999L);
     }
 }

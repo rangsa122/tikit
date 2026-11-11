@@ -1,4 +1,3 @@
-
 import {createBrowserRouter} from 'react-router'
 import MainLayout from '../layouts/MainLayout'
 import HomePage from '../pages/HomePage'
@@ -12,12 +11,13 @@ import QueuePage from '../pages/queue/QueuePage'
 import PaymentSuccessPage from '../pages/payment/PaymentSuccessPage'
 import PaymentFailPage from '../pages/payment/PaymentFailPage'
 import mypageRoutes from './mypageRoutes'
-
 import AdminGuard from '../pages/admin/AdminGuard'
 import AdminMembersPage from '../pages/admin/AdminMembersPage'
 import PerformanceCreatePage from '../pages/manager/PerformanceCreatePage'
 import PerformanceListPage from '../pages/manager/PerformanceListPage'
 import RoleRoute from '../components/auth/RoleRoute'
+import SalesConfigurationPage from '../pages/manager/SalesConfigurationPage'
+import KopisSearchPage from '../pages/manager/KopisSearchPage'
 
 const router = createBrowserRouter([
   {
@@ -50,6 +50,22 @@ const router = createBrowserRouter([
         element: (
           <RoleRoute roles={['MANAGER']}>
             <PerformanceCreatePage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: '/manager/performances/kopis',
+        element: (
+          <RoleRoute roles={['MANAGER']}>
+            <KopisSearchPage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: '/manager/performances/:performanceId/sales-configuration',
+        element: (
+          <RoleRoute roles={['MANAGER']}>
+            <SalesConfigurationPage />
           </RoleRoute>
         ),
       },

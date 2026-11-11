@@ -54,7 +54,7 @@ export default function AccountPopover() {
     try {
       await logout()
       setIsOpen(false)
-      triggerRef.current?.focus()
+      navigate('/login', {replace: true})
     } catch (error) {
       if (isAxiosError<{message: string}>(error)) {
         setMessage(error.response?.data?.message ?? '서버에 연결할 수 없습니다.')
@@ -71,6 +71,16 @@ export default function AccountPopover() {
 
     if (hasSession) {
       navigate(isAdmin ? '/admin/members' : '/mypage')
+    } else {
+      navigate('/login')
+    }
+  }
+
+  function handleBookingHistory() {
+    setIsOpen(false)
+
+    if (hasSession) {
+      navigate('/mypage/bookings')
     } else {
       navigate('/login')
     }
@@ -136,9 +146,9 @@ export default function AccountPopover() {
               )}
             </div>
             <div className="flex items-center justify-between px-[46px] text-base leading-[normal] font-medium max-sm:px-4">
-              <button type="button" onClick={handleAccountPage} disabled={hasSession} title="주문" className="flex items-center gap-1 whitespace-nowrap">
+              <button type="button" onClick={handleBookingHistory} title="예매" className="flex items-center gap-1 whitespace-nowrap">
                 <img src={walletIcon} alt="" className="max-w-none shrink-0" />
-                주문
+                예매
               </button>
               <button type="button" onClick={handleAccountPage} title={isAdmin ? '관리자 페이지' : '마이페이지'} className="flex items-center gap-1 whitespace-nowrap">
                 <img src={profileIcon} alt="" className="max-w-none shrink-0" />
