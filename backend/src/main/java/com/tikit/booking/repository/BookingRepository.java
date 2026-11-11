@@ -65,4 +65,26 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     List<Long> findExpirableIds(@Param("now") Instant now,
                                 @Param("attemptStatuses") Collection<PaymentAttemptStatus> attemptStatuses,
                                 Pageable pageable);
+
+    // 회차별 예매 집계
+    interface BookingCount {
+        Long getSessionId();
+        long getBookingCount();
+        long getCanceledCount();
+        long getRevenue();
+    }
+
+    @Query("""
+            select b.sessionId as sessionId,
+                   sum(case when b.status = com.tikit.booking.entity.BookingStatus.CONFIRMED
+                            then 1 else 0 end) as bookingCount,
+                   sum(case when b.status = com.tikit.booking.entity.BookingStatus.CANCELED
+                            then 1 else 0 end) as canceledCount,
+                   coalesce(sum(case when b.status = com.tikit.booking.entity.BookingStatus.CONFIRMED
+                                     then b.totalAmount else 0 end), 0) as revenue
+            from Booking b
+            where b.sessionId in :sessionIds
+            group by b.sessionId
+            """)
+    List<BookingCount> countBySessions(@Param("sessionIds") Collection<Long> sessionIds);
 }
