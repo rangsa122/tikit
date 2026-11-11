@@ -179,3 +179,119 @@ export async function getTickets(
 
     return response.data.data
 }
+
+/** 전체 취소 예상 금액 조회 응답 */
+export interface CancellationQuote {
+    bookingId: number
+    eligible: boolean
+    reasonCode: string | null
+    paidAmount: number | null
+    feeAmount: number | null
+    refundAmount: number | null
+    policyVersion: string | null
+    cancellationDeadline: string | null
+    quotedAt: string | null
+    serverTime: string | null
+}
+
+/**
+ * 전체 취소 예상 금액 조회
+ * GET /api/v1/bookings/{bookingId}/cancellation-quote
+ */
+export async function getCancellationQuote(
+    bookingId: string,
+): Promise<CancellationQuote> {
+    try {
+        const response = await apiClient.get<ApiResponse<CancellationQuote>>(
+            `/api/v1/bookings/${encodeURIComponent(bookingId)}/cancellation-quote`,
+        )
+
+        // API 응답 검증
+        if (response.data.code !== 'SUCCESS' || !response.data.data) {
+            throw new BookingApiError(
+                response.data.code,
+                response.data.message || '취소 견적을 불러오지 못했습니다.',
+            )
+        }
+
+        return response.data.data
+    } catch (error) {
+        // 서버 오류 코드 유지
+        if (axios.isAxiosError<ApiResponse<unknown>>(error)) {
+            const body = error.response?.data
+
+            throw new BookingApiError(
+                body?.code ?? 'NETWORK_ERROR',
+                body?.message ?? '서버에 연결하지 못했습니다. 다시 시도해 주세요.',
+            )
+        }
+
+        throw error
+    }
+}
+
+/** 전체 취소 요청 데이터 */
+export interface CancellationCreateRequest {
+    reason: string
+    expectedRefundAmount: number
+    policyVersion: string
+}
+
+/** 전체 취소 처리 결과 */
+export interface CancellationResponse {
+    cancellationId: number
+    bookingId: number
+    status: string
+    refundAmount: number | null
+    feeAmount: number | null
+    reason: string
+    initiatorRole: string
+    retryAllowed: boolean
+    failureCode: string | null
+    createdAt: string
+    completedAt: string | null
+    serverTime: string
+}
+
+/**
+ * 예매 전체 취소 요청
+ * POST /api/v1/bookings/{bookingId}/cancellations
+ */
+export async function createCancellation(
+    bookingId: string,
+    request: CancellationCreateRequest,
+    idempotencyKey: string,
+): Promise<CancellationResponse> {
+    try {
+        const response = await apiClient.post<ApiResponse<CancellationResponse>>(
+            `/api/v1/bookings/${encodeURIComponent(bookingId)}/cancellations`,
+            request,
+            {
+                headers: {
+                    'Idempotency-Key': idempotencyKey,
+                },
+            },
+        )
+
+        if (response.data.code !== 'SUCCESS' || !response.data.data) {
+            throw new BookingApiError(
+                response.data.code,
+                response.data.message || '예매 취소 요청에 실패했습니다.',
+            )
+        }
+
+        return response.data.data
+    } catch (error) {
+        // HTTP 오류 및 네트워크 오류 처리
+        if (axios.isAxiosError<ApiResponse<unknown>>(error)) {
+            const body = error.response?.data
+
+            throw new BookingApiError(
+                body?.code ?? 'NETWORK_ERROR',
+                body?.message ?? '서버에 연결하지 못했습니다. 다시 시도해 주세요.',
+            )
+        }
+
+        throw error
+    }
+}
