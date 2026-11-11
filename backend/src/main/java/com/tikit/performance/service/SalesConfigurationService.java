@@ -91,7 +91,7 @@ public class SalesConfigurationService {
                                                                 SalesConfigurationSaveRequestDTO request) {
         accessChecker.requireManager(memberId);
 
-        Performance performance = performanceRepository.findForSave(performanceId)
+        Performance performance = performanceRepository.findById(performanceId)
                 .orElseThrow(() -> new PerformanceException(ErrorCode.RESOURCE_NOT_FOUND));
 
         if (performance.getPublicationStatus() != PublicationStatus.DRAFT) {
