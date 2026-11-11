@@ -81,3 +81,16 @@ export async function getManagerPerformances(
     }
     return response.data.data
 }
+
+export async function getManagerPerformance(
+    performanceId: number,
+): Promise<ManagerPerformance> {
+    const response = await apiClient.get<ApiResponse<ManagerPerformance>>(
+        `/api/v1/manager/performances/${performanceId}`,
+    )
+    if (response.data.code !== 'SUCCESS' || !response.data.data) {
+        throw new Error(response.data.message || '공연을 불러오지 못했습니다')
+    }
+    return response.data.data
+}
+

@@ -162,6 +162,12 @@ export default function PerformanceListPage() {
                                         ? <Badge text="판매 중" tone="green"/>
                                         : <Badge text="판매 중지" tone="red"/>}
                                 </div>
+                                <button
+                                    onClick={() => navigate(`/manager/performances/${performance.performanceId}/sales-configuration`)}
+                                    className="h-9 shrink-0 rounded-lg border border-gray-300 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                >
+                                    판매 설정
+                                </button>
                             </li>
                         ))}
                     </ul>
