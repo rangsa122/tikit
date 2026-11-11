@@ -55,7 +55,7 @@ export default function KopisSearchPage() {
     function rangeProblem(): string {
         if (!startDate || !endDate) return '검색 기간을 입력해 주세요.'
         if (endDate < startDate) return '종료일은 시작일 이후여야 합니다.'
-        if (daysBetween(startDate, endDate) > MAX_RANGE_DAYS) {
+        if (daysBetween(startDate, endDate) >= MAX_RANGE_DAYS) {
             return `KOPIS는 검색 기간을 ${MAX_RANGE_DAYS}일까지만 지원합니다.`
         }
         return ''
