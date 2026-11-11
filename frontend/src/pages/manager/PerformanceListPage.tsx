@@ -77,6 +77,7 @@ export default function PerformanceListPage() {
     const [error, setError] = useState('')
     const [actingId, setActingId] = useState<number | null>(null)
     const [actionError, setActionError] = useState('')
+    const [refreshKey, setRefreshKey] = useState(0)
 
     useEffect(() => {
         let ignore = false   // 늦게 도착한 응답이 화면을 덮어쓰지 않게 한다
@@ -110,7 +111,7 @@ export default function PerformanceListPage() {
         return () => {
             ignore = true
         }
-    }, [page, status])
+    }, [page, status, refreshKey])
 
     // 바뀐 필드만 덮어쓴다. 게시 응답에는 제목·공연장이 없기 때문이다
     function applyPatch(performanceId: number, patch: Partial<ManagerPerformance>) {
@@ -138,6 +139,8 @@ export default function PerformanceListPage() {
             applyPatch(performanceId, await action())
         } catch (e) {
             setActionError(toMessage(e, '처리하지 못했습니다'))
+            // 실패 시 최신 상태와 version을 다시 받아온다.
+            setRefreshKey((key) => key + 1)
         } finally {
             setActingId(null)
         }
