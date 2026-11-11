@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-
+import com.tikit.performance.dto.PublicPerformancePageDTO;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -131,5 +131,189 @@ class PublicPerformanceControllerTest {
                 ));
 
         verify(performanceService).getPublicSessions(999999L);
+    }
+    @Test
+    void getPublicPerformances_default_success() throws Exception {
+        PublicPerformancePageDTO response =
+                new PublicPerformancePageDTO(
+                        List.of(),
+                        0,
+                        20,
+                        0L,
+                        0
+                );
+
+        when(performanceService.getPublicPerformances(
+                0, 20, null, null, null, null, "startDate"
+        )).thenReturn(response);
+
+        mockMvc.perform(get("/api/v1/performances")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items").isEmpty())
+                .andExpect(jsonPath("$.data.page").value(0))
+                .andExpect(jsonPath("$.data.size").value(20))
+                .andExpect(jsonPath("$.data.totalElements").value(0))
+                .andExpect(jsonPath("$.data.totalPages").value(0));
+
+        verify(performanceService).getPublicPerformances(
+                0, 20, null, null, null, null, "startDate"
+        );
+    }
+    @Test
+    void getPublicPerformances_keywordAndGenre_success() throws Exception {
+        PublicPerformancePageDTO response =
+                new PublicPerformancePageDTO(
+                        List.of(),
+                        0,
+                        10,
+                        0L,
+                        0
+                );
+
+        when(performanceService.getPublicPerformances(
+                0, 10, "뮤지컬", "MUSICAL",
+                null, null, "startDate"
+        )).thenReturn(response);
+
+        mockMvc.perform(get("/api/v1/performances")
+                        .param("page", "0")
+                        .param("size", "10")
+                        .param("keyword", "뮤지컬")
+                        .param("genreCode", "MUSICAL")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.page").value(0))
+                .andExpect(jsonPath("$.data.size").value(10));
+
+        verify(performanceService).getPublicPerformances(
+                0, 10, "뮤지컬", "MUSICAL",
+                null, null, "startDate"
+        );
+    }
+    @Test
+    void getPublicPerformances_dateAndPagination_success() throws Exception {
+        PublicPerformancePageDTO response =
+                new PublicPerformancePageDTO(
+                        List.of(),
+                        2,
+                        5,
+                        0L,
+                        0
+                );
+
+        LocalDate fromDate = LocalDate.of(2026, 11, 1);
+        LocalDate toDate = LocalDate.of(2026, 11, 30);
+
+        when(performanceService.getPublicPerformances(
+                2, 5, null, null,
+                fromDate, toDate, "startDate"
+        )).thenReturn(response);
+
+        mockMvc.perform(get("/api/v1/performances")
+                        .param("page", "2")
+                        .param("size", "5")
+                        .param("fromDate", "2026-11-01")
+                        .param("toDate", "2026-11-30")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.page").value(2))
+                .andExpect(jsonPath("$.data.size").value(5));
+
+        verify(performanceService).getPublicPerformances(
+                2, 5, null, null,
+                fromDate, toDate, "startDate"
+        );
+    }
+    @Test
+    void getPublicPerformances_negativePage_badRequest() throws Exception {
+        when(performanceService.getPublicPerformances(
+                -1, 20, null, null, null, null, "startDate"
+        )).thenThrow(new PerformanceException(
+                ErrorCode.VALIDATION_ERROR
+        ));
+
+        mockMvc.perform(get("/api/v1/performances")
+                        .param("page", "-1")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+        verify(performanceService).getPublicPerformances(
+                -1, 20, null, null, null, null, "startDate"
+        );
+    }
+    @Test
+    void getPublicPerformances_zeroSize_badRequest() throws Exception {
+        when(performanceService.getPublicPerformances(
+                0, 0, null, null, null, null, "startDate"
+        )).thenThrow(new PerformanceException(
+                ErrorCode.VALIDATION_ERROR
+        ));
+
+        mockMvc.perform(get("/api/v1/performances")
+                        .param("size", "0")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+        verify(performanceService).getPublicPerformances(
+                0, 0, null, null, null, null, "startDate"
+        );
+    }
+    @Test
+    void getPublicPerformances_invalidDateFormat_badRequest() throws Exception {
+        mockMvc.perform(get("/api/v1/performances")
+                        .param("fromDate", "abc")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(performanceService);
+    }
+    @Test
+    void getPublicPerformances_invalidDateRange_badRequest() throws Exception {
+        LocalDate fromDate = LocalDate.of(2026, 12, 31);
+        LocalDate toDate = LocalDate.of(2026, 11, 1);
+
+        when(performanceService.getPublicPerformances(
+                0, 20, null, null,
+                fromDate, toDate, "startDate"
+        )).thenThrow(new PerformanceException(
+                ErrorCode.VALIDATION_ERROR
+        ));
+
+        mockMvc.perform(get("/api/v1/performances")
+                        .param("fromDate", "2026-12-31")
+                        .param("toDate", "2026-11-01")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+        verify(performanceService).getPublicPerformances(
+                0, 20, null, null,
+                fromDate, toDate, "startDate"
+        );
+    }
+    @Test
+    void getPublicPerformances_invalidSort_badRequest() throws Exception {
+        when(performanceService.getPublicPerformances(
+                0, 20, null, null, null, null, "title"
+        )).thenThrow(new PerformanceException(
+                ErrorCode.VALIDATION_ERROR
+        ));
+
+        mockMvc.perform(get("/api/v1/performances")
+                        .param("sort", "title")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+        verify(performanceService).getPublicPerformances(
+                0, 20, null, null, null, null, "title"
+        );
     }
 }
