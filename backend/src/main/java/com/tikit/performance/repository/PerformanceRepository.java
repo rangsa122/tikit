@@ -1,3 +1,4 @@
+
 package com.tikit.performance.repository;
 
 import com.tikit.performance.entity.Performance;
@@ -11,6 +12,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -41,7 +43,7 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
             """)
     Optional<Performance> findDetail(@Param("id") Long id);
 
-    // 추가: 일반 사용자용 공개 공연 상세 조회
+    // 일반 사용자용 공개 공연 상세 조회
     @Query("""
             select p
             from Performance p join fetch p.genre
@@ -62,5 +64,51 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
     Optional<Performance> findForSave(@Param("id") Long id);
 
     @Query("select p.kopisId from Performance p where p.kopisId in :kopisIds")
-    List<String> findRegisteredKopisIds(@Param("kopisIds") Collection<String> kopisIds);
+    List<String> findRegisteredKopisIds(
+            @Param("kopisIds") Collection<String> kopisIds
+    );
+
+    /**
+     * 공개된 공연 검색
+     * 검색 기간과 공연 기간이 겹치는 공연을 조회한다.
+     *
+     * fromDate, toDate는 Service에서 기본값을 설정하여
+     * null이 아닌 LocalDate로 전달한다.
+     */
+    @Query(value = """
+            select p
+            from Performance p
+            join fetch p.genre
+            where p.publicationStatus = :publicationStatus
+              and p.visibility = :visibility
+              and (
+                  lower(p.title) like concat('%', lower(:keyword), '%')
+                  or lower(p.venueName) like concat('%', lower(:keyword), '%')
+              )
+              and (:genreCode is null or p.genre.code = :genreCode)
+              and p.endDate >= :fromDate
+              and p.startDate <= :toDate
+            """,
+            countQuery = """
+            select count(p)
+            from Performance p
+            where p.publicationStatus = :publicationStatus
+              and p.visibility = :visibility
+              and (
+                  lower(p.title) like concat('%', lower(:keyword), '%')
+                  or lower(p.venueName) like concat('%', lower(:keyword), '%')
+              )
+              and (:genreCode is null or p.genre.code = :genreCode)
+              and p.endDate >= :fromDate
+              and p.startDate <= :toDate
+            """)
+    Page<Performance> searchPublicPerformances(
+            @Param("publicationStatus") PublicationStatus publicationStatus,
+            @Param("visibility") Visibility visibility,
+            @Param("keyword") String keyword,
+            @Param("genreCode") String genreCode,
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate,
+            Pageable pageable
+    );
 }

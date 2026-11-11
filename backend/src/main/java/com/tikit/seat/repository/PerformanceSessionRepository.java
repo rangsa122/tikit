@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Collection;
 
 public interface PerformanceSessionRepository
         extends JpaRepository<PerformanceSession, Long> {
@@ -18,5 +19,17 @@ public interface PerformanceSessionRepository
      */
     List<PerformanceSession> findByPerformance_IdOrderByStartsAtAsc(
             Long performanceId
+    );
+
+    /**
+     * 여러 공연의 회차를 한 번에 조회
+     */
+    @Query("""
+            select s
+            from PerformanceSession s
+            where s.performance.id in :performanceIds
+            """)
+    List<PerformanceSession> findByPerformanceIds(
+            @Param("performanceIds") Collection<Long> performanceIds
     );
 }
