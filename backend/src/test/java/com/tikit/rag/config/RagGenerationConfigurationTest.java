@@ -5,6 +5,8 @@ import com.tikit.rag.generation.OllamaAnswerClient;
 import com.tikit.rag.search.RagPrototypeChunkRepository;
 import com.tikit.rag.search.RagSearchService;
 import com.tikit.rag.service.RagQuestionService;
+import com.tikit.rag.service.RagQuestionAnswerer;
+import com.tikit.rag.remote.RemoteRagQuestionClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.io.support.ResourcePropertySource;
@@ -23,7 +25,7 @@ class RagGenerationConfigurationTest {
                     throw new java.io.UncheckedIOException(exception);
                 }
             })
-            .withPropertyValues("rag.search.prototype-enabled=false")
+            .withPropertyValues("rag.search.prototype-enabled=false", "rag.mode=local")
             .withBean(ObjectMapper.class, () -> JsonMapper.builder().build())
             .withUserConfiguration(RagConfiguration.class, RagOllamaConfiguration.class,
                     RagPrototypeChunkRepository.class, RagSearchService.class, RagQuestionService.class);
@@ -43,5 +45,16 @@ class RagGenerationConfigurationTest {
     void rejectsInvalidGenerationTimeoutAtStartup() {
         runner.withPropertyValues("rag.generation.read-timeout-ms=0")
                 .run(context -> assertThat(context).hasFailed());
+    }
+
+    @Test
+    void remoteModeHasExactlyOneAnswererAndNoLocalQuestionService() {
+        runner.withPropertyValues("rag.mode=remote")
+                .withUserConfiguration(RagRemoteConfiguration.class, RemoteRagQuestionClient.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed().hasSingleBean(RagQuestionAnswerer.class)
+                            .doesNotHaveBean(RagQuestionService.class);
+                    assertThat(context.getBean(RagRemoteProperties.class).baseUrl().getScheme()).isEqualTo("https");
+                });
     }
 }

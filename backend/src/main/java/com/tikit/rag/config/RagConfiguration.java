@@ -5,6 +5,6 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({RagEmbeddingProperties.class, RagOllamaProperties.class,
-        RagSearchProperties.class, RagGenerationProperties.class})
+        RagSearchProperties.class, RagGenerationProperties.class, RagRemoteProperties.class})
 public class RagConfiguration {
 }

@@ -3,7 +3,7 @@ package com.tikit.rag.controller;
 import com.tikit.common.dto.ResponseDTO;
 import com.tikit.rag.dto.request.RagQuestionRequest;
 import com.tikit.rag.dto.response.RagQuestionResponse;
-import com.tikit.rag.service.RagQuestionService;
+import com.tikit.rag.service.RagQuestionAnswerer;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,9 +15,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/rag/questions")
 public class RagQuestionController {
 
-    private final RagQuestionService questionService;
+    private final RagQuestionAnswerer questionService;
 
-    public RagQuestionController(RagQuestionService questionService) {
+    public RagQuestionController(RagQuestionAnswerer questionService) {
         this.questionService = questionService;
     }
 

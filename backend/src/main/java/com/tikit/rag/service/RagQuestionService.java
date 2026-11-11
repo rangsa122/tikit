@@ -7,12 +7,14 @@ import com.tikit.rag.exception.RagGenerationException;
 import com.tikit.rag.generation.OllamaAnswerClient;
 import com.tikit.rag.search.RagSearchService;
 import org.springframework.stereotype.Service;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 
 @Service
-public class RagQuestionService {
+@ConditionalOnProperty(name = "rag.mode", havingValue = "local", matchIfMissing = true)
+public class RagQuestionService implements RagQuestionAnswerer {
     public static final String NO_EVIDENCE = "등록된 안내 문서에서 확인할 수 없습니다";
     private final RagSearchService searchService;
     private final OllamaAnswerClient answerClient;

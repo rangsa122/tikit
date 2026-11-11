@@ -8,6 +8,7 @@ import org.springframework.web.client.RestClient;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class OllamaAnswerClient {
@@ -20,6 +21,8 @@ public class OllamaAnswerClient {
             예를 들어 환불 규정에 수수료만 있고 카드사 입금 소요 기간이 없으면,
             입금까지 며칠 걸리는지에 대해서는 answerable=false로 반환하세요.
             복합 질문의 일부에만 근거가 있어도 나머지를 추측하지 말고 answerable=false로 반환하세요.
+            답변 작성 전에 질문의 각 요구사항에 직접적인 근거가 있는지 먼저 판단하세요.
+            취소 기한은 취소 가능한 시각이지, 카드사 입금 소요 기간의 근거가 아닙니다.
             취소 가능 조건과 기한처럼 답변에 필요한 조건을 생략하지 마세요.
             answer는 숫자나 단어만 쓰지 말고, 필요한 적용 조건을 포함한 2~4개의 완전한 문장으로 작성하세요.
             수수료·환불 질문에서는 본문에 있는 취소 가능 조건과 기한을 반드시 함께 설명하세요.
@@ -80,12 +83,16 @@ public class OllamaAnswerClient {
     }
 
     private Map<String, Object> schema(List<RagSearchMatch> matches) {
+        // JSON 스키마의 필드 순서를 고정해 답변 문장보다 근거 충분성 판단을 먼저 생성한다.
+        var fields = new LinkedHashMap<String, Object>();
+        fields.put("answerable", Map.of("type", "boolean", "description",
+                "질문의 모든 핵심 요구에 직접적인 근거가 있는 경우만 true. 일부만 답할 수 있으면 false."));
+        fields.put("answer", Map.of("type", "string"));
+        fields.put("sourceChunkIds", Map.of("type", "array", "uniqueItems", true,
+                "items", Map.of("type", "string", "enum",
+                        matches.stream().map(RagSearchMatch::chunkId).toList())));
         return Map.of("type", "object", "additionalProperties", false,
-                "properties", Map.of("answerable", Map.of("type", "boolean"),
-                        "answer", Map.of("type", "string"),
-                        "sourceChunkIds", Map.of("type", "array", "uniqueItems", true,
-                                "items", Map.of("type", "string", "enum",
-                                        matches.stream().map(RagSearchMatch::chunkId).toList()))),
+                "properties", fields,
                 "required", List.of("answerable", "answer", "sourceChunkIds"));
     }
 
