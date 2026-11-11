@@ -4,6 +4,8 @@ import MyPage from '../pages/mypage/MyPage'
 import MemberProfilePage from '../pages/mypage/MemberProfilePage'
 import NotificationSettingsPage from '../pages/mypage/NotificationSettingsPage'
 import FavoritePerformancesPage from '../pages/mypage/FavoritePerformancesPage'
+import BookingHistoryPage from '../pages/mypage/BookingHistoryPage'
+import BookingDetailPage from '../pages/mypage/BookingDetailPage'
 
 // 마이페이지 관련 경로 관리
 const mypageRoutes: RouteObject[] = [
@@ -11,6 +13,8 @@ const mypageRoutes: RouteObject[] = [
   { path: '/mypage/profile', element: <MemberProfilePage /> },
   { path: '/mypage/notifications', element: <NotificationSettingsPage /> },
   { path: '/mypage/favorites', element: <FavoritePerformancesPage /> },
+  { path: '/mypage/bookings', element: <BookingHistoryPage /> },
+  { path: '/mypage/bookings/:bookingId', element: <BookingDetailPage /> },
 ]
 
 export default mypageRoutes

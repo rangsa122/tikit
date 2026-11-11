@@ -15,6 +15,7 @@ import mypageRoutes from './mypageRoutes'
 import PerformanceCreatePage from "../pages/manager/PerformanceCreatePage.tsx";
 import PerformanceListPage from "../pages/manager/PerformanceListPage.tsx";
 import RoleRoute from "../components/auth/RoleRoute.tsx";
+import SalesConfigurationPage from "../pages/manager/SalesConfigurationPage.tsx";
 
 const router = createBrowserRouter([
   {
@@ -34,6 +35,9 @@ const router = createBrowserRouter([
       {path: '/manager/performances/new', element: (
             <RoleRoute roles={['MANAGER']}><PerformanceCreatePage /></RoleRoute>
         )},
+      {path: '/manager/performances/:performanceId/sales-configuration', element: (
+            <RoleRoute roles={['MANAGER']}><SalesConfigurationPage/></RoleRoute>
+        ),},
 
       ...mypageRoutes,
     ],
