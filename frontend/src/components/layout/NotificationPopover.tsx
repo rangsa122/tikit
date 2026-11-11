@@ -311,13 +311,15 @@ export default function NotificationPopover() {
                                         </time>
                                     </div>
 
-                                    <p className="mt-2 text-sm font-semibold">
-                                        {notification.performanceTitle && (
-                                            <p className="mb-1 text-[14px] font-semibold text-[#2A2A37]">
-                                                {notification.performanceTitle}
-                                            </p>
-                                        )}
-                                    </p>
+                                    {notification.performanceTitle && (
+                                        <span className="mb-1 block text-[14px] font-semibold text-[#2A2A37]">
+                                            {notification.performanceTitle}
+                                        </span >
+                                    )}
+
+                                    <span className="mt-1 block text-[13px] font-normal text-[#666]">
+                                        {notification.message}
+                                    </span>
 
                                     {!notification.isRead && (
                                         <p className="mt-2 text-xs text-[#888]">
