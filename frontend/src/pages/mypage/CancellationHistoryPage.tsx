@@ -152,8 +152,7 @@ export default function CancellationHistoryPage() {
                 <MyPageSidebar />
 
                 <main className="min-w-0 flex-1">
-                    {/* 취소/환불 내역 제목 */}
-                    <div className="border-b border-[#ddd] pb-5">
+                    <div className="pb-2">
                         <h2 className="text-[26px] font-bold text-[#222]">
                             취소/환불 내역
                         </h2>
@@ -163,7 +162,6 @@ export default function CancellationHistoryPage() {
                         </p>
                     </div>
 
-                    {/* 취소/환불 내역이 없는 경우 */}
                     {cancellationBookings.length === 0 &&
                         !isLoading &&
                         !hasMore &&
@@ -173,14 +171,12 @@ export default function CancellationHistoryPage() {
                             </p>
                         )}
 
-                    {/* 취소/환불 내역 카드 목록 */}
                     <div className="mt-6 space-y-5">
                         {cancellationBookings.map((booking) => (
                             <article
                                 key={booking.bookingId}
                                 className="overflow-hidden rounded-xl border border-[#ddd] bg-white"
                             >
-                                {/* 카드 상단: 예매일 및 예매번호 */}
                                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e5e5e5] bg-[#fafafa] px-5 py-4">
                                     <span className="text-[13px] font-semibold text-[#222]">
                                         {formatBookingDate(booking.createdAt)} 예매
@@ -192,25 +188,17 @@ export default function CancellationHistoryPage() {
                                 </div>
 
                                 {/* 카드 본문 */}
-                                <div className="flex flex-col gap-5 px-5 py-5 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="flex flex-col gap-5 px-5 py-5 sm:flex-row sm:justify-between">
                                     <div className="min-w-0 flex-1">
-                                        {/* 취소 처리 상태 배지 */}
-                                        <span className="inline-block rounded-md bg-[#eeecff] px-3 py-1.5 text-[12px] font-semibold text-[#4338CA]">
-                                            {getCancellationStatusLabel(booking)}
-                                        </span>
-
-                                        {/* 공연명 */}
-                                        <h3 className="mt-3 break-words text-[18px] font-bold text-[#222]">
+                                        <h3 className="break-words text-[18px] font-bold text-[#222]">
                                             {booking.performanceTitle}
                                         </h3>
 
-                                        {/* 공연 및 예매 정보 */}
                                         <dl className="mt-4 space-y-2 text-[13px]">
                                             <div className="flex gap-4">
                                                 <dt className="w-[70px] shrink-0 text-[#888]">
                                                     관람일시
                                                 </dt>
-
                                                 <dd className="text-[#333]">
                                                     {formatDate(booking.startsAt)}
                                                 </dd>
@@ -220,7 +208,6 @@ export default function CancellationHistoryPage() {
                                                 <dt className="w-[70px] shrink-0 text-[#888]">
                                                     좌석
                                                 </dt>
-
                                                 <dd className="break-words text-[#333]">
                                                     {booking.seats.length > 0
                                                         ? booking.seats
@@ -234,7 +221,6 @@ export default function CancellationHistoryPage() {
                                                 <dt className="w-[70px] shrink-0 text-[#888]">
                                                     예매 금액
                                                 </dt>
-
                                                 <dd className="font-medium text-[#333]">
                                                     {booking.totalAmount.toLocaleString()}원
                                                 </dd>
@@ -242,14 +228,20 @@ export default function CancellationHistoryPage() {
                                         </dl>
                                     </div>
 
-                                    {/* 예매 상세보기 이동 */}
-                                    <Link
-                                        to={`/mypage/bookings/${booking.bookingId}`}
-                                        className="self-start whitespace-nowrap rounded-md border border-[#4338CA] px-4 py-2 text-[13px] font-semibold text-[#4338CA] transition-colors hover:bg-[#f8f7ff]"
-                                    >
-                                        상세보기
-                                    </Link>
+                                    <div className="flex shrink-0 items-end justify-between gap-4 sm:flex-col">
+                                        <span className="inline-block rounded-md bg-[#eeecff] px-3 py-1.5 text-[12px] font-semibold text-[#4338CA]">
+                                            {getCancellationStatusLabel(booking)}
+                                        </span>
+
+                                        <Link
+                                            to={`/mypage/bookings/${booking.bookingId}`}
+                                            className="whitespace-nowrap rounded-md border border-[#4338CA] px-4 py-2 text-[13px] font-semibold text-[#4338CA] transition-colors hover:bg-[#f8f7ff]"
+                                        >
+                                            상세보기
+                                        </Link>
+                                    </div>
                                 </div>
+
                             </article>
                         ))}
                     </div>
