@@ -244,14 +244,14 @@ class SalesConfigurationServiceTest {
 
         assertFails(()-> service.saveSalesConfiguration(1L, 10L, saveRequest(3L)),
                 ErrorCode.ACCESS_DENIED);
-        verify(performanceRepository, never()).findForSave(any());
+        verify(performanceRepository, never()).findById(any());
     }
 
     @Test
     @DisplayName("없는 공연이면 RESOURCE_NOT_FOUND")
     void save_performanceNotFound(){
         when(memberRepository.findById(1L)).thenReturn(Optional.of(member(Role.MANAGER)));
-        when(performanceRepository.findForSave(10L)).thenReturn(Optional.empty());
+        when(performanceRepository.findById(10L)).thenReturn(Optional.empty());
 
         assertFails(()->service.saveSalesConfiguration(1L, 10L, saveRequest(3L)),
                 ErrorCode.RESOURCE_NOT_FOUND);
@@ -264,7 +264,7 @@ class SalesConfigurationServiceTest {
         Performance performance = performance(manager);
         ReflectionTestUtils.setField(performance, "publicationStatus", PublicationStatus.PUBLISHED);
         when(memberRepository.findById(1L)).thenReturn(Optional.of(manager));
-        when(performanceRepository.findForSave(10L)).thenReturn(Optional.of(performance));
+        when(performanceRepository.findById(10L)).thenReturn(Optional.of(performance));
 
         assertFails(()-> service.saveSalesConfiguration(1L, 10L, saveRequest(3L)),
                 ErrorCode.PERFORMANCE_EDIT_LOCKED);
@@ -276,7 +276,7 @@ class SalesConfigurationServiceTest {
     void save_versionConflict(){
         Member manager = member(Role.MANAGER);
         when(memberRepository.findById(1L)).thenReturn(Optional.of(manager));
-        when(performanceRepository.findForSave(10L)).thenReturn(Optional.of(performance(manager)));
+        when(performanceRepository.findById(10L)).thenReturn(Optional.of(performance(manager)));
 
         assertFails(() -> service.saveSalesConfiguration(1L, 10L, saveRequest(5L)),
                 ErrorCode.VERSION_CONFLICT);
@@ -289,7 +289,7 @@ class SalesConfigurationServiceTest {
         Member manager = member(Role.MANAGER);
         given(memberRepository.findById(1L)).willReturn(Optional.of(manager));          // ① 권한
         Performance performance = performance(manager);                                  // DRAFT, id 10, version 3
-        given(performanceRepository.findForSave(10L)).willReturn(Optional.of(performance)); // ②
+        given(performanceRepository.findById(10L)).willReturn(Optional.of(performance)); // ②
         given(performanceSessionRepository.findByPerformance(10L)).willReturn(List.of(session(performance, 100L, 1L, Instant.parse("2026-12-10T05:00:00Z"))));
         given(sessionSeatRepository.existsTaken(any())).willReturn(true);
 
@@ -307,7 +307,7 @@ class SalesConfigurationServiceTest {
         PerformanceSession s101 = session(performance, 101L, 1L, Instant.parse("2026-12-11T05:00:00Z"));
 
         given(memberRepository.findById(1L)).willReturn(Optional.of(manager));
-        given(performanceRepository.findForSave(10L)).willReturn(Optional.of(performance));
+        given(performanceRepository.findById(10L)).willReturn(Optional.of(performance));
         given(performanceSessionRepository.findByPerformance(10L))
                 .willReturn(List.of(s100, s101))    // 첫 호출: 저장 전 기존 회차
                 .willReturn(List.of());             // 두 번째 호출: 응답을 만들 때
@@ -331,7 +331,7 @@ class SalesConfigurationServiceTest {
         PerformanceSession created = session(performance, 200L, 5L, Instant.parse("2026-12-10T05:00:00Z"));
 
         given(memberRepository.findById(1L)).willReturn(Optional.of(manager));
-        given(performanceRepository.findForSave(10L)).willReturn(Optional.of(performance));
+        given(performanceRepository.findById(10L)).willReturn(Optional.of(performance));
         given(performanceSessionRepository.findByPerformance(10L)).willReturn(List.of());   // 기존 회차 없음
         given(seatTemplateRepository.findAllById(any())).willReturn(List.of(t1));
         given(templateSeatRepository.findByTemplateIdIn(any())).willReturn(seats);
