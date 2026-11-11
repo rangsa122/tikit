@@ -119,7 +119,7 @@ public class PerformancePublishServiceTest {
         Performance performance = draftPerformance(manager);
 
         when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
-        when(performanceRepository.findForSave(PERFORMANCE_ID)).thenReturn(Optional.of(performance));
+        when(performanceRepository.findById(PERFORMANCE_ID)).thenReturn(Optional.of(performance));
         PerformanceSession session = session(performance, SESSION_ID);
         when(performanceSessionRepository.findByPerformance(PERFORMANCE_ID))
                 .thenReturn(List.of(session));
@@ -146,7 +146,7 @@ public class PerformancePublishServiceTest {
         Member manager = member(Role.MANAGER);
 
         when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
-        when(performanceRepository.findForSave(PERFORMANCE_ID))
+        when(performanceRepository.findById(PERFORMANCE_ID))
                 .thenReturn(Optional.of(draftPerformance(manager)));
         when(performanceSessionRepository.findByPerformance(PERFORMANCE_ID))
                 .thenReturn(List.of());
@@ -163,7 +163,7 @@ public class PerformancePublishServiceTest {
         Performance performance = draftPerformance(manager);
 
         when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
-        when(performanceRepository.findForSave(PERFORMANCE_ID)).thenReturn(Optional.of(performance));
+        when(performanceRepository.findById(PERFORMANCE_ID)).thenReturn(Optional.of(performance));
         PerformanceSession withPrice = session(performance, SESSION_ID);
         PerformanceSession withoutPrice = session(performance, 200L);
         when(performanceSessionRepository.findByPerformance(PERFORMANCE_ID))
@@ -184,7 +184,7 @@ public class PerformancePublishServiceTest {
         ReflectionTestUtils.setField(performance, "publicationStatus", PublicationStatus.PUBLISHED);
 
         when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
-        when(performanceRepository.findForSave(PERFORMANCE_ID)).thenReturn(Optional.of(performance));
+        when(performanceRepository.findById(PERFORMANCE_ID)).thenReturn(Optional.of(performance));
 
         assertFails(() -> service.publish(MEMBER_ID, PERFORMANCE_ID, 0L, REQUEST_ID),
                 ErrorCode.PERFORMANCE_ALREADY_PUBLISHED);
@@ -196,7 +196,7 @@ public class PerformancePublishServiceTest {
         Member manager = member(Role.MANAGER);
 
         when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
-        when(performanceRepository.findForSave(PERFORMANCE_ID))
+        when(performanceRepository.findById(PERFORMANCE_ID))
                 .thenReturn(Optional.of(draftPerformance(manager)));   // version 0
 
         assertFails(() -> service.publish(MEMBER_ID, PERFORMANCE_ID, 5L, REQUEST_ID),
@@ -207,7 +207,7 @@ public class PerformancePublishServiceTest {
     @DisplayName("존재하지 않는 공연은 게시할 수 없다")
     void publish_notFound() {
         when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(member(Role.MANAGER)));
-        when(performanceRepository.findForSave(PERFORMANCE_ID)).thenReturn(Optional.empty());
+        when(performanceRepository.findById(PERFORMANCE_ID)).thenReturn(Optional.empty());
 
         assertFails(() -> service.publish(MEMBER_ID, PERFORMANCE_ID, 0L, REQUEST_ID),
                 ErrorCode.RESOURCE_NOT_FOUND);
@@ -220,6 +220,6 @@ public class PerformancePublishServiceTest {
 
         assertFails(() -> service.publish(MEMBER_ID, PERFORMANCE_ID, 0L, REQUEST_ID),
                 ErrorCode.ACCESS_DENIED);
-        verify(performanceRepository, never()).findForSave(anyLong());
+        verify(performanceRepository, never()).findById(anyLong());
     }
 }
