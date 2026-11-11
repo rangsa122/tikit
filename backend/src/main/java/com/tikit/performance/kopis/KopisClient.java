@@ -13,6 +13,7 @@ import org.xml.sax.InputSource;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -111,7 +112,10 @@ public class KopisClient {
 
     private String call(java.util.function.Function<org.springframework.web.util.UriBuilder, java.net.URI> uriFunction) {
         try {
-            return restClient.get().uri(uriFunction).retrieve().body(String.class);
+            // KOPIS 응답에 charset이 없어 String으로 바로 받으면 ISO-8859-1로 해석된다.
+            // 바이트로 받아 UTF-8로 직접 해석한다.
+            byte[] body = restClient.get().uri(uriFunction).retrieve().body(byte[].class);
+            return body == null ? null : new String(body, StandardCharsets.UTF_8);
         } catch (Exception e) {
             // 호출 실패, 시간 초과 등은 모두 "KOPIS 일시 불가"로 처리한다
             throw new PerformanceException(ErrorCode.KOPIS_UNAVAILABLE);
