@@ -6,6 +6,7 @@ import com.tikit.auth.entity.Role;
 import com.tikit.booking.entity.Booking;
 import com.tikit.booking.entity.BookingSeat;
 import com.tikit.booking.entity.BookingStatus;
+import com.tikit.booking.entity.Ticket;
 import com.tikit.payment.entity.PaymentAttempt;
 import com.tikit.payment.entity.PaymentAttemptStatus;
 import com.tikit.performance.entity.*;
@@ -123,6 +124,7 @@ public class PaymentTestDataHelper {
 
     // 좌석 1개 생성: 등급 가격 -> 템플릿 좌석 -> 회차 좌석 -> 예매 좌석 (외래키 순서)
     // 템플릿 좌석, 회차 좌석은 엔티티 생성 메서드가 없어 SQL로 저장
+    // 확정 예매는 실제 결제 승인처럼 좌석마다 티켓 1장 발급 (전체 취소 시 티켓 무효 처리 확인용)
     private void createBookingSeat(PerformanceSession session, SeatTemplate seatTemplate,
                                    Booking booking, BookingStatus status, Long price) {
         entityManager.persist(SessionGradePrice.create(session, SEAT_GRADE, price));
@@ -155,9 +157,15 @@ public class PaymentTestDataHelper {
                 .setParameter("bookingId", booking.getId())
                 .getSingleResult()).longValue();
 
-        entityManager.persist(BookingSeat.create(booking.getId(), session.getId(), sessionSeatId,
-                SEAT_LABEL, SEAT_GRADE, price));
+        BookingSeat bookingSeat = BookingSeat.create(booking.getId(), session.getId(), sessionSeatId,
+                SEAT_LABEL, SEAT_GRADE, price);
+        entityManager.persist(bookingSeat);
         entityManager.flush();
+
+        if (status == BookingStatus.CONFIRMED) {
+            entityManager.persist(Ticket.issue(bookingSeat.getId(), Instant.now()));
+            entityManager.flush();
+        }
     }
 
     // 예매 상태를 엔티티 메서드로 변경 (PENDING_PAYMENT면 그대로)

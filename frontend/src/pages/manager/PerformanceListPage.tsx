@@ -1,8 +1,15 @@
 import {useEffect, useState} from 'react'
+import type {ReactNode} from 'react'
 import {useNavigate} from 'react-router'
 import axios from 'axios'
-import {getManagerPerformances} from '../../api/managerPerformanceApi.ts'
+import {
+    changeSalesStatus,
+    changeVisibility,
+    getManagerPerformances,
+    publishPerformance,
+} from '../../api/managerPerformanceApi.ts'
 import type {ManagerPerformance, PageResponse} from '../../api/managerPerformanceApi.ts'
+import {toMessage} from '../../api/apiError.ts'
 
 const PAGE_SIZE = 10
 
@@ -31,6 +38,30 @@ function Badge({text, tone}: { text: string; tone: Tone }) {
     )
 }
 
+function ActionButton({children, onClick, disabled, title, primary}: {
+    children: ReactNode
+    onClick: () => void
+    disabled?: boolean
+    title?: string
+    primary?: boolean
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            disabled={disabled}
+            title={title}
+            className={`h-9 shrink-0 rounded-lg px-3 text-sm font-medium disabled:opacity-40 ${
+                primary
+                    ? 'bg-indigo-600 text-white'
+                    : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+            }`}
+        >
+            {children}
+        </button>
+    )
+}
+
 // "2026-12-01" → "2026.12.01"
 function formatDate(value: string) {
     return value.split('-').join('.')
@@ -44,6 +75,9 @@ export default function PerformanceListPage() {
     const [page, setPage] = useState(0)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
+    const [actingId, setActingId] = useState<number | null>(null)
+    const [actionError, setActionError] = useState('')
+    const [refreshKey, setRefreshKey] = useState(0)
 
     useEffect(() => {
         let ignore = false   // 늦게 도착한 응답이 화면을 덮어쓰지 않게 한다
@@ -77,7 +111,75 @@ export default function PerformanceListPage() {
         return () => {
             ignore = true
         }
-    }, [page, status])
+    }, [page, status, refreshKey])
+
+    // 바뀐 필드만 덮어쓴다. 게시 응답에는 제목·공연장이 없기 때문이다
+    function applyPatch(performanceId: number, patch: Partial<ManagerPerformance>) {
+        setData((prev) =>
+            prev === null
+                ? prev
+                : {
+                    ...prev,
+                    items: prev.items.map((item) =>
+                        item.performanceId === performanceId ? {...item, ...patch} : item,
+                    ),
+                },
+        )
+    }
+
+    // 세 동작이 모두 같은 흐름이라 하나로 묶는다
+    async function runAction(
+        performanceId: number,
+        action: () => Promise<Partial<ManagerPerformance>>,
+    ) {
+        if (actingId !== null) return
+        setActingId(performanceId)
+        setActionError('')
+        try {
+            applyPatch(performanceId, await action())
+        } catch (e) {
+            setActionError(toMessage(e, '처리하지 못했습니다'))
+            // 실패 시 최신 상태와 version을 다시 받아온다.
+            setRefreshKey((key) => key + 1)
+        } finally {
+            setActingId(null)
+        }
+    }
+
+    const publish = (p: ManagerPerformance) =>
+        runAction(p.performanceId, async () => {
+            const result = await publishPerformance(p.performanceId, p.version)
+            return {
+                publicationStatus: result.publicationStatus,
+                visibility: result.visibility,
+                salesStatus: result.salesStatus,
+                version: result.version,
+            }
+        })
+
+    const toggleSales = (p: ManagerPerformance) =>
+        runAction(p.performanceId, () =>
+            changeSalesStatus(
+                p.performanceId,
+                p.salesStatus === 'ENABLED' ? 'STOPPED' : 'ENABLED',
+                p.version,
+            ),
+        )
+
+    const toggleVisibility = (p: ManagerPerformance) =>
+        runAction(p.performanceId, async () => {
+            const result = await changeVisibility(
+                p.performanceId,
+                p.visibility === 'PUBLIC' ? 'HIDDEN' : 'PUBLIC',
+                p.version,
+            )
+            return {
+                publicationStatus: result.publicationStatus,
+                visibility: result.visibility,
+                salesStatus: result.salesStatus,
+                version: result.version,
+            }
+        })
 
     const changeStatus = (next: StatusFilter) => {
         setStatus(next)
@@ -92,13 +194,19 @@ export default function PerformanceListPage() {
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">공연 관리</h1>
                     <p className="mt-1 text-sm text-gray-500">
-                        등록한 공연을 확인하고 판매 설정과 게시를 관리해요.
+                        등록한 공연을 확인하고 판매 설정과 게시를 관리합니다.
                     </p>
                 </div>
-                <button onClick={goCreate}
-                        className="h-11 shrink-0 rounded-lg bg-indigo-700 px-5 font-semibold text-white">
-                    공연 등록
-                </button>
+                <div className="flex shrink-0 gap-2">
+                    <button onClick={goCreate}
+                            className="h-11 shrink-0 rounded-lg bg-indigo-700 px-5 font-semibold text-white">
+                        공연 등록
+                    </button>
+                    <button onClick={() => navigate('/manager/performances/kopis')}
+                            className="h-11 rounded-lg border border-gray-300 px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                        KOPIS에서 등록
+                    </button>
+                </div>
             </div>
 
             <div className="mt-6 flex gap-2">
@@ -113,6 +221,12 @@ export default function PerformanceListPage() {
                 ))}
             </div>
 
+            {actionError && (
+                <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {actionError}
+                </div>
+            )}
+
             <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-white">
                 {loading && (
                     <p className="px-6 py-16 text-center text-sm text-gray-500">불러오는 중...</p>
@@ -124,7 +238,7 @@ export default function PerformanceListPage() {
 
                 {!loading && !error && data && data.items.length === 0 && (
                     <div className="px-6 py-16 text-center">
-                        <p className="text-sm text-gray-500">등록된 공연이 없어요.</p>
+                        <p className="text-sm text-gray-500">등록된 공연이 없습니다.</p>
                         <button onClick={goCreate} className="mt-3 text-sm font-semibold text-indigo-700">
                             첫 공연 등록하기
                         </button>
@@ -145,6 +259,7 @@ export default function PerformanceListPage() {
                                         {formatDate(performance.startDate)} ~ {formatDate(performance.endDate)}
                                     </p>
                                 </div>
+
                                 <div className="flex shrink-0 gap-1.5">
                                     {performance.publicationStatus === 'PUBLISHED'
                                         ? <Badge text="게시됨" tone="green"/>
@@ -155,6 +270,50 @@ export default function PerformanceListPage() {
                                     {performance.salesStatus === 'ENABLED'
                                         ? <Badge text="판매 중" tone="green"/>
                                         : <Badge text="판매 중지" tone="red"/>}
+                                </div>
+
+                                <div className="flex shrink-0 items-center gap-2">
+                                    <ActionButton
+                                        onClick={() => navigate(`/manager/performances/${performance.performanceId}/sales-configuration`)}
+                                    >
+                                        판매 설정
+                                    </ActionButton>
+
+                                    {performance.publicationStatus === 'DRAFT' ? (
+                                        <ActionButton
+                                            primary
+                                            disabled={actingId !== null}
+                                            onClick={() => void publish(performance)}
+                                        >
+                                            {actingId === performance.performanceId ? '처리 중…' : '게시'}
+                                        </ActionButton>
+                                    ) : (
+                                        <>
+                                            <ActionButton
+                                                disabled={
+                                                    actingId !== null ||
+                                                    (performance.salesStatus === 'STOPPED' &&
+                                                        performance.visibility !== 'PUBLIC')
+                                                }
+                                                title={
+                                                    performance.salesStatus === 'STOPPED' &&
+                                                    performance.visibility !== 'PUBLIC'
+                                                        ? '공개 상태에서만 판매를 재개할 수 있습니다'
+                                                        : undefined
+                                                }
+                                                onClick={() => void toggleSales(performance)}
+                                            >
+                                                {performance.salesStatus === 'ENABLED' ? '판매 중지' : '판매 재개'}
+                                            </ActionButton>
+
+                                            <ActionButton
+                                                disabled={actingId !== null}
+                                                onClick={() => void toggleVisibility(performance)}
+                                            >
+                                                {performance.visibility === 'PUBLIC' ? '게시 중단' : '게시 복구'}
+                                            </ActionButton>
+                                        </>
+                                    )}
                                 </div>
                             </li>
                         ))}

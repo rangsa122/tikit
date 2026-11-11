@@ -11,6 +11,7 @@ public record NotificationResponseDTO(
         Long openingId,
         String type,
         String title,
+        String performanceTitle,
         String message,
         boolean isRead,
         Instant createdAt,
@@ -18,17 +19,24 @@ public record NotificationResponseDTO(
 ) {
 
     public static NotificationResponseDTO from(
-            Notification notification
+            Notification notification,
+            String performanceTitle
+
     ) {
         return new NotificationResponseDTO(
                 notification.getId(),
                 notification.getOpeningId(),
                 notification.getType(),
                 notification.getTitle(),
+                performanceTitle,
                 notification.getMessage(),
                 notification.getReadAt() != null,
                 notification.getCreatedAt(),
                 notification.getReadAt()
         );
+    }
+
+    public static NotificationResponseDTO from(Notification notification) {
+        return from(notification, null);
     }
 }

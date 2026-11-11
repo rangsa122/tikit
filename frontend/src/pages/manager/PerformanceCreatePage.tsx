@@ -2,18 +2,10 @@ import {useState} from 'react'
 import type {ChangeEvent, FocusEvent, FormEvent, ReactNode} from 'react'
 import axios from 'axios'
 import {createPerformance} from '../../api/managerPerformanceApi.ts'
+import {GENRES} from "../../constants/genres.ts";
+import type {KopisPerformanceDetail} from "../../api/kopisApi.ts";
+import {useLocation, useNavigate} from 'react-router'
 
-const GENRES = [
-    {code: 'theater', name: '연극'},
-    {code: 'dance', name: '무용'},
-    {code: 'popular_dance', name: '대중무용'},
-    {code: 'classical', name: '클래식'},
-    {code: 'korean_traditional', name: '국악'},
-    {code: 'concert', name: '콘서트'},
-    {code: 'complex', name: '복합'},
-    {code: 'circus_magic', name: '서커스/마술'},
-    {code: 'musical', name: '뮤지컬'},
-]
 
 interface FormState {
     title: string
@@ -42,6 +34,20 @@ const INITIAL_FORM: FormState = {
     bookingLimitPerMember: '4',
 }
 
+function fromKopis(detail: KopisPerformanceDetail): FormState {
+    return {
+        title: detail.title ?? '',
+        genreCode: detail.genreCode ?? '',
+        venueName: detail.venueName ?? '',
+        organizerName: detail.organizerName ?? '',
+        description: detail.description ?? '',
+        posterUrl: detail.posterUrl ?? '',
+        startDate: detail.startDate ?? '',
+        endDate: detail.endDate ?? '',
+        bookingLimitPerMember: '4',
+    }
+}
+
 function validate(form: FormState): FormErrors {
     const errors: FormErrors = {}
 
@@ -59,7 +65,7 @@ function validate(form: FormState): FormErrors {
     else if (form.description.length > 10000) errors.description = '공연 설명은 10000자 이하로 입력해 주세요.'
 
     if (form.posterUrl && !form.posterUrl.startsWith('https://')) {
-        errors.posterUrl = '포스터 주소는 https:// 로 시작해야 해요.'
+        errors.posterUrl = '포스터 주소는 https:// 로 시작해야 합니다.'
     }
 
     if (!form.startDate) errors.startDate = '시작일을 입력해 주세요.'
@@ -97,11 +103,16 @@ function Field({label, required, error, children}: FieldProps) {
 }
 
 export default function PerformanceCreatePage() {
-    const [form, setForm] = useState<FormState>(INITIAL_FORM)
+    const location = useLocation()
+    const kopis = (location.state as { kopis?: KopisPerformanceDetail } | null)?.kopis ?? null
+
+    const [form, setForm] = useState<FormState>(kopis ? fromKopis(kopis) : INITIAL_FORM)
     const [touched, setTouched] = useState<Touched>({})
     const [serverError, setServerError] = useState('')
     const [success, setSuccess] = useState('')
     const [submitting, setSubmitting] = useState(false)
+    const [createdId, setCreatedId] = useState<number | null>(null)
+    const navigate = useNavigate()
 
     // 렌더링할 때마다 계산. 따로 state로 저장하지 않아도 됌.
     const errors = validate(form)
@@ -136,10 +147,12 @@ export default function PerformanceCreatePage() {
 
         setServerError('')
         setSuccess('')
+        setCreatedId(null)
         setSubmitting(true)
         try {
             const created = await createPerformance({
-                source: 'MANUAL',
+                source: kopis?'KOPIS' : 'MANUAL',
+                kopisId: kopis?.kopisId,
                 title: form.title.trim(),
                 genreCode: form.genreCode,
                 venueName: form.venueName.trim(),
@@ -151,8 +164,11 @@ export default function PerformanceCreatePage() {
                 bookingLimitPerMember: Number(form.bookingLimitPerMember),
             })
             setSuccess(`공연이 등록되었습니다. (공연 번호: ${created.performanceId})`)
-            setForm(INITIAL_FORM)
-            setTouched({})
+            setCreatedId(created.performanceId)
+            if (!kopis) {
+                setForm(INITIAL_FORM)
+                setTouched({})
+            }
         } catch (err) {
             if (axios.isAxiosError<{ code: string; message: string }>(err)) {
                 const status = err.response?.status
@@ -172,10 +188,23 @@ export default function PerformanceCreatePage() {
 
     return (
         <div className="mx-auto max-w-[720px] px-6 py-10">
-            <h1 className="text-2xl font-bold text-gray-900">공연 직접 등록</h1>
+            <h1 className="text-2xl font-bold text-gray-900">
+                {kopis ? 'KOPIS 공연 등록' : '공연 직접 등록'}
+            </h1>
             <p className="mt-1 text-sm text-gray-500">
                 공연 기본 정보를 입력해 등록합니다. 회차와 가격은 등록한 뒤 판매 설정에서 작성해주세요.
             </p>
+
+            {kopis && (
+                <div className="mt-4 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+                    KOPIS에서 가져온 정보입니다 (공연 ID: {kopis.kopisId}). 필수항목들을 채운 후 등록해주세요.
+                    {!kopis.genreCode && (
+                        <span className="mt-1 block font-semibold">
+                            KOPIS 장르 “{kopis.genreName ?? '-'}”는 우리 장르와 연결되지 않아 비어 있습니다. 직접 선택해 주세요.
+                        </span>
+                    )}
+                </div>
+            )}
 
             <form onSubmit={handleSubmit}
                   className="mt-6 space-y-5 rounded-2xl border border-gray-200 bg-white p-8">
@@ -237,15 +266,45 @@ export default function PerformanceCreatePage() {
                 )}
                 {success && (
                     <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                        <p>{success}</p>
+                        <div className="mt-3 flex gap-2">
+                            {createdId !== null && (
+                                <button
+                                    type="button"
+                                    onClick={() => navigate(`/manager/performances/${createdId}/sales-configuration`)}
+                                    className="h-9 rounded-lg bg-indigo-700 px-4 text-sm font-semibold text-white"
+                                >
+                                    판매 설정하러 가기
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => navigate('/manager/performances')}
+                                className="h-9 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700"
+                            >
+                                목록으로
+                            </button>
+                        </div>
+                    </div>
+                )}
+                {success && (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                         {success}
                     </div>
                 )}
 
-                <button type="submit" disabled={!isValid || submitting}
-                        className="h-12 w-full rounded-lg bg-indigo-700 font-semibold text-white
-                                   disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400">
-                    {submitting ? '등록 중...' : '공연 등록'}
-                </button>
+                <div className="flex gap-3">
+                    <button type="button"
+                            onClick={() => navigate('/manager/performances')}
+                            className="h-12 shrink-0 rounded-lg border border-gray-300 px-6 font-semibold text-gray-700 hover:bg-gray-50">
+                        목록으로
+                    </button>
+                    <button type="submit" disabled={!isValid || submitting}
+                            className="h-12 flex-1 rounded-lg bg-indigo-700 font-semibold text-white
+                                       disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400">
+                        {submitting ? '등록 중...' : '공연 등록'}
+                    </button>
+                </div>
                 <p className="text-xs text-gray-500">내용을 모두 작성하시고 등록버튼을 눌러주세요.</p>
             </form>
         </div>

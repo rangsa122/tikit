@@ -1,3 +1,4 @@
+
 package com.tikit.performance.controller.advice;
 
 import com.tikit.common.ErrorCode;
@@ -15,23 +16,31 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class PerformanceControllerAdvice {
 
     @ExceptionHandler(PerformanceException.class)
-    public ResponseEntity<ResponseDTO<Void>> handlePerformanceException(PerformanceException e) {
+    public ResponseEntity<ResponseDTO<Void>> handlePerformanceException(
+            PerformanceException e) {
+
         log.warn("performance error: {}", e.getMessage());
         return toResponse(e.getErrorCode());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ResponseDTO<Void>> handleValidation(MethodArgumentNotValidException e) {
+    public ResponseEntity<ResponseDTO<Void>> handleValidation(
+            MethodArgumentNotValidException e) {
+
         return toResponse(ErrorCode.VALIDATION_ERROR);
     }
 
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
-    public ResponseEntity<ResponseDTO<Void>> handleOptimisticLock(ObjectOptimisticLockingFailureException e) {
+    public ResponseEntity<ResponseDTO<Void>> handleOptimisticLock(
+            ObjectOptimisticLockingFailureException e) {
+
         log.warn("optimistic lock conflict: {}", e.getMessage());
         return toResponse(ErrorCode.VERSION_CONFLICT);
     }
 
-    private ResponseEntity<ResponseDTO<Void>> toResponse(ErrorCode errorCode) {
+    private ResponseEntity<ResponseDTO<Void>> toResponse(
+            ErrorCode errorCode) {
+
         return ResponseEntity
                 .status(errorCode.getStatus())
                 .body(ResponseDTO.fail(errorCode));

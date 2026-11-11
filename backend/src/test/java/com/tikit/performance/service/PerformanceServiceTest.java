@@ -523,7 +523,7 @@ public class PerformanceServiceTest {
         Performance p = publicPerformance();   // PUBLISHED + PUBLIC, 판매는 STOPPED
 
         when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
-        when(performanceRepository.findForSave(PERFORMANCE_ID)).thenReturn(Optional.of(p));
+        when(performanceRepository.findById(PERFORMANCE_ID)).thenReturn(Optional.of(p));
 
         service.changeSalesStatus(MEMBER_ID, PERFORMANCE_ID, salesStatusRequest(SalesStatus.ENABLED, 0L));
 
@@ -539,7 +539,7 @@ public class PerformanceServiceTest {
         ReflectionTestUtils.setField(p, "salesStatus", SalesStatus.ENABLED);
 
         when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
-        when(performanceRepository.findForSave(PERFORMANCE_ID)).thenReturn(Optional.of(p));
+        when(performanceRepository.findById(PERFORMANCE_ID)).thenReturn(Optional.of(p));
 
         service.changeSalesStatus(MEMBER_ID, PERFORMANCE_ID, salesStatusRequest(SalesStatus.STOPPED, 0L));
 
@@ -553,7 +553,7 @@ public class PerformanceServiceTest {
         Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
 
         when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
-        when(performanceRepository.findForSave(PERFORMANCE_ID))
+        when(performanceRepository.findById(PERFORMANCE_ID))
                 .thenReturn(Optional.of(draftPerformance(manager)));
 
         assertFails(() -> service.changeSalesStatus(
@@ -569,7 +569,7 @@ public class PerformanceServiceTest {
         ReflectionTestUtils.setField(p, "visibility", Visibility.HIDDEN);
 
         when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
-        when(performanceRepository.findForSave(PERFORMANCE_ID)).thenReturn(Optional.of(p));
+        when(performanceRepository.findById(PERFORMANCE_ID)).thenReturn(Optional.of(p));
 
         assertFails(() -> service.changeSalesStatus(
                         MEMBER_ID, PERFORMANCE_ID, salesStatusRequest(SalesStatus.ENABLED, 0L)),
@@ -582,7 +582,7 @@ public class PerformanceServiceTest {
         Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
 
         when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
-        when(performanceRepository.findForSave(PERFORMANCE_ID))
+        when(performanceRepository.findById(PERFORMANCE_ID))
                 .thenReturn(Optional.of(draftPerformance(manager)));
 
         assertFails(() -> service.changeSalesStatus(
@@ -596,7 +596,7 @@ public class PerformanceServiceTest {
         Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
 
         when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
-        when(performanceRepository.findForSave(PERFORMANCE_ID))
+        when(performanceRepository.findById(PERFORMANCE_ID))
                 .thenReturn(Optional.of(publicPerformance()));   // version 0
 
         assertFails(() -> service.changeSalesStatus(
@@ -610,7 +610,7 @@ public class PerformanceServiceTest {
         Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
 
         when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
-        when(performanceRepository.findForSave(PERFORMANCE_ID)).thenReturn(Optional.empty());
+        when(performanceRepository.findById(PERFORMANCE_ID)).thenReturn(Optional.empty());
 
         assertFails(() -> service.changeSalesStatus(
                         MEMBER_ID, PERFORMANCE_ID, salesStatusRequest(SalesStatus.STOPPED, 0L)),
@@ -640,7 +640,7 @@ public class PerformanceServiceTest {
         Performance p = publicPerformance();   // PUBLISHED + PUBLIC
 
         when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
-        when(performanceRepository.findForSave(PERFORMANCE_ID)).thenReturn(Optional.of(p));
+        when(performanceRepository.findById(PERFORMANCE_ID)).thenReturn(Optional.of(p));
 
         PerformancePublicationResponseDTO result = service.changeVisibility(
                 MEMBER_ID, PERFORMANCE_ID, visibilityRequest(Visibility.HIDDEN, 0L));
@@ -659,7 +659,7 @@ public class PerformanceServiceTest {
         ReflectionTestUtils.setField(p, "visibility", Visibility.HIDDEN);
 
         when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
-        when(performanceRepository.findForSave(PERFORMANCE_ID)).thenReturn(Optional.of(p));
+        when(performanceRepository.findById(PERFORMANCE_ID)).thenReturn(Optional.of(p));
 
         service.changeVisibility(MEMBER_ID, PERFORMANCE_ID,
                 visibilityRequest(Visibility.PUBLIC, 0L));
@@ -673,7 +673,7 @@ public class PerformanceServiceTest {
         Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
 
         when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
-        when(performanceRepository.findForSave(PERFORMANCE_ID))
+        when(performanceRepository.findById(PERFORMANCE_ID))
                 .thenReturn(Optional.of(draftPerformance(manager)));
 
         assertFails(() -> service.changeVisibility(
@@ -690,7 +690,7 @@ public class PerformanceServiceTest {
         assertFails(() -> service.changeVisibility(
                         MEMBER_ID, PERFORMANCE_ID, visibilityRequest(Visibility.PRIVATE, 0L)),
                 ErrorCode.VALIDATION_ERROR);
-        verify(performanceRepository, never()).findForSave(any());
+        verify(performanceRepository, never()).findById(any());
     }
 
     @Test
@@ -699,7 +699,7 @@ public class PerformanceServiceTest {
         Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
 
         when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
-        when(performanceRepository.findForSave(PERFORMANCE_ID))
+        when(performanceRepository.findById(PERFORMANCE_ID))
                 .thenReturn(Optional.of(publicPerformance()));   // version 0
 
         assertFails(() -> service.changeVisibility(
@@ -713,7 +713,7 @@ public class PerformanceServiceTest {
         Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
 
         when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
-        when(performanceRepository.findForSave(PERFORMANCE_ID)).thenReturn(Optional.empty());
+        when(performanceRepository.findById(PERFORMANCE_ID)).thenReturn(Optional.empty());
 
         assertFails(() -> service.changeVisibility(
                         MEMBER_ID, PERFORMANCE_ID, visibilityRequest(Visibility.HIDDEN, 0L)),
