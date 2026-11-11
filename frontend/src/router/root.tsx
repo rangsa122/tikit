@@ -17,6 +17,7 @@ import PerformanceListPage from "../pages/manager/PerformanceListPage.tsx";
 import RoleRoute from "../components/auth/RoleRoute.tsx";
 import SalesConfigurationPage from "../pages/manager/SalesConfigurationPage.tsx";
 import KopisSearchPage from "../pages/manager/KopisSearchPage.tsx";
+import PerformanceEditPage from "../pages/manager/PerformanceEditPage.tsx";
 
 const router = createBrowserRouter([
   {
@@ -42,6 +43,9 @@ const router = createBrowserRouter([
       {path: '/manager/performances/:performanceId/sales-configuration', element: (
             <RoleRoute roles={['MANAGER']}><SalesConfigurationPage/></RoleRoute>
         ),},
+      {path: '/manager/performances/:performanceId/edit', element: (
+            <RoleRoute roles={['MANAGER']}><PerformanceEditPage /></RoleRoute>
+        )},
 
       ...mypageRoutes,
     ],

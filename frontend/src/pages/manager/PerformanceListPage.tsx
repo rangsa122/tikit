@@ -250,6 +250,14 @@ export default function PerformanceListPage() {
                         {data.items.map((performance) => (
                             <li key={performance.performanceId}
                                 className="flex items-center gap-4 px-6 py-4">
+                                {performance.posterUrl ? (
+                                    <img src={performance.posterUrl} alt=""
+                                         className="h-16 w-11 shrink-0 rounded object-cover"/>
+                                ) : (
+                                    <div className="flex h-16 w-11 shrink-0 items-center justify-center rounded bg-gray-100 text-[10px] text-gray-400">
+                                        없음
+                                    </div>
+                                )}
                                 <div className="min-w-0 flex-1">
                                     <p className="truncate font-semibold text-gray-900">
                                         {performance.title}
@@ -280,13 +288,21 @@ export default function PerformanceListPage() {
                                     </ActionButton>
 
                                     {performance.publicationStatus === 'DRAFT' ? (
-                                        <ActionButton
-                                            primary
-                                            disabled={actingId !== null}
-                                            onClick={() => void publish(performance)}
-                                        >
-                                            {actingId === performance.performanceId ? '처리 중…' : '게시'}
-                                        </ActionButton>
+                                        <>
+                                            <ActionButton
+                                                onClick={() => navigate(`/manager/performances/${performance.performanceId}/edit`)}
+                                            >
+                                                수정
+                                            </ActionButton>
+
+                                            <ActionButton
+                                                primary
+                                                disabled={actingId !== null}
+                                                onClick={() => void publish(performance)}
+                                            >
+                                                {actingId === performance.performanceId ? '처리 중…' : '게시'}
+                                            </ActionButton>
+                                        </>
                                     ) : (
                                         <>
                                             <ActionButton
