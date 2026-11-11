@@ -70,15 +70,26 @@ export default function MyPageSidebar() {
                             )
                         }
 
-                        // TODO : 취소/환불 내역
-                        return (
-                            <span
-                                key={menu}
-                                className="text-[14px] text-[#555]"
-                            >
-                                {menu}
-                            </span>
-                        )
+                        if (menu === '취소/환불 내역') {
+                            const isActive = location.pathname === '/mypage/cancellations'
+
+                            return (
+                                <Link
+                                    key={menu}
+                                    to="/mypage/cancellations"
+                                    aria-current={isActive ? 'page' : undefined}
+                                    className={
+                                        isActive
+                                            ? 'rounded bg-[#eeeeee] px-2 py-2 text-[14px] text-[#111]'
+                                            : 'text-[14px] text-[#555] hover:text-black'
+                                    }
+                                >
+                                    {menu}
+                                </Link>
+                            )
+                        }
+
+                        return null
                     })}
                 </nav>
             </div>
