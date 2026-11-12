@@ -19,6 +19,7 @@ import RoleRoute from '../components/auth/RoleRoute'
 import SalesConfigurationPage from '../pages/manager/SalesConfigurationPage'
 import KopisSearchPage from '../pages/manager/KopisSearchPage'
 import PerformanceEditPage from '../pages/manager/PerformanceEditPage'
+import BookingStatusPage from '../pages/manager/BookingStatusPage'
 
 const router = createBrowserRouter([
     {
@@ -75,6 +76,14 @@ const router = createBrowserRouter([
                 element: (
                     <RoleRoute roles={['MANAGER']}>
                         <PerformanceEditPage />
+                    </RoleRoute>
+                ),
+            },
+            {
+                path: '/manager/performances/:performanceId/booking-status',
+                element: (
+                    <RoleRoute roles={['MANAGER']}>
+                        <BookingStatusPage />
                     </RoleRoute>
                 ),
             },
