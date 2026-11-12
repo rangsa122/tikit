@@ -10,6 +10,7 @@ import {
     getCancellationQuote,
     type CancellationQuote,
     createCancellation,
+    getCancellation,
     type CancellationResponse,
     BookingApiError,
 } from '../../api/bookingApi'
@@ -383,26 +384,55 @@ export default function BookingDetailPage() {
             const latestBooking = await getBooking(bookingId)
             setBooking(latestBooking)
 
-            // 취소 완료된 예매는 티켓 정보도 갱신
-            if (latestBooking.status === 'CANCELED') {
+            // 조회할 취소 요청 ID 확인
+            const cancellationId = latestBooking.cancellationId ?? cancelResult?.cancellationId
+
+            if (cancellationId == null) {
+                setCancelStatusRefreshError('조회할 취소 요청 정보를 찾지 못했습니다.')
+                return
+            }
+
+            // 최신 취소 처리 결과 조회
+            const latestResult = await getCancellation(cancellationId)
+            setCancelResult(latestResult)
+
+            // 재시도 가능한 실패라면 다음 요청에 새로운 멱등키 사용
+            if (
+                latestResult.status === 'FAILED' &&
+                latestResult.retryAllowed
+            ) {
+                cancellationRequestRef.current = null
+            }
+
+            // 취소 완료 시 예매 및 발급 티켓 정보 갱신
+            if (latestResult.status === 'SUCCEEDED') {
                 setIsTicketsLoading(true)
 
-                try {
-                    const latestTickets = await getTickets(bookingId)
-                    setTicketList(latestTickets)
-                    setTicketError('')
-                } catch {
-                    setTicketError(
-                        '발급 티켓 정보를 다시 불러오지 못했습니다.',
-                    )
-                } finally {
-                    setIsTicketsLoading(false)
+                const [bookingRefresh, ticketsRefresh] =
+                    await Promise.allSettled([
+                        getBooking(bookingId),
+                        getTickets(bookingId),
+                    ])
+
+                // 예매 상태 갱신
+                if (bookingRefresh.status === 'fulfilled') {
+                    setBooking(bookingRefresh.value)
+                } else {
+                    setCancelStatusRefreshError('취소는 완료되었지만 예매 정보를 다시 불러오지 못했습니다.')
                 }
+
+                // 발급 티켓 상태 갱신
+                if (ticketsRefresh.status === 'fulfilled') {
+                    setTicketList(ticketsRefresh.value)
+                    setTicketError('')
+                } else {
+                    setTicketError('발급 티켓 정보를 다시 불러오지 못했습니다.')
+                }
+
+                setIsTicketsLoading(false)
             }
         } catch {
-            setCancelStatusRefreshError(
-                '취소 상태를 불러오지 못했습니다. 다시 시도해 주세요.',
-            )
+            setCancelStatusRefreshError('취소 상태를 불러오지 못했습니다. 다시 시도해 주세요.')
         } finally {
             setIsCancelStatusRefreshing(false)
         }
@@ -912,13 +942,13 @@ export default function BookingDetailPage() {
                         )}
 
                         {/* 취소 요청 후 최신 상태 확인 */}
-                        {(cancelResult || cancellationRequestRef.current) && (
+                        {(booking?.cancellationId != null || cancelResult !== null || cancellationRequestRef.current !== null ) && (
                             <div className="mt-4">
                                 <div className="flex items-center justify-between gap-3">
                                     <p aria-live="polite" className="text-[12px] text-[#777]">
                                         최신 조회 상태:{' '}
                                         <span className="font-semibold text-[#4338CA]">
-                                            {booking?.cancellationStatus ?? '확인 전'}
+                                            {cancelResult?.status ?? booking?.cancellationStatus ?? '확인 전'}
                                         </span>
                                     </p>
 
