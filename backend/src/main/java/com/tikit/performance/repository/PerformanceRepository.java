@@ -22,14 +22,17 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
             select p
             from Performance p join fetch p.genre
             where (:status is null or p.publicationStatus = :status)
+              and (:ownerId is null or p.createdBy.id = :ownerId)
             order by p.createdAt desc
             """, countQuery = """
             select count(p)
             from Performance p
             where (:status is null or p.publicationStatus = :status)
+              and (:ownerId is null or p.createdBy.id = :ownerId)
             """)
     Page<Performance> findAllByStatus(
             @Param("status") PublicationStatus status,
+            @Param("ownerId") Long ownerId,
             Pageable pageable
     );
 

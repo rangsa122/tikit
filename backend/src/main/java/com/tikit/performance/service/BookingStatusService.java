@@ -1,8 +1,10 @@
 package com.tikit.performance.service;
 
+import com.tikit.auth.entity.Member;
 import com.tikit.booking.repository.BookingRepository;
 import com.tikit.common.ErrorCode;
 import com.tikit.performance.dto.response.BookingStatusResponseDTO;
+import com.tikit.performance.entity.Performance;
 import com.tikit.performance.entity.PerformanceSession;
 import com.tikit.performance.exception.PerformanceException;
 import com.tikit.performance.repository.PerformanceRepository;
@@ -33,12 +35,12 @@ public class BookingStatusService {
     private final BookingRepository bookingRepository;
 
     public BookingStatusResponseDTO getBookingStatus(Long memberId, Long performanceId) {
-        // 조회는 MANAGER와 ADMIN 모두 가능
-        accessChecker.requireViewer(memberId);
+        // 조회는 MANAGER와 ADMIN 모두 가능하지만, MANAGER는 본인 공연만
+        Member member = accessChecker.requireViewer(memberId);
 
-        if (!performanceRepository.existsById(performanceId)) {
-            throw new PerformanceException(ErrorCode.RESOURCE_NOT_FOUND);
-        }
+        Performance performance = performanceRepository.findById(performanceId)
+                .orElseThrow(() -> new PerformanceException(ErrorCode.RESOURCE_NOT_FOUND));
+        accessChecker.requireOwner(member, performance);
 
         List<PerformanceSession> sessions =
                 performanceSessionRepository.findByPerformance(performanceId);

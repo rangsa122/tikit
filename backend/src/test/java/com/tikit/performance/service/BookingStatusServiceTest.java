@@ -82,6 +82,16 @@ public class BookingStatusServiceTest {
         return session;
     }
 
+    private Performance performanceOwnedBy(Long ownerId) {
+        Member owner = Member.create("owner@test.com", "1234", "소유자", Role.MANAGER);
+        ReflectionTestUtils.setField(owner, "id", ownerId);
+
+        return Performance.createManual(owner,
+                Genre.create("theater", "연극", "AAAA", 1, true),
+                "제목", "장소", null, "소개", null,
+                LocalDate.of(2026, 11, 28), LocalDate.of(2026, 11, 30), null);
+    }
+
     private SessionSeatRepository.SeatCount seatCount(Long sessionId, long total, long sold, long held) {
         SessionSeatRepository.SeatCount count = mock(SessionSeatRepository.SeatCount.class);
         when(count.getSessionId()).thenReturn(sessionId);
@@ -112,7 +122,8 @@ public class BookingStatusServiceTest {
     @DisplayName("회차별 현황과 공연 전체 합계를 함께 반환한다")
     void getBookingStatus_success() {
         loginAs(Role.MANAGER);
-        when(performanceRepository.existsById(PERFORMANCE_ID)).thenReturn(true);
+        when(performanceRepository.findById(PERFORMANCE_ID))
+                .thenReturn(Optional.of(performanceOwnedBy(MEMBER_ID)));
         when(performanceSessionRepository.findByPerformance(PERFORMANCE_ID))
                 .thenReturn(List.of(session(100L), session(200L)));
 
@@ -142,7 +153,8 @@ public class BookingStatusServiceTest {
     @DisplayName("회차가 없으면 빈 목록과 0 합계를 반환한다")
     void getBookingStatus_noSessions() {
         loginAs(Role.MANAGER);
-        when(performanceRepository.existsById(PERFORMANCE_ID)).thenReturn(true);
+        when(performanceRepository.findById(PERFORMANCE_ID))
+                .thenReturn(Optional.of(performanceOwnedBy(MEMBER_ID)));
         when(performanceSessionRepository.findByPerformance(PERFORMANCE_ID)).thenReturn(List.of());
 
         BookingStatusResponseDTO result = service.getBookingStatus(MEMBER_ID, PERFORMANCE_ID);
@@ -157,7 +169,8 @@ public class BookingStatusServiceTest {
     @DisplayName("좌석이나 예매가 아직 없는 회차는 0으로 채운다")
     void getBookingStatus_emptySession() {
         loginAs(Role.MANAGER);
-        when(performanceRepository.existsById(PERFORMANCE_ID)).thenReturn(true);
+        when(performanceRepository.findById(PERFORMANCE_ID))
+                .thenReturn(Optional.of(performanceOwnedBy(MEMBER_ID)));
         when(performanceSessionRepository.findByPerformance(PERFORMANCE_ID))
                 .thenReturn(List.of(session(100L)));
         when(sessionSeatRepository.countBySessions(List.of(100L))).thenReturn(List.of());
@@ -171,10 +184,11 @@ public class BookingStatusServiceTest {
     }
 
     @Test
-    @DisplayName("ADMIN도 조회할 수 있다")
+    @DisplayName("ADMIN은 다른 운영자의 공연도 조회할 수 있다")
     void getBookingStatus_admin() {
         loginAs(Role.ADMIN);
-        when(performanceRepository.existsById(PERFORMANCE_ID)).thenReturn(true);
+        when(performanceRepository.findById(PERFORMANCE_ID))
+                .thenReturn(Optional.of(performanceOwnedBy(99L)));
         when(performanceSessionRepository.findByPerformance(PERFORMANCE_ID)).thenReturn(List.of());
 
         assertThat(service.getBookingStatus(MEMBER_ID, PERFORMANCE_ID)).isNotNull();
@@ -184,10 +198,22 @@ public class BookingStatusServiceTest {
     @DisplayName("없는 공연은 조회할 수 없다")
     void getBookingStatus_notFound() {
         loginAs(Role.MANAGER);
-        when(performanceRepository.existsById(PERFORMANCE_ID)).thenReturn(false);
+        when(performanceRepository.findById(PERFORMANCE_ID)).thenReturn(Optional.empty());
 
         assertFails(() -> service.getBookingStatus(MEMBER_ID, PERFORMANCE_ID),
                 ErrorCode.RESOURCE_NOT_FOUND);
+        verify(performanceSessionRepository, never()).findByPerformance(anyLong());
+    }
+
+    @Test
+    @DisplayName("다른 운영자의 공연은 조회할 수 없다")
+    void getBookingStatus_notOwner() {
+        loginAs(Role.MANAGER);
+        when(performanceRepository.findById(PERFORMANCE_ID))
+                .thenReturn(Optional.of(performanceOwnedBy(99L)));
+
+        assertFails(() -> service.getBookingStatus(MEMBER_ID, PERFORMANCE_ID),
+                ErrorCode.ACCESS_DENIED);
         verify(performanceSessionRepository, never()).findByPerformance(anyLong());
     }
 }
