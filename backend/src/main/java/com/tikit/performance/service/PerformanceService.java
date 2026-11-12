@@ -4,6 +4,8 @@ import com.tikit.auth.entity.Member;
 import com.tikit.common.ErrorCode;
 import com.tikit.performance.dto.PerformanceSessionListDTO;
 import com.tikit.performance.dto.PublicPerformanceDetailDTO;
+import com.tikit.performance.dto.PublicPerformancePageDTO;
+import com.tikit.performance.dto.PublicPerformanceSummaryDTO;
 import com.tikit.performance.dto.request.PerformanceCreateRequestDTO;
 import com.tikit.performance.dto.request.PerformanceUpdateRequestDTO;
 import com.tikit.performance.dto.request.SalesStatusUpdateRequestDTO;
@@ -22,6 +24,7 @@ import com.tikit.seat.repository.SessionSeatRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -146,6 +149,124 @@ public class PerformanceService {
         );
     }
 
+    /**
+     * 일반 사용자용 공개 공연 목록 검색
+     */
+    public PublicPerformancePageDTO getPublicPerformances(
+            int page,
+            int size,
+            String keyword,
+            String genreCode,
+            LocalDate fromDate,
+            LocalDate toDate,
+            String sort
+    ) {
+        if (page < 0 || size < 1 || size > MAX_PAGE_SIZE
+                || (fromDate != null && toDate != null && fromDate.isAfter(toDate))
+                || (sort != null && !sort.equals("startDate"))) {
+            throw new PerformanceException(ErrorCode.VALIDATION_ERROR);
+        }
+
+        String normalizedKeyword = StringUtils.hasText(keyword) ? keyword.trim() : "";
+        String normalizedGenreCode = StringUtils.hasText(genreCode) ? genreCode.trim() : null;
+        LocalDate searchFromDate = fromDate != null ? fromDate : LocalDate.of(1, 1, 1);
+        LocalDate searchToDate = toDate != null ? toDate : LocalDate.of(9999, 12, 31);
+
+        Page<Performance> performances = performanceRepository.searchPublicPerformances(
+                PublicationStatus.PUBLISHED,
+                Visibility.PUBLIC,
+                normalizedKeyword,
+                normalizedGenreCode,
+                searchFromDate,
+                searchToDate,
+                PageRequest.of(page, size, Sort.by(
+                        Sort.Order.asc("startDate"),
+                        Sort.Order.asc("id")
+                ))
+        );
+
+        List<Long> performanceIds = performances.getContent().stream()
+                .map(Performance::getId)
+                .toList();
+
+        if (performanceIds.isEmpty()) {
+            return new PublicPerformancePageDTO(
+                    List.of(), page, size,
+                    performances.getTotalElements(),
+                    performances.getTotalPages()
+            );
+        }
+
+        List<PerformanceSession> sessions =
+                performanceSessionRepository.findByPerformanceIds(performanceIds);
+
+        List<Long> sessionIds = sessions.stream()
+                .map(PerformanceSession::getId)
+                .toList();
+
+        List<SessionGradePrice> prices = sessionIds.isEmpty()
+                ? List.of()
+                : sessionGradePriceRepository.findBySessions(sessionIds);
+
+        Map<Long, Long> sessionToPerformance = sessions.stream()
+                .collect(Collectors.toMap(
+                        PerformanceSession::getId,
+                        session -> session.getPerformance().getId()
+                ));
+
+        Map<Long, Long> minPrices = prices.stream()
+                .collect(Collectors.groupingBy(
+                        price -> sessionToPerformance.get(price.getId().getSessionId()),
+                        Collectors.collectingAndThen(
+                                Collectors.minBy(Comparator.comparingLong(SessionGradePrice::getPrice)),
+                                optional -> optional.orElseThrow().getPrice()
+                        )
+                ));
+
+        Instant now = Instant.now();
+
+        Map<Long, OffsetDateTime> nextOpenings =
+                saleOpeningRepository.findByPerformanceIds(performanceIds).stream()
+                        .filter(opening -> opening.getOpensAt().isAfter(now))
+                        .collect(Collectors.groupingBy(
+                                opening -> opening.getPerformance().getId(),
+                                Collectors.collectingAndThen(
+                                        Collectors.minBy(Comparator.comparing(SaleOpening::getOpensAt)),
+                                        optional -> toOffsetDateTime(optional.orElseThrow().getOpensAt())
+                                )
+                        ));
+
+        List<PublicPerformanceSummaryDTO> items = performances.getContent().stream()
+                .map(performance -> {
+                    Long minPrice = minPrices.get(performance.getId());
+
+                    if (minPrice == null) {
+                        throw new PerformanceException(ErrorCode.RESOURCE_NOT_FOUND);
+                    }
+
+                    return new PublicPerformanceSummaryDTO(
+                            performance.getId().toString(),
+                            performance.getTitle(),
+                            performance.getGenre().getCode(),
+                            performance.getVenueName(),
+                            performance.getPosterUrl(),
+                            performance.getStartDate(),
+                            performance.getEndDate(),
+                            minPrice,
+                            performance.getSalesStatus().name(),
+                            nextOpenings.get(performance.getId())
+                    );
+                })
+                .toList();
+
+        return new PublicPerformancePageDTO(
+                items,
+                performances.getNumber(),
+                performances.getSize(),
+                performances.getTotalElements(),
+                performances.getTotalPages()
+        );
+    }
     /**
      * 일반 사용자용 공개 공연 상세 조회
      */
