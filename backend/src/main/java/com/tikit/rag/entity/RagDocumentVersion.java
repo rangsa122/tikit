@@ -59,6 +59,13 @@ public class RagDocumentVersion {
         indexStatus = RagIndexStatus.RUNNING;
     }
 
+    public void completeIndexing() {
+        if (indexStatus != RagIndexStatus.RUNNING) {
+            throw new IllegalStateException("실행 중인 문서 버전만 완료할 수 있습니다.");
+        }
+        indexStatus = RagIndexStatus.READY;
+    }
+
     public void failIndexing() {
         if (indexStatus != RagIndexStatus.RUNNING) {
             throw new IllegalStateException("실행 중인 문서 버전만 실패 처리할 수 있습니다.");

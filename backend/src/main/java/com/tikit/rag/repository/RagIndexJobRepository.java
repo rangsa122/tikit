@@ -8,9 +8,16 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 
 public interface RagIndexJobRepository
         extends JpaRepository<RagIndexJob, Long> {
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select j from RagIndexJob j where j.id = :id")
+    Optional<RagIndexJob> findForUpdate(@Param("id") Long id);
 
     @Query("""
             select j.id from RagIndexJob j

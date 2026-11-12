@@ -112,6 +112,15 @@ class RagConfigurationTest {
     }
 
     @Test
+    void enabledWorkerWithDefaultProcessorStartsWithoutCallingModels() {
+        runner.withPropertyValues("rag.indexing.enabled=true")
+                .withUserConfiguration(DefaultRagIndexProcessor.class)
+                .withBean(RagIndexCompletionService.class, () -> mock(RagIndexCompletionService.class))
+                .run(context -> assertThat(context).hasNotFailed()
+                        .hasSingleBean(RagIndexProcessor.class).hasSingleBean(RagIndexWorker.class));
+    }
+
+    @Test
     void bindsOllamaDefaultsWithoutCallingServer() {
         runner.run(context -> {
             assertThat(context).hasNotFailed().hasSingleBean(OllamaEmbeddingClient.class);

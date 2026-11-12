@@ -52,6 +52,18 @@ public class RagIndexJob {
 
     @Column(name = "completed_at")
     private Instant completedAt;
+
+    public void succeed(String owner, Instant completedAt) {
+        if (status != RagIndexJobStatus.RUNNING || !Objects.equals(leaseOwner, owner)) {
+            throw new IllegalStateException("선점한 워커만 실행 중인 작업을 완료할 수 있습니다.");
+        }
+        this.completedAt = Objects.requireNonNull(completedAt, "완료 시각은 필수입니다.");
+        status = RagIndexJobStatus.SUCCEEDED;
+        failureCode = null;
+        leaseOwner = null;
+        leaseUntil = null;
+    }
+
     public void fail(String owner, String code, Instant completedAt) {
         if (status != RagIndexJobStatus.RUNNING || !Objects.equals(leaseOwner, owner)) {
             throw new IllegalStateException("선점한 워커만 실행 중인 작업을 실패 처리할 수 있습니다.");

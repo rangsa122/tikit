@@ -37,12 +37,12 @@ public class RagIndexJobService {
                 new RagDocumentVersionId(job.getDocumentId(), job.getDocumentVersion())).orElseThrow();
         version.startIndexing(embedding.model(), embedding.dimensions());
         return Optional.of(new RagIndexTask(job.getId(), job.getDocumentId(), job.getDocumentVersion(),
-                version.getContent(), embedding.model(), embedding.dimensions()));
+                version.getContent(), embedding.model(), embedding.dimensions(), owner));
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void fail(Long jobId, String owner) {
-        var job = jobRepository.findById(jobId).orElseThrow();
+        var job = jobRepository.findForUpdate(jobId).orElseThrow();
         var version = versionRepository.findById(
                 new RagDocumentVersionId(job.getDocumentId(), job.getDocumentVersion())).orElseThrow();
         job.fail(owner, "INDEX_PROCESSING_FAILED", Instant.now());
