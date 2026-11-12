@@ -75,6 +75,18 @@ public class RagIndexJob {
         leaseUntil = null;
     }
 
+    public void requeueFailed() {
+        if (status != RagIndexJobStatus.FAILED) {
+            throw new IllegalStateException("실패한 작업만 재처리할 수 있습니다.");
+        }
+        status = RagIndexJobStatus.QUEUED;
+        failureCode = null;
+        completedAt = null;
+        leaseOwner = null;
+        leaseUntil = null;
+        // attemptCount는 다음 선점 시 증가시켜 이전 시도의 결과와 구분한다.
+    }
+
 //필수 아이디와 버전을 확인한 뒤 큐,attemptCount=0으로 초기화한다
     public static RagIndexJob createQueued(
             Long documentId,

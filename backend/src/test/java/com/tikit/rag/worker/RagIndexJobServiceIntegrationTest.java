@@ -140,9 +140,11 @@ class RagIndexJobServiceIntegrationTest {
             var document = documents.findById(task.documentId()).orElseThrow();
             org.springframework.test.util.ReflectionTestUtils.setField(document, "activeVersion", 1);
         });
-        assertThatThrownBy(() -> service.fail(id, "other")).isInstanceOf(IllegalStateException.class);
+        var other = new RagIndexTask(task.jobId(), task.documentId(), task.documentVersion(), task.content(),
+                task.embeddingModel(), task.embeddingDimensions(), "other", task.attemptCount());
+        assertThatThrownBy(() -> service.fail(other)).isInstanceOf(IllegalStateException.class);
         assertThat(jobs.findById(id).orElseThrow().getStatus()).isEqualTo(RagIndexJobStatus.RUNNING);
-        service.fail(id, "worker");
+        service.fail(task);
         var job = jobs.findById(id).orElseThrow();
         assertThat(job.getStatus()).isEqualTo(RagIndexJobStatus.FAILED);
         assertThat(job.getFailureCode()).isEqualTo("INDEX_PROCESSING_FAILED");

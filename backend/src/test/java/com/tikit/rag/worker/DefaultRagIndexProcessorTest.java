@@ -16,7 +16,7 @@ class DefaultRagIndexProcessorTest {
     private final RagIndexCompletionService completion = mock(RagIndexCompletionService.class);
     private final RagChunkSplitter splitter = new RagChunkSplitter(new RagChunkingProperties(3, 0));
     private final DefaultRagIndexProcessor processor = new DefaultRagIndexProcessor(splitter, embedding, completion);
-    private final RagIndexTask task = new RagIndexTask(1L, 2L, 1, "가나다라마", "Qwen/Qwen3-Embedding-8B", 4096, "owner");
+    private final RagIndexTask task = new RagIndexTask(1L, 2L, 1, "가나다라마", "Qwen/Qwen3-Embedding-8B", 4096, "owner", 1);
 
     @Test
     void passesOrderedChunksAndEmbeddingsToCompletion() {

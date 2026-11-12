@@ -33,7 +33,8 @@ public class RagIndexCompletionService {
         if (job.getStatus() == RagIndexJobStatus.SUCCEEDED) {
             return;
         }
-        if (job.getStatus() != RagIndexJobStatus.RUNNING || !Objects.equals(job.getLeaseOwner(), task.owner())) {
+        if (job.getStatus() != RagIndexJobStatus.RUNNING || !Objects.equals(job.getLeaseOwner(), task.owner())
+                || job.getAttemptCount() != task.attemptCount()) {
             throw new IllegalStateException("선점한 워커만 실행 중인 작업을 완료할 수 있습니다.");
         }
         var document = entityManager.find(RagDocument.class, task.documentId(), LockModeType.PESSIMISTIC_WRITE);

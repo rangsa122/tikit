@@ -1,9 +1,12 @@
 package com.tikit.rag.worker;
 
 import com.tikit.rag.config.RagEmbeddingProperties;
+import com.tikit.rag.entity.RagDocumentVersion;
 import com.tikit.rag.entity.RagDocumentVersionId;
 import com.tikit.rag.repository.RagDocumentVersionRepository;
 import com.tikit.rag.repository.RagIndexJobRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -20,6 +23,7 @@ public class RagIndexJobService {
     private final RagIndexJobRepository jobRepository;
     private final RagDocumentVersionRepository versionRepository;
     private final RagEmbeddingProperties embedding;
+    private final EntityManager entityManager;
 
     @Transactional(readOnly = true)
     public List<Long> findQueuedJobIds(int batchSize) {
@@ -37,15 +41,28 @@ public class RagIndexJobService {
                 new RagDocumentVersionId(job.getDocumentId(), job.getDocumentVersion())).orElseThrow();
         version.startIndexing(embedding.model(), embedding.dimensions());
         return Optional.of(new RagIndexTask(job.getId(), job.getDocumentId(), job.getDocumentVersion(),
-                version.getContent(), embedding.model(), embedding.dimensions(), owner));
+                version.getContent(), embedding.model(), embedding.dimensions(), owner, job.getAttemptCount()));
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void fail(Long jobId, String owner) {
-        var job = jobRepository.findForUpdate(jobId).orElseThrow();
+    public void fail(RagIndexTask task) {
+        var job = jobRepository.findForUpdate(task.jobId()).orElseThrow();
+        if (job.getAttemptCount() != task.attemptCount()) {
+            throw new IllegalStateException("이전 시도의 실패 결과는 반영할 수 없습니다.");
+        }
         var version = versionRepository.findById(
                 new RagDocumentVersionId(job.getDocumentId(), job.getDocumentVersion())).orElseThrow();
-        job.fail(owner, "INDEX_PROCESSING_FAILED", Instant.now());
+        job.fail(task.owner(), "INDEX_PROCESSING_FAILED", Instant.now());
         version.failIndexing();
+    }
+
+    /** 자동 재시도가 아닌 명시적인 재처리 요청이다. 기존 청크와 활성 버전은 유지한다. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void requeueFailed(Long jobId) {
+        var job = jobRepository.findForUpdate(jobId).orElseThrow();
+        var version = entityManager.find(RagDocumentVersion.class,
+                new RagDocumentVersionId(job.getDocumentId(), job.getDocumentVersion()), LockModeType.PESSIMISTIC_WRITE);
+        job.requeueFailed();
+        version.queueForRetry();
     }
 }

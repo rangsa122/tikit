@@ -37,7 +37,7 @@ public class RagIndexWorker {
                 } catch (Exception e) {
                     // API 응답/본문/키를 로그나 실패 정보에 노출하지 않는다.
                     log.warn("RAG 인덱싱 처리 실패: jobId={}, exception={}", jobId, e.getClass().getSimpleName());
-                    jobs.fail(jobId, owner);
+                    jobs.fail(task.get());
                 }
             } catch (Exception e) {
                 log.error("RAG 인덱싱 상태 처리 실패: jobId={}, exception={}", jobId, e.getClass().getSimpleName());

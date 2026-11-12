@@ -4,6 +4,7 @@ import com.tikit.rag.chunking.RagChunkSplitter;
 import com.tikit.rag.config.RagChunkingProperties;
 import com.tikit.rag.config.RagIndexingProperties;
 import com.tikit.rag.embedding.OllamaEmbeddingClient;
+import com.tikit.rag.exception.RagEmbeddingException;
 import com.tikit.rag.entity.*;
 import com.tikit.rag.repository.*;
 import org.junit.jupiter.api.*;
@@ -41,6 +42,7 @@ class RagIndexCompletionIntegrationTest {
     @Autowired RagDocumentRepository documents;
     @Autowired RagDocumentVersionRepository versions;
     @Autowired RagChunkSplitter splitter;
+    @Autowired RagChunkRepository chunkRepository;
     @Autowired OllamaEmbeddingClient embedding;
     @Autowired JdbcTemplate jdbc;
     @Autowired JpaTransactionManager transactionManager;
@@ -120,7 +122,7 @@ class RagIndexCompletionIntegrationTest {
     void rejectsCompletionByAnotherWorker() {
         var task = claim("가나다", false);
         var other = new RagIndexTask(task.jobId(), task.documentId(), task.documentVersion(), task.content(),
-                task.embeddingModel(), task.embeddingDimensions(), "another-worker");
+                task.embeddingModel(), task.embeddingDimensions(), "another-worker", task.attemptCount());
         assertThatThrownBy(() -> completion.complete(other, splitter.split(task.content()), vectors(1)))
                 .isInstanceOf(IllegalStateException.class);
         assertNotCompleted(task, null);
@@ -196,6 +198,177 @@ class RagIndexCompletionIntegrationTest {
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> processor.process(task));
         assertThat(jobRepository.findById(task.jobId()).orElseThrow().getStatus()).isEqualTo(RagIndexJobStatus.SUCCEEDED);
         verify(embedding).embed(List.of("가나다"));
+    }
+
+    @Test
+    void retriesFailedJobAndReplacesRemainingChunksWithoutTouchingOtherVersionsOrDocuments() {
+        var task = claim("가나다라마바", true);
+        seedChunks(task.documentId(), 1, "이전청크");
+        seedChunks(task.documentId(), 2, "남은청크가세개있음");
+        var unrelated = claim("다른문서", false);
+        seedChunks(unrelated.documentId(), 1, "다른청크");
+        var previous = storedChunks(task.documentId(), 1);
+        var otherDocument = storedChunks(unrelated.documentId(), 1);
+        jobs.fail(task);
+        jobs.requeueFailed(task.jobId());
+        var queued = jobRepository.findById(task.jobId()).orElseThrow();
+        assertThat(queued.getStatus()).isEqualTo(RagIndexJobStatus.QUEUED);
+        assertThat(queued.getAttemptCount()).isEqualTo(1);
+        assertThat(queued.getFailureCode()).isNull();
+        assertThat(queued.getCompletedAt()).isNull();
+        assertThat(version(task).getIndexStatus()).isEqualTo(RagIndexStatus.QUEUED);
+        assertThat(documents.findById(task.documentId()).orElseThrow().getActiveVersion()).isEqualTo(1);
+
+        var retry = jobs.claim(task.jobId(), "retry-worker").orElseThrow();
+        assertThat(retry.attemptCount()).isEqualTo(2);
+        processor.process(retry);
+        assertThat(jdbc.queryForList("select content from rag_chunks where document_id = ? and document_version = 2 order by chunk_order",
+                String.class, task.documentId())).containsExactly("가나다", "라마바");
+        assertThat(storedChunks(task.documentId(), 1)).isEqualTo(previous);
+        assertThat(storedChunks(unrelated.documentId(), 1)).isEqualTo(otherDocument);
+        assertThat(documents.findById(task.documentId()).orElseThrow().getActiveVersion()).isEqualTo(2);
+        assertThat(jobRepository.findById(task.jobId()).orElseThrow().getStatus()).isEqualTo(RagIndexJobStatus.SUCCEEDED);
+        assertThat(jdbc.queryForObject("""
+                select count(*) from (
+                    select document_id, document_version, chunk_order from rag_chunks
+                    group by document_id, document_version, chunk_order having count(*) > 1
+                ) duplicates
+                """, Long.class)).isZero();
+    }
+
+    @Test
+    void retryStorageFailureRestoresExistingChunksAndKeepsPreviousActiveVersion() {
+        var task = claim("정상문실패문", true);
+        seedChunks(task.documentId(), 1, "활성청크");
+        seedChunks(task.documentId(), 2, "복원할청크");
+        var active = storedChunks(task.documentId(), 1);
+        var remaining = storedChunks(task.documentId(), 2);
+        jobs.fail(task);
+        jobs.requeueFailed(task.jobId());
+        jdbc.execute("alter table rag_chunks add constraint reject_retry_chunk check (content <> '실패문')");
+        try {
+            new RagIndexWorker(jobs, processor, new RagIndexingProperties(true, 10, 5000)).poll();
+            assertThat(storedChunks(task.documentId(), 1)).isEqualTo(active);
+            assertThat(storedChunks(task.documentId(), 2)).isEqualTo(remaining);
+            assertThat(version(task).getIndexStatus()).isEqualTo(RagIndexStatus.FAILED);
+            assertThat(documents.findById(task.documentId()).orElseThrow().getActiveVersion()).isEqualTo(1);
+            var failed = jobRepository.findById(task.jobId()).orElseThrow();
+            assertThat(failed.getStatus()).isEqualTo(RagIndexJobStatus.FAILED);
+            assertThat(failed.getAttemptCount()).isEqualTo(2);
+            assertThat(failed.getFailureCode()).isEqualTo("INDEX_PROCESSING_FAILED");
+        } finally {
+            jdbc.execute("alter table rag_chunks drop constraint reject_retry_chunk");
+        }
+        jobs.requeueFailed(task.jobId());
+        var thirdAttempt = jobs.claim(task.jobId(), "worker").orElseThrow();
+        processor.process(thirdAttempt);
+        assertThat(thirdAttempt.attemptCount()).isEqualTo(3);
+        assertThat(storedChunks(task.documentId(), 2)).hasSize(2);
+        assertThat(storedChunks(task.documentId(), 1)).isEqualTo(active);
+    }
+
+    @Test
+    void rejectsLateSuccessAndFailureFromPreviousAttemptEvenWithTheSameWorkerOwner() {
+        var old = claim("가나다라마바", false);
+        jobs.fail(old);
+        jobs.requeueFailed(old.jobId());
+        var retry = jobs.claim(old.jobId(), old.owner()).orElseThrow();
+        assertThatThrownBy(() -> processor.process(old)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> jobs.fail(old)).isInstanceOf(IllegalStateException.class);
+        assertNotCompleted(retry, null);
+        processor.process(retry);
+        assertThat(version(retry).getIndexStatus()).isEqualTo(RagIndexStatus.READY);
+        var ids = storedChunks(retry.documentId(), 1);
+        assertThatThrownBy(() -> jobs.fail(old)).isInstanceOf(IllegalStateException.class);
+        assertThat(storedChunks(retry.documentId(), 1)).isEqualTo(ids);
+        assertThat(jobRepository.findById(retry.jobId()).orElseThrow().getStatus()).isEqualTo(RagIndexJobStatus.SUCCEEDED);
+    }
+
+    @Test
+    void onlyOneWorkerClaimsRequeuedJobAndStoresChunks() throws Exception {
+        var old = claim("가나다라마바", false);
+        jobs.fail(old);
+        jobs.requeueFailed(old.jobId());
+        var start = new CountDownLatch(1);
+        var claims = new ArrayList<RagIndexTask>();
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var first = executor.submit(() -> { start.await(); return jobs.claim(old.jobId(), "first"); });
+            var second = executor.submit(() -> { start.await(); return jobs.claim(old.jobId(), "second"); });
+            start.countDown();
+            first.get(15, TimeUnit.SECONDS).ifPresent(claims::add);
+            second.get(15, TimeUnit.SECONDS).ifPresent(claims::add);
+        }
+        assertThat(claims).hasSize(1);
+        assertThat(claims.getFirst().attemptCount()).isEqualTo(2);
+        processor.process(claims.getFirst());
+        assertThat(storedChunks(old.documentId(), 1)).hasSize(2);
+    }
+
+    @Test
+    void embeddingFailureDoesNotSaveChunksAndDoesNotStopNextJob() {
+        Long failedId = createJob("가나다", true);
+        Long successId = createJob("라마바", false);
+        when(embedding.embed(List.of("가나다"))).thenThrow(new RagEmbeddingException("모델 오류"));
+        new RagIndexWorker(jobs, processor, new RagIndexingProperties(true, 10, 5000)).poll();
+        var failed = jobRepository.findById(failedId).orElseThrow();
+        assertThat(failed.getStatus()).isEqualTo(RagIndexJobStatus.FAILED);
+        assertThat(failed.getFailureCode()).isEqualTo("INDEX_PROCESSING_FAILED");
+        assertThat(storedChunks(failed.getDocumentId(), 2)).isEmpty();
+        assertThat(versions.findById(new RagDocumentVersionId(failed.getDocumentId(), 2)).orElseThrow().getIndexStatus())
+                .isEqualTo(RagIndexStatus.FAILED);
+        assertThat(documents.findById(failed.getDocumentId()).orElseThrow().getActiveVersion()).isEqualTo(1);
+        assertThat(jobRepository.findById(successId).orElseThrow().getStatus()).isEqualTo(RagIndexJobStatus.SUCCEEDED);
+
+        reset(embedding);
+        when(embedding.embed(anyList())).thenReturn(vectors(1));
+        jobs.requeueFailed(failedId);
+        new RagIndexWorker(jobs, processor, new RagIndexingProperties(true, 10, 5000)).poll();
+        assertThat(jobRepository.findById(failedId).orElseThrow().getStatus()).isEqualTo(RagIndexJobStatus.SUCCEEDED);
+        assertThat(storedChunks(failed.getDocumentId(), 2)).hasSize(1);
+    }
+
+    @Test
+    void rejectsRequeueOfQueuedRunningOrSuccessfulJobs() {
+        Long id = createJob("가나다", false);
+        assertThatThrownBy(() -> jobs.requeueFailed(id)).isInstanceOf(IllegalStateException.class);
+        assertThat(jobRepository.findById(id).orElseThrow().getStatus()).isEqualTo(RagIndexJobStatus.QUEUED);
+        var task = jobs.claim(id, "worker").orElseThrow();
+        assertThatThrownBy(() -> jobs.requeueFailed(id)).isInstanceOf(IllegalStateException.class);
+        assertNotCompleted(task, null);
+        processor.process(task);
+        var saved = storedChunks(task.documentId(), 1);
+        assertThatThrownBy(() -> jobs.requeueFailed(id)).isInstanceOf(IllegalStateException.class);
+        assertThat(storedChunks(task.documentId(), 1)).isEqualTo(saved);
+        assertThat(version(task).getIndexStatus()).isEqualTo(RagIndexStatus.READY);
+    }
+
+    @Test
+    void inconsistentVersionStateRollsBackRequeue() {
+        var task = claim("가나다", false);
+        jobs.fail(task);
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            var version = versions.findById(new RagDocumentVersionId(task.documentId(), 1)).orElseThrow();
+            version.startIndexing(task.embeddingModel(), task.embeddingDimensions());
+            version.completeIndexing();
+        });
+        assertThatThrownBy(() -> jobs.requeueFailed(task.jobId())).isInstanceOf(IllegalStateException.class);
+        var job = jobRepository.findById(task.jobId()).orElseThrow();
+        assertThat(job.getStatus()).isEqualTo(RagIndexJobStatus.FAILED);
+        assertThat(job.getFailureCode()).isEqualTo("INDEX_PROCESSING_FAILED");
+        assertThat(job.getCompletedAt()).isNotNull();
+    }
+
+    private void seedChunks(Long documentId, int number, String content) {
+        var texts = splitter.split(content);
+        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+                chunkRepository.replace(documentId, number, texts, vectors(texts.size())));
+    }
+
+    private List<java.util.Map<String, Object>> storedChunks(Long documentId, int number) {
+        return jdbc.queryForList("""
+                select id, chunk_order, content, embedding::text as embedding
+                from rag_chunks where document_id = ? and document_version = ? order by chunk_order
+                """, documentId, number);
     }
 
     private void assertNotCompleted(RagIndexTask task, Integer active) {

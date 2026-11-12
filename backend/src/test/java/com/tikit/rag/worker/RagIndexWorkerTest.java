@@ -3,12 +3,10 @@ package com.tikit.rag.worker;
 import com.tikit.rag.config.RagIndexingProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 import java.util.List;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -36,7 +34,7 @@ class RagIndexWorkerTest {
         worker.poll();
         verify(processor).process(task);
         verifyNoMoreInteractions(processor);
-        verify(jobs, never()).fail(anyLong(), anyString());
+        verify(jobs, never()).fail(any(RagIndexTask.class));
     }
 
     @Test
@@ -49,9 +47,7 @@ class RagIndexWorkerTest {
         when(jobs.claim(eq(2L), anyString())).thenReturn(Optional.of(second));
         doThrow(new IllegalStateException("API failure")).when(processor).process(first);
         worker.poll();
-        var owner = ArgumentCaptor.forClass(String.class);
-        verify(jobs).claim(eq(1L), owner.capture());
-        verify(jobs).fail(1L, owner.getValue());
+        verify(jobs).fail(first);
         verify(processor).process(second);
     }
 
@@ -63,10 +59,10 @@ class RagIndexWorkerTest {
         when(jobs.claim(eq(2L), anyString())).thenReturn(Optional.of(task(2L)));
         worker.poll();
         verify(processor).process(task(2L));
-        verify(jobs, never()).fail(anyLong(), anyString());
+        verify(jobs, never()).fail(any(RagIndexTask.class));
     }
 
     private RagIndexTask task(Long id) {
-        return new RagIndexTask(id, id, 1, "정책 본문", "Qwen/Qwen3-Embedding-8B", 4096, "worker");
+        return new RagIndexTask(id, id, 1, "정책 본문", "Qwen/Qwen3-Embedding-8B", 4096, "worker", 1);
     }
 }
