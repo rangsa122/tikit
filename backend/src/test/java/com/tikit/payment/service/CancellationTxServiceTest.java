@@ -5,6 +5,7 @@ import com.tikit.booking.entity.BookingStatus;
 import com.tikit.booking.service.BookingCancelService;
 import com.tikit.payment.entity.CancellationInitiatorRole;
 import com.tikit.common.ErrorCode;
+import com.tikit.common.job.BackgroundJobService;
 import com.tikit.payment.dto.request.CancellationCreateRequestDTO;
 import com.tikit.payment.entity.Cancellation;
 import com.tikit.payment.entity.CancellationStatus;
@@ -47,6 +48,7 @@ class CancellationTxServiceTest {
     private PaymentAttemptRepository paymentAttemptRepository;
     private CancellationRepository cancellationRepository;
     private BookingCancelService bookingCancelService;
+    private BackgroundJobService backgroundJobService;
     private CancellationTxService service;
     private Booking booking;
     private PaymentAttempt approved;
@@ -57,6 +59,7 @@ class CancellationTxServiceTest {
         paymentAttemptRepository = mock(PaymentAttemptRepository.class);
         cancellationRepository = mock(CancellationRepository.class);
         bookingCancelService = mock(BookingCancelService.class);
+        backgroundJobService = mock(BackgroundJobService.class);
         service = serviceAt(NOW);
 
         // 기본: 기한 전 확정 예매 + 승인된 결제 5만 원 + 진행 중 취소 없음 + 견적과 같은 요청
@@ -81,7 +84,7 @@ class CancellationTxServiceTest {
 
     private CancellationTxService serviceAt(Instant now) {
         return new CancellationTxService(paymentAttemptRepository, cancellationRepository, bookingCancelService,
-                Clock.fixed(now, ZoneOffset.UTC));
+                backgroundJobService, Clock.fixed(now, ZoneOffset.UTC));
     }
 
     @Test
