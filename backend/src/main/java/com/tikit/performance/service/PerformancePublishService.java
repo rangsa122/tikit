@@ -50,6 +50,7 @@ public class PerformancePublishService {
 
         Performance performance = performanceRepository.findById(performanceId)
                 .orElseThrow(() -> new PerformanceException(ErrorCode.RESOURCE_NOT_FOUND));
+        accessChecker.requireOwner(manager, performance);
 
         if (performance.getPublicationStatus() != PublicationStatus.DRAFT) {
             throw new PerformanceException(ErrorCode.PERFORMANCE_ALREADY_PUBLISHED);
@@ -75,11 +76,13 @@ public class PerformancePublishService {
      */
     @Transactional(readOnly = true)
     public PerformancePublicationResponseDTO getPublication(Long memberId, Long performanceId) {
-        accessChecker.requireViewer(memberId);
+        Member member = accessChecker.requireViewer(memberId);
 
-        return PerformancePublicationResponseDTO.from(
-                performanceRepository.findById(performanceId)
-                        .orElseThrow(() -> new PerformanceException(ErrorCode.RESOURCE_NOT_FOUND)));
+        Performance performance = performanceRepository.findById(performanceId)
+                .orElseThrow(() -> new PerformanceException(ErrorCode.RESOURCE_NOT_FOUND));
+        accessChecker.requireOwner(member, performance);
+
+        return PerformancePublicationResponseDTO.from(performance);
     }
 
     /**
