@@ -20,6 +20,7 @@ import java.util.UUID;
 
 /** PostgreSQL tests use a unique schema, never the application's existing tables. */
 @TestConfiguration(proxyBeanMethods = false)
+@PropertySource(value = "classpath:secrets.properties", ignoreResourceNotFound = true)
 @PropertySource("classpath:application-rag-test.properties")
 public class PostgresRagTestConfiguration {
 

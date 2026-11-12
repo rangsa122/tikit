@@ -8,6 +8,7 @@ import com.tikit.rag.support.PostgresRagTestConfiguration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.*;
 
 @SpringJUnitConfig(RagIndexJobServiceIntegrationTest.Config.class)
+@Tag("local-db")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class RagIndexJobServiceIntegrationTest {
     @Autowired RagIndexJobService service;

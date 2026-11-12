@@ -80,6 +80,18 @@ class AdminRagDocumentSecurityTest {
     }
 
     @Test
+    @DisplayName("공연 관리자의 JWT도 공통 정책 문서 API에서는 403을 반환한다")
+    void managerJwtReceives403ForAllThreeEndpoints() throws Exception {
+        String token = jwtProvider.generateAccessToken(member(Role.MANAGER));
+        for (var request : requests()) {
+            mvc.perform(request.header("Authorization", "Bearer " + token))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+        }
+        verifyNoInteractions(service);
+    }
+
+    @Test
     @DisplayName("관리자의 JWT로 문서를 등록하고 목록과 상세를 조회할 수 있다")
     void adminJwtCanCreateListAndReadDetail() throws Exception {
         var detail = new RagDocumentDetailResponse(1L, RagDocumentType.POLICY, "Policy", "Content",

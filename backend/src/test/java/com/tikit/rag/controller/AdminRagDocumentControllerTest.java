@@ -1,5 +1,6 @@
 package com.tikit.rag.controller;
 
+import com.tikit.common.advice.GlobalExceptionHandler;
 import com.tikit.rag.controller.advice.RagControllerAdvice;
 import com.tikit.rag.service.RagDocumentService;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,7 +26,7 @@ class AdminRagDocumentControllerTest {
     void setUp() {
         service = mock(RagDocumentService.class);
         mvc = MockMvcBuilders.standaloneSetup(new AdminRagDocumentController(service))
-                .setControllerAdvice(new RagControllerAdvice())
+                .setControllerAdvice(new RagControllerAdvice(), new GlobalExceptionHandler())
                 .build();
     }
 
@@ -59,6 +60,18 @@ class AdminRagDocumentControllerTest {
                         .content("{\"title\":\" \",\"content\":\"본문\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    @DisplayName("본문 누락이나 잘못된 JSON은 공통 오류 형식으로 400을 반환한다")
+    void rejectsMissingOrMalformedBody() throws Exception {
+        for (String body : new String[]{"", "{", "null"}) {
+            mvc.perform(post("/api/v1/admin/rag/documents")
+                            .contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        }
         verifyNoInteractions(service);
     }
 }
