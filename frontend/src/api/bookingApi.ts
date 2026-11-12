@@ -295,3 +295,39 @@ export async function createCancellation(
         throw error
     }
 }
+
+/**
+ * 전체 취소 처리 결과 조회
+ * GET /api/v1/cancellations/{cancellationId}
+ */
+export async function getCancellation(
+    cancellationId: number,
+): Promise<CancellationResponse> {
+    try {
+        // 취소 ID로 최신 처리 결과 조회
+        const response = await apiClient.get<ApiResponse<CancellationResponse>>(
+            `/api/v1/cancellations/${cancellationId}`,
+        )
+
+        // API 응답 검증
+        if (response.data.code !== 'SUCCESS' || !response.data.data) {
+            throw new BookingApiError(
+                response.data.code,
+                response.data.message || '취소 처리 결과를 불러오지 못했습니다.',
+            )
+        }
+
+        return response.data.data
+    } catch (error) {
+        if (axios.isAxiosError<ApiResponse<unknown>>(error)) {
+            const body = error.response?.data
+
+            throw new BookingApiError(
+                body?.code ?? 'NETWORK_ERROR',
+                body?.message ?? '취소 처리 결과를 조회하지 못했습니다.',
+            )
+        }
+
+        throw error
+    }
+}
