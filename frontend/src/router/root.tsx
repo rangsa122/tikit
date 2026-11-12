@@ -18,63 +18,72 @@ import PerformanceListPage from '../pages/manager/PerformanceListPage'
 import RoleRoute from '../components/auth/RoleRoute'
 import SalesConfigurationPage from '../pages/manager/SalesConfigurationPage'
 import KopisSearchPage from '../pages/manager/KopisSearchPage'
+import PerformanceEditPage from '../pages/manager/PerformanceEditPage'
 
 const router = createBrowserRouter([
-  {
-    element: <MainLayout />,
-    children: [
-      {
-        element: <AdminGuard />,
+    {
+        element: <MainLayout />,
         children: [
-          {path: '/admin/members', element: <AdminMembersPage />},
+            {
+                element: <AdminGuard />,
+                children: [
+                    {path: '/admin/members', element: <AdminMembersPage />},
+                ],
+            },
+            {path: '/', element: <HomePage />},
+            {path: '/categories/:categoryId', element: <CategoryPage />},
+            {path: '/performances/:performanceId', element: <PerformanceDetailPage />},
+            {path: '/login', element: <LoginPage />},
+            {path: '/signup', element: <SignupPage />},
+            {path: '/bookings/:bookingId/payment', element: <PaymentPage />},
+            {path: '/bookings/:bookingId/payment/success', element: <PaymentSuccessPage />},
+            {path: '/bookings/:bookingId/payment/fail', element: <PaymentFailPage />},
+            {
+                path: '/manager/performances',
+                element: (
+                    <RoleRoute roles={['MANAGER', 'ADMIN']}>
+                        <PerformanceListPage />
+                    </RoleRoute>
+                ),
+            },
+            {
+                path: '/manager/performances/new',
+                element: (
+                    <RoleRoute roles={['MANAGER']}>
+                        <PerformanceCreatePage />
+                    </RoleRoute>
+                ),
+            },
+            {
+                path: '/manager/performances/kopis',
+                element: (
+                    <RoleRoute roles={['MANAGER']}>
+                        <KopisSearchPage />
+                    </RoleRoute>
+                ),
+            },
+            {
+                path: '/manager/performances/:performanceId/sales-configuration',
+                element: (
+                    <RoleRoute roles={['MANAGER']}>
+                        <SalesConfigurationPage />
+                    </RoleRoute>
+                ),
+            },
+            {
+                path: '/manager/performances/:performanceId/edit',
+                element: (
+                    <RoleRoute roles={['MANAGER']}>
+                        <PerformanceEditPage />
+                    </RoleRoute>
+                ),
+            },
+            ...mypageRoutes,
         ],
-      },
-      {path: '/', element: <HomePage />},
-      {path: '/categories/:categoryId', element: <CategoryPage />},
-      {path: '/performances/:performanceId', element: <PerformanceDetailPage />},
-      {path: '/login', element: <LoginPage />},
-      {path: '/signup', element: <SignupPage />},
-      {path: '/bookings/:bookingId/payment', element: <PaymentPage />},
-      {path: '/bookings/:bookingId/payment/success', element: <PaymentSuccessPage />},
-      {path: '/bookings/:bookingId/payment/fail', element: <PaymentFailPage />},
-      {
-        path: '/manager/performances',
-        element: (
-          <RoleRoute roles={['MANAGER', 'ADMIN']}>
-            <PerformanceListPage />
-          </RoleRoute>
-        ),
-      },
-      {
-        path: '/manager/performances/new',
-        element: (
-          <RoleRoute roles={['MANAGER']}>
-            <PerformanceCreatePage />
-          </RoleRoute>
-        ),
-      },
-      {
-        path: '/manager/performances/kopis',
-        element: (
-          <RoleRoute roles={['MANAGER']}>
-            <KopisSearchPage />
-          </RoleRoute>
-        ),
-      },
-      {
-        path: '/manager/performances/:performanceId/sales-configuration',
-        element: (
-          <RoleRoute roles={['MANAGER']}>
-            <SalesConfigurationPage />
-          </RoleRoute>
-        ),
-      },
-      ...mypageRoutes,
-    ],
-  },
-  // 대기열과 좌석 선택은 전용 헤더를 사용
-  {path: '/sessions/:sessionId/queue', element: <QueuePage />},
-  {path: '/sessions/:sessionId/seats', element: <SeatSelectionPage />},
+    },
+    // 대기열과 좌석 선택은 전용 헤더를 사용
+    {path: '/sessions/:sessionId/queue', element: <QueuePage />},
+    {path: '/sessions/:sessionId/seats', element: <SeatSelectionPage />},
 ])
 
 export default router
