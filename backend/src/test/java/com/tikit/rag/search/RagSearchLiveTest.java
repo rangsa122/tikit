@@ -5,6 +5,7 @@ import com.tikit.rag.config.RagOllamaProperties;
 import com.tikit.rag.config.RagSearchProperties;
 import com.tikit.rag.dto.response.RagSearchMatch;
 import com.tikit.rag.embedding.OllamaEmbeddingClient;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.core.io.ClassPathResource;
@@ -21,6 +22,7 @@ import static org.assertj.core.api.SoftAssertions.assertSoftly;
 @EnabledIfEnvironmentVariable(named = "RAG_QA_LIVE_TEST", matches = "true")
 class RagSearchLiveTest {
     @Test
+    @DisplayName("실제 임베딩 모델로 대표 질문에 필요한 시제품 근거를 검색한다")
     void retrievesExpectedEvidenceForRepresentativeQuestions() throws Exception {
         var mapper = JsonMapper.builder().build();
         var baseUrl = System.getenv().getOrDefault("RAG_OLLAMA_BASE_URL", "http://localhost:11434");
@@ -31,7 +33,7 @@ class RagSearchLiveTest {
                 .requestFactory(factory).build(),
                 new RagOllamaProperties(URI.create(baseUrl), 5000, 180000, 8, 2048),
                 new RagEmbeddingProperties("Qwen/Qwen3-Embedding-8B", 4096, ""));
-        var service = new RagSearchService(client, new RagPrototypeChunkRepository(mapper),
+        var service = new RagPrototypeSearchService(client, new RagPrototypeChunkRepository(mapper),
                 new RagSearchProperties(true, 3, 0.5));
         try (var input = new ClassPathResource("rag/qa-prototype/questions.json").getInputStream()) {
             var questions = mapper.readTree(input).get("questions");

@@ -8,11 +8,11 @@ Push-Location -LiteralPath $projectRoot
 try {
     if (-not $SkipRun) {
         $env:RAG_QA_ANSWER_LIVE_TEST = 'true'
-        & .\gradlew.bat test --tests 'com.tikit.rag.generation.RagAnswerLiveTest' --rerun-tasks
+        & .\gradlew.bat localDbTest --tests 'com.tikit.rag.generation.RagAnswerLiveTest' --rerun-tasks
         if ($LASTEXITCODE -ne 0) { throw '실제 모델 검증에 실패했습니다. Gradle 테스트 결과를 확인해 주세요.' }
     }
 
-    $reportPath = Join-Path $projectRoot 'build/test-results/test/TEST-com.tikit.rag.generation.RagAnswerLiveTest.xml'
+    $reportPath = Join-Path $projectRoot 'build/test-results/localDbTest/TEST-com.tikit.rag.generation.RagAnswerLiveTest.xml'
     if (-not (Test-Path -LiteralPath $reportPath)) { throw '실모델 테스트 결과가 없습니다. -SkipRun 없이 실행해 주세요.' }
     [xml]$report = Get-Content -LiteralPath $reportPath -Raw -Encoding UTF8
     if ([int]$report.testsuite.failures -gt 0 -or [int]$report.testsuite.errors -gt 0 -or [int]$report.testsuite.skipped -gt 0) {
@@ -28,12 +28,8 @@ try {
     $lines.Add('')
     $lines.Add('테스트 실행 시각(UTC): ' + $report.testsuite.timestamp)
     $lines.Add('')
-    $lines.Add('로컬 Ollama의 실제 임베딩·답변 모델을 호출한 결과입니다. API 서버를 띄우지 않고 API가 사용하는 검색·답변 서비스를 직접 실행했습니다.')
+    $lines.Add('임시 PostgreSQL 스키마에 저장한 문서를 로컬 Ollama의 실제 임베딩·답변 모델로 검색하고 답변한 결과입니다. 정상 검색, 활성 버전 교체, 근거 없음을 검증하며 DB 검색 실패는 MockMvc로 HTTP 503을 확인합니다.')
     $lines.Add('')
-    if ($results.Count -gt 3) {
-        $lines.Add('마지막 복합 질문은 테스트에서만 검색 하한을 낮춰 후보를 강제로 검색한 사례입니다. 실제 API 기본 설정은 바꾸지 않았습니다.')
-        $lines.Add('')
-    }
     foreach ($result in $results) {
         $lines.Add('## ' + $result.question)
         $lines.Add('')
