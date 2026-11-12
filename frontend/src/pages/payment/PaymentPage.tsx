@@ -25,7 +25,7 @@ import {usePaymentCountdown} from '../../hooks/usePaymentCountdown'
 import type {PaymentCountdown} from '../../hooks/usePaymentCountdown'
 import {formatDateTime, formatSeat, formatSeatSummary, formatWon} from '../../utils/bookingFormat'
 
-type PaymentView = 'payment' | 'processing' | 'reconciling' | 'approved' | 'failed' | 'expired'
+type PaymentView = 'payment' | 'processing' | 'reconciling' | 'approved' | 'failed' | 'expired' | 'canceled'
 
 const URGENT_SECONDS = 60
 
@@ -53,6 +53,8 @@ export default function PaymentPage() {
     const {booking} = data
     const view = getPaymentView(booking, countdown.isExpired)
     const performancePath = `/performances/${booking.performanceId}`
+    // 전체 취소는 환불 성공 후에만 예매를 취소하므로, 취소된 예매에 취소 기록이 있으면 환불까지 끝난 상태
+    const isRefunded = booking.cancellationId !== null
 
     // 결제 준비(주문 번호·금액 발급) → 토스 결제창 열기
     // 결제창에서 인증이 끝나면 토스가 성공·실패 페이지로 이동시키므로 여기서 결제 완료를 판단하지 않음
@@ -168,21 +170,41 @@ export default function PaymentPage() {
                             <br />
                             다시 예매하려면 대기열부터 다시 참여해 주세요.
                         </StatusCard>
-                        <Card>
-                            <div className="flex items-center gap-4">
-                                <PosterPlaceholder className="h-[74px] w-14" />
-                                <div className="min-w-0">
-                                    <p className="truncate text-[15px] font-bold text-gray-900">{booking.performanceTitle}</p>
-                                    <p className="text-[13px] text-gray-500">{formatDateTime(booking.startsAt)}</p>
-                                    <p className="text-[13px] text-gray-700">{formatSeatSummary(booking.seats)}</p>
-                                </div>
-                            </div>
-                        </Card>
+                        <BookingSummaryCard booking={booking} />
                         <ButtonRow>
                             <Button variant="secondary" onClick={() => navigate(performancePath)}>
                                 공연 상세로
                             </Button>
                             <Button onClick={() => navigate(performancePath)}>다시 예매하기</Button>
+                        </ButtonRow>
+                    </CenterColumn>
+                )}
+
+                {view === 'canceled' && (
+                    <CenterColumn>
+                        <StatusCard icon={<CheckIcon />} title="예매가 취소됐어요">
+                            {isRefunded ? (
+                                <>
+                                    결제 금액 {formatWon(booking.totalAmount)}이 환불 처리됐어요.
+                                    <br />
+                                    카드사에 따라 실제 환불까지 며칠 걸릴 수 있어요.
+                                </>
+                            ) : (
+                                <>
+                                    결제 전에 취소된 예매예요.
+                                    <br />
+                                    선택했던 좌석은 해제됐어요.
+                                </>
+                            )}
+                        </StatusCard>
+                        <BookingSummaryCard booking={booking} />
+                        <ButtonRow>
+                            <Button variant="secondary" onClick={() => navigate(performancePath)}>
+                                공연 상세로
+                            </Button>
+                            <Button onClick={() => navigate(`/mypage/bookings/${booking.bookingId}`)}>
+                                예매 상세 보기
+                            </Button>
                         </ButtonRow>
                     </CenterColumn>
                 )}
@@ -194,10 +216,14 @@ export default function PaymentPage() {
 /**
  * 예매·결제 상태로 보여 줄 화면 결정
  *
+ * 취소된 예매는 결제 시도가 APPROVED로 남으므로 결제 상태보다 먼저 봄
  * 결제가 진행 중이면 기한보다 먼저 봄 (서버도 진행 중 검사를 기한 검사보다 먼저 함)
- * Y-06 전까지는 승인돼도 예매가 PENDING_PAYMENT라 paymentStatus로 완료 판단
  */
 function getPaymentView(booking: Booking, isTimeOver: boolean): PaymentView {
+    if (booking.status === 'CANCELED') {
+        return 'canceled'
+    }
+
     if (booking.paymentStatus === 'PROCESSING') {
         return 'processing'
     }
@@ -210,7 +236,7 @@ function getPaymentView(booking: Booking, isTimeOver: boolean): PaymentView {
         return 'approved'
     }
 
-    if (booking.status === 'EXPIRED' || booking.status === 'CANCELED' || isTimeOver) {
+    if (booking.status === 'EXPIRED' || isTimeOver) {
         return 'expired'
     }
 
@@ -236,7 +262,7 @@ function getPayErrorMessage(error: unknown): string {
 }
 
 function getTimerPill(view: PaymentView, countdown: PaymentCountdown): TimerPillProps | null {
-    if (view === 'approved') {
+    if (view === 'approved' || view === 'canceled') {
         return null
     }
 
@@ -262,6 +288,22 @@ function PageMessage({message, showHomeLink}: {message: string; showHomeLink?: b
                 </Link>
             )}
         </main>
+    )
+}
+
+// 시간 만료·취소 화면 공통 예매 요약 (포스터 자리, 공연명, 일시, 좌석)
+function BookingSummaryCard({booking}: {booking: Booking}) {
+    return (
+        <Card>
+            <div className="flex items-center gap-4">
+                <PosterPlaceholder className="h-[74px] w-14" />
+                <div className="min-w-0">
+                    <p className="truncate text-[15px] font-bold text-gray-900">{booking.performanceTitle}</p>
+                    <p className="text-[13px] text-gray-500">{formatDateTime(booking.startsAt)}</p>
+                    <p className="text-[13px] text-gray-700">{formatSeatSummary(booking.seats)}</p>
+                </div>
+            </div>
+        </Card>
     )
 }
 
