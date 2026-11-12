@@ -11,6 +11,7 @@ import {
     type CancellationQuote,
     createCancellation,
     type CancellationResponse,
+    BookingApiError,
 } from '../../api/bookingApi'
 import { getPerformanceDetail } from '../../api/performanceApi'
 import MyPageSidebar from './MyPageSidebar'
@@ -347,12 +348,22 @@ export default function BookingDetailPage() {
                 cancellationRequestRef.current = null
             }
         } catch (error) {
-            // 처리 결과가 불확실하므로 멱등키 유지
-            setCancelSubmitError(
-                error instanceof Error
-                    ? error.message
-                    : '취소 요청 결과를 확인하지 못했습니다.',
-            )
+            if (error instanceof BookingApiError && error.code === 'CANCELLATION_QUOTE_CHANGED') {
+                // 서버가 견적 변경을 확정한 경우 기존 멱등키 초기화
+                cancellationRequestRef.current = null
+
+                // 이전 견적으로 다시 요청하지 못하도록 초기화
+                setCancellationQuote(null)
+                setCancelSubmitError('')
+                setQuoteError('취소 견적이 변경되었습니다. 돌아가기를 누른 후 취소창을 다시 열어 최신 금액을 확인해 주세요.')
+            } else {
+                // 네트워크 오류 등 결과가 불확실한 경우 기존 키 유지
+                setCancelSubmitError(
+                    error instanceof Error
+                        ? error.message
+                        : '취소 요청 결과를 확인하지 못했습니다.',
+                )
+            }
         } finally {
             setIsCancelSubmitting(false)
         }
@@ -958,10 +969,7 @@ export default function BookingDetailPage() {
                                     (cancelResult !== null && (cancelResult.status !== 'FAILED' || !cancelResult.retryAllowed)) ||
 
                                     // 예매 상세 조회에서 진행 중인 취소가 확인된 경우
-                                    (booking?.cancellationStatus != null && booking.cancellationStatus !== 'FAILED') ||
-
-                                    // 이전 취소가 실패했지만 재시도 허용 여부를 모르는 경우
-                                    (booking?.cancellationStatus === 'FAILED' && !(cancelResult?.status === 'FAILED' && cancelResult.retryAllowed))
+                                    (booking?.cancellationStatus != null && booking.cancellationStatus !== 'FAILED')
                                 }
                                 className="flex-1 rounded-lg bg-[#4338CA] py-3 text-[14px] font-semibold text-white transition-colors enabled:hover:bg-[#372da8] disabled:cursor-not-allowed disabled:opacity-50"
                             >
