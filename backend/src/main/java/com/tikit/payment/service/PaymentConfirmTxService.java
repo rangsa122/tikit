@@ -7,6 +7,8 @@ import com.tikit.booking.entity.Booking;
 import com.tikit.booking.entity.BookingStatus;
 import com.tikit.booking.service.BookingConfirmService;
 import com.tikit.common.ErrorCode;
+import com.tikit.common.job.BackgroundJobService;
+import com.tikit.common.job.BackgroundJobType;
 import com.tikit.payment.dto.request.PaymentConfirmRequestDTO;
 import com.tikit.payment.entity.PaymentAttempt;
 import com.tikit.payment.entity.PaymentAttemptStatus;
@@ -26,6 +28,7 @@ public class PaymentConfirmTxService {
 
     private final PaymentAttemptRepository paymentAttemptRepository;
     private final BookingConfirmService bookingConfirmService;
+    private final BackgroundJobService backgroundJobService;
 
     // 승인 1차 트랜잭션: 회원 -> 예매 -> 결제 순으로 잠그고 검사한 뒤 PROCESSING 저장 (커밋 후 Toss 호출)
     @Transactional
@@ -95,7 +98,8 @@ public class PaymentConfirmTxService {
         // PROCESSING에 저장 (같은 결제의 다음 승인 요청은 이 상태를 보고 Toss를 다시 부르지 않음)
         attempt.startConfirmation(request.getPaymentKey(), now);
 
-        // TODO 복구 작업 저장
+        // 결과 확인 작업 예약 (같은 트랜잭션: Toss 호출 중 서버가 멈춰도 PROCESSING이 그대로 남지 않게 함)
+        backgroundJobService.schedule(BackgroundJobType.PAYMENT_RECONCILE, attempt.getId(), now);
 
         log.info("payment confirmation started: paymentAttemptId={}, bookingId={}", paymentAttemptId, bookingId);
 
