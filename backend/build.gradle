@@ -66,3 +66,10 @@ tasks.register('localDbTest', Test) {
 
 	shouldRunAfter tasks.named('test')
 }
+
+tasks.register('runRagPublicHost', JavaExec) {
+	group = 'application'
+	description = 'Run the authenticated RAG-only host without PostgreSQL or Redis'
+	classpath = sourceSets.main.runtimeClasspath
+	mainClass = 'com.tikit.rag.host.RagPublicHostMain'
+}
