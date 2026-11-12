@@ -38,6 +38,21 @@ export async function signup(request: SignupRequest) {
     return response.data;
 }
 
+interface EmailAvailabilityResponse {
+    code: string
+    message: string
+    data: { available: boolean }
+}
+
+export async function checkEmailAvailability(email: string) {
+    const response = await authClient.get<EmailAvailabilityResponse>(
+        `${AUTH_API_PREFIX}/email-availability`,
+        {params: {email}}
+    );
+
+    return response.data.data.available;
+}
+
 export async function logout() {
     await apiClient.post(`${AUTH_API_PREFIX}/logout`, {});
     useAuthStore.getState().clearTokens();

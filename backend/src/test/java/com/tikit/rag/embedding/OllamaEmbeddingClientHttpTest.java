@@ -7,6 +7,8 @@ import com.tikit.rag.exception.RagEmbeddingException;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.io.support.ResourcePropertySource;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
@@ -38,6 +40,7 @@ class OllamaEmbeddingClientHttpTest {
         server.start();
         try {
             new ApplicationContextRunner().withUserConfiguration(RagConfiguration.class, RagOllamaConfiguration.class)
+                    .withBean(ObjectMapper.class, () -> JsonMapper.builder().build())
                     .withInitializer(context -> {
                         try {
                             context.getEnvironment().getPropertySources()

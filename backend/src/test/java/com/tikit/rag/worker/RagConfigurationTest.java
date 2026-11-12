@@ -12,6 +12,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.io.support.ResourcePropertySource;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -24,6 +26,7 @@ class RagConfigurationTest {
             .withUserConfiguration(RagConfiguration.class, RagIndexWorker.class, RagChunkSplitter.class,
                     RagOllamaConfiguration.class)
             .withBean(RagIndexJobService.class, () -> mock(RagIndexJobService.class))
+            .withBean(ObjectMapper.class, () -> JsonMapper.builder().build())
             .withInitializer(context -> {
                 try {
                     // 운영 환경과 같이 개별 환경 설정이 공통 기본값보다 우선한다.

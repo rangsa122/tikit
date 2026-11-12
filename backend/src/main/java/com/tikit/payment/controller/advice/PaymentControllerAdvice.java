@@ -2,11 +2,9 @@ package com.tikit.payment.controller.advice;
 
 import com.tikit.common.ErrorCode;
 import com.tikit.common.dto.ResponseDTO;
-import com.tikit.payment.exception.PaymentNotFoundException;
-import com.tikit.payment.exception.TossApiException;
-import com.tikit.payment.exception.TossResultUnknownException;
-import com.tikit.payment.exception.TossUnavailableException;
+import com.tikit.payment.exception.*;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.coyote.Response;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -59,6 +57,19 @@ public class PaymentControllerAdvice {
         log.error("payment not found: {}", e.getMessage());
 
         ErrorCode errorCode = ErrorCode.RESOURCE_NOT_FOUND;
+
+        return ResponseEntity
+                .status(errorCode.getStatus())
+                .body(ResponseDTO.fail(
+                        errorCode
+                ));
+    }
+
+    @ExceptionHandler(PaymentException.class)
+    public ResponseEntity<ResponseDTO<Void>> handlePaymentException(PaymentException e) {
+        log.error("payment rule violated: code={}, {}", e.getErrorCode().name(), e.getMessage());
+
+        ErrorCode errorCode = e.getErrorCode();
 
         return ResponseEntity
                 .status(errorCode.getStatus())

@@ -1,0 +1,90 @@
+package com.tikit.admin.entity;
+
+import com.tikit.auth.entity.MemberStatus;
+import com.tikit.auth.entity.Role;
+import jakarta.persistence.*;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+import java.time.Instant;
+import java.util.Map;
+
+@Entity
+@Table(name = "audit_logs")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@EntityListeners(AuditingEntityListener.class)
+public class AuditLog {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "actor_member_id", nullable = false)
+    private Long actorMemberId;
+
+    @Column(nullable = false, length = 60)
+    private String action;
+
+    @Column(name = "target_type", nullable = false, length = 40)
+    private String targetType;
+
+    @Column(name = "target_id", nullable = false)
+    private Long targetId;
+
+    @Column(nullable = false, columnDefinition = "text")
+    private String reason;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "before_state")
+    private Map<String, String> beforeState;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "after_state")
+    private Map<String, String> afterState;
+
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    public static AuditLog memberRoleChange(Long actorId, Long memberId, String reason, Role before, Role after) {
+        AuditLog log = new AuditLog();
+        log.actorMemberId = actorId;
+        log.action = "MEMBER_ROLE_CHANGE";
+        log.targetType = "MEMBER";
+        log.targetId = memberId;
+        log.reason = reason.strip();
+        log.beforeState = Map.of("role", before.name());
+        log.afterState = Map.of("role", after.name());
+        return log;
+    }
+
+    public static AuditLog managerCreate(Long actorId, Long memberId) {
+        AuditLog log = new AuditLog();
+        log.actorMemberId = actorId;
+        log.action = "MANAGER_CREATE";
+        log.targetType = "MEMBER";
+        log.targetId = memberId;
+        log.reason = "ADMIN에 의한 MANAGER 계정 생성";
+        log.afterState = Map.of("role", Role.MANAGER.name(), "status", MemberStatus.ACTIVE.name());
+        return log;
+    }
+
+    public static AuditLog memberStatusChange(Long actorId, Long memberId, String reason,
+                                              MemberStatus before, MemberStatus after) {
+        AuditLog log = new AuditLog();
+        log.actorMemberId = actorId;
+        log.action = after == MemberStatus.SUSPENDED ? "MEMBER_SUSPEND" : "MEMBER_RESUME";
+        log.targetType = "MEMBER";
+        log.targetId = memberId;
+        log.reason = reason.strip();
+        log.beforeState = Map.of("status", before.name());
+        log.afterState = Map.of("status", after.name());
+        return log;
+    }
+}

@@ -1,5 +1,6 @@
 package com.tikit.payment.dto.response;
 
+import com.tikit.booking.entity.BookingStatus;
 import com.tikit.payment.entity.PaymentAttemptStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,7 +22,7 @@ public class PaymentAttemptResponseDTO {
     private Long amount;
     private String currency;
     private PaymentAttemptStatus status;
-    private String bookingStatus;
+    private BookingStatus bookingStatus;
     private OffsetDateTime expiresAt;
     private boolean retryAllowed;
     private String failureCode;

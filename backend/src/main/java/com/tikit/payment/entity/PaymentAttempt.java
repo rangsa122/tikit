@@ -74,4 +74,58 @@ public class PaymentAttempt {
 
         return attempt;
     }
+
+    public boolean isReady() {
+        return status == PaymentAttemptStatus.READY;
+    }
+
+    public boolean isApproved() {
+        return status == PaymentAttemptStatus.APPROVED;
+    }
+
+    // 승인 결과를 아직 모르는 상태 (처리 중 또는 결과 확인 중)
+    public boolean isInProgress() {
+        return status == PaymentAttemptStatus.PROCESSING || status == PaymentAttemptStatus.RECONCILING;
+    }
+
+    // 승인 요청 시작: READY -> PROCESSING (Toss 호출 전에 저장, 복구 작업이 조회할 paymentKey도 함께 저장)
+    public void startConfirmation(String paymentKey, Instant now) {
+        if (status != PaymentAttemptStatus.READY) {
+            throw new IllegalStateException(
+                    "READY 상태에서만 승인을 시작할 수 있습니다. status=" + status);
+        }
+        this.paymentKey = paymentKey;
+        this.confirmationRequestedAt = now;
+        this.status = PaymentAttemptStatus.PROCESSING;
+    }
+
+    // 승인 완료: PROCESSING, RECONCILING -> APPROVED
+    public void approve(Instant approvedAt) {
+        requireInProgress("승인 완료");
+        this.approvedAt = approvedAt;
+        this.status = PaymentAttemptStatus.APPROVED;
+    }
+
+    // 승인 실패 확정: PROCESSING, RECONCILING -> FAILED
+    public void fail(String failureCode) {
+        requireInProgress("승인 실패");
+        this.failureCode = failureCode;
+        this.status = PaymentAttemptStatus.FAILED;
+    }
+
+    // 결과 불명확: PROCESSING -> RECONCILING (Toss 응답 유실, 나중에 조회로 확정)
+    public void markReconciling() {
+        if (status != PaymentAttemptStatus.PROCESSING) {
+            throw new IllegalStateException(
+                    "PROCESSING 상태에서만 결과 확인 중으로 바꿀 수 있습니다. status=" + status);
+        }
+        this.status = PaymentAttemptStatus.RECONCILING;
+    }
+
+    private void requireInProgress(String action) {
+        if (!isInProgress()) {
+            throw new IllegalStateException(
+                    "처리 중 또는 결과 확인 중 상태에서만 " + action + "할 수 있습니다. status=" + status);
+        }
+    }
 }

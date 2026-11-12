@@ -1,5 +1,7 @@
 package com.tikit.auth.entity;
 
+import com.tikit.auth.exception.MemberStatusChangeException;
+import com.tikit.common.ErrorCode;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
@@ -73,9 +75,54 @@ public class Member {
         return member;
     }
 
+    public void changePasswordHash(String encodedPassword) {
+        if (encodedPassword == null || encodedPassword.isBlank()) {
+            throw new IllegalArgumentException("비밀번호 해시는 필수입니다.");
+        }
+        this.passwordHash = encodedPassword;
+    }
+
     // 회원 이름 변경
     public void changeName(String newName){
         this.name = newName;
+    }
+
+    // 전체 알림 수신 설정 변경
+    public void changeNotificationEnabled(boolean enabled) {
+        this.notificationEnabled = enabled;
+    }
+
+    public void changeRole(Role newRole) {
+        if (role == Role.ADMIN) {
+            throw new MemberStatusChangeException(ErrorCode.ADMIN_ACCOUNT_PROTECTED);
+        }
+        if (newRole != Role.MEMBER && newRole != Role.MANAGER) {
+            throw new MemberStatusChangeException(ErrorCode.VALIDATION_ERROR);
+        }
+        if (role == newRole || status != MemberStatus.ACTIVE) {
+            throw new MemberStatusChangeException(ErrorCode.STATE_CONFLICT);
+        }
+        role = newRole;
+    }
+
+    public void suspend() {
+        validateStatusChange(MemberStatus.ACTIVE);
+        this.status = MemberStatus.SUSPENDED;
+    }
+
+    public void resume() {
+        validateStatusChange(MemberStatus.SUSPENDED);
+        this.status = MemberStatus.ACTIVE;
+    }
+
+    private void validateStatusChange(MemberStatus expectedStatus) {
+        if (role == Role.ADMIN) {
+            throw new MemberStatusChangeException(ErrorCode.ADMIN_ACCOUNT_PROTECTED);
+        }
+
+        if (status != expectedStatus) {
+            throw new MemberStatusChangeException(ErrorCode.STATE_CONFLICT);
+        }
     }
 
 }
