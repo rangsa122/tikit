@@ -6,9 +6,11 @@ import {useAuthStore} from '../../stores/authStore'
 import myPageIcon from '../../assets/navigation/my-page.svg'
 import walletIcon from '../../assets/account/wallet.svg'
 import profileIcon from '../../assets/account/profile.svg'
+import {getAuthClaims} from '../../utils/authClaims'
 
 export default function AccountPopover() {
   const hasSession = useAuthStore(state => Boolean(state.tokens?.accessToken))
+  const isAdmin = useAuthStore(state => getAuthClaims(state.tokens?.accessToken)?.role === 'ADMIN')
   const [isOpen, setIsOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [message, setMessage] = useState('')
@@ -68,7 +70,7 @@ export default function AccountPopover() {
     setIsOpen(false)
 
     if (hasSession) {
-      navigate('/mypage')
+      navigate(isAdmin ? '/admin/members' : '/mypage')
     } else {
       navigate('/login')
     }
@@ -121,6 +123,7 @@ export default function AccountPopover() {
           <div className="px-3">
             <h2 className="text-xl leading-[normal] font-normal">계정</h2>
             <div className="flex flex-col gap-3 py-[18px]">
+              {isAdmin && <Link to="/admin/members" onClick={() => setIsOpen(false)} className="flex h-[42px] items-center justify-center border border-[#ddd] text-base">관리자 회원 관리</Link>}
               {hasSession && (
                 <button
                   type="button"
@@ -147,9 +150,9 @@ export default function AccountPopover() {
                 <img src={walletIcon} alt="" className="max-w-none shrink-0" />
                 예매
               </button>
-              <button type="button" onClick={handleAccountPage} title="프로필" className="flex items-center gap-1 whitespace-nowrap">
+              <button type="button" onClick={handleAccountPage} title={isAdmin ? '관리자 페이지' : '마이페이지'} className="flex items-center gap-1 whitespace-nowrap">
                 <img src={profileIcon} alt="" className="max-w-none shrink-0" />
-                프로필
+                {isAdmin ? '관리자 페이지' : '마이페이지'}
               </button>
             </div>
             {message && <p role="alert" className="mt-3 text-sm text-red-600">{message}</p>}

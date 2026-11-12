@@ -83,7 +83,7 @@ export default function LoginPage() {
             .then(res => {
                 setTokens(res.data)
                 setLoginForm(INIT_LOGIN_FORM);
-                navigate("/", {replace: true});
+                navigate('/', {replace: true});
             })
             .catch((err: unknown) => {
                 if (axios.isAxiosError<{ code: string, message: string }>(err)) {

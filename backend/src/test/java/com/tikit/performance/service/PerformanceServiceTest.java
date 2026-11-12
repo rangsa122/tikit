@@ -69,6 +69,23 @@ public class PerformanceServiceTest {
 
     private static final Long MEMBER_ID = 1L;
 
+    @Test
+    void demotedManagerCannotUsePerformanceManagementEvenWithExistingIdentity() {
+        Member formerManager = Member.create("former@example.com", "hash", "회원", Role.MANAGER);
+        formerManager.changeRole(Role.MEMBER);
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(formerManager));
+
+        assertThatThrownBy(() -> service.create(MEMBER_ID, null))
+                .isInstanceOfSatisfying(PerformanceException.class,
+                        error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.ACCESS_DENIED));
+        assertThatThrownBy(() -> service.update(MEMBER_ID, 10L, null))
+                .isInstanceOf(PerformanceException.class);
+        assertThatThrownBy(() -> service.list(MEMBER_ID, null, 0, 20))
+                .isInstanceOf(PerformanceException.class);
+        assertThatThrownBy(() -> service.get(MEMBER_ID, 10L))
+                .isInstanceOf(PerformanceException.class);
+        verifyNoInteractions(performanceRepository);
+    }
     private static final Long PERFORMANCE_ID = 10L;
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
