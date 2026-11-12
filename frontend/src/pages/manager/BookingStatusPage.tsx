@@ -33,7 +33,7 @@ function remaining(total:number, sold: number, held: number): number{
     return total - sold - held
 }
 
-function StartCard({label, value, hint}:{
+function StatCard({label, value, hint}:{
     label: string
     value: string
     hint?: string
@@ -122,21 +122,21 @@ export default function BookingStatusPage(){
             {!loading && !error && summary && status && (
                 <>
                     <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-                        <StartCard
+                        <StatCard
                             label="총 좌석"
                             value={formatNumber(summary.totalSeats)}
                         />
-                        <StartCard
+                        <StatCard
                             label="판매 좌석"
                             value={formatNumber(summary.soldSeats)}
                             hint={`판매율 ${sellRate(summary.soldSeats, summary.totalSeats)}%`}
                         />
-                        <StartCard
+                        <StatCard
                             label="선점 중"
                             value={formatNumber(summary.heldSeats)}
                             hint="결제 대기"
                         />
-                        <StartCard
+                        <StatCard
                             label="잔여 좌석"
                             value={formatNumber(
                                 remaining(
@@ -146,16 +146,16 @@ export default function BookingStatusPage(){
                                 ),
                             )}
                         />
-                        <StartCard
+                        <StatCard
                             label="예매 건수"
                             value={formatNumber(summary.bookingCount)}
                             hint="좌석 수가 아닌 주문 수"
                         />
-                        <StartCard
+                        <StatCard
                             label="취소 건수"
                             value={formatNumber(summary.canceledCount)}
                         />
-                        <StartCard
+                        <StatCard
                             label="매출"
                             value={formatMoney(summary.revenue)}
                             hint="취소 제외"
