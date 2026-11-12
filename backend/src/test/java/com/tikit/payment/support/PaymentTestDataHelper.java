@@ -7,6 +7,9 @@ import com.tikit.booking.entity.Booking;
 import com.tikit.booking.entity.BookingSeat;
 import com.tikit.booking.entity.BookingStatus;
 import com.tikit.booking.entity.Ticket;
+import com.tikit.payment.entity.Cancellation;
+import com.tikit.payment.entity.CancellationInitiatorRole;
+import com.tikit.payment.entity.CancellationStatus;
 import com.tikit.payment.entity.PaymentAttempt;
 import com.tikit.payment.entity.PaymentAttemptStatus;
 import com.tikit.performance.entity.*;
@@ -22,6 +25,7 @@ public class PaymentTestDataHelper {
 
     public static final String PERFORMANCE_TITLE = "테스트 공연";
     public static final String TEST_FAILURE_CODE = "TEST_FAILURE";
+    public static final String CANCELLATION_REASON = "테스트 취소 사유";
 
     private static final String SEAT_GRADE = "R";
     private static final String SEAT_LABEL = "A1";
@@ -120,6 +124,29 @@ public class PaymentTestDataHelper {
         entityManager.persist(attempt);
         entityManager.flush();
         return attempt.getId();
+    }
+
+    // 취소 생성 (요청자, 취소 주체, 상태 지정) -> 취소 ID
+    public Long createCancellation(Long paymentAttemptId, Long requestedBy, CancellationInitiatorRole initiatorRole,
+                                   CancellationStatus status, Long paidAmount) {
+        Cancellation cancellation = Cancellation.create(paymentAttemptId, requestedBy, initiatorRole,
+                CANCELLATION_REASON, paidAmount, 0L, "v1", UUID.randomUUID().toString());
+
+        if (status != CancellationStatus.REQUESTED) {
+            cancellation.startProcessing();
+        }
+
+        switch (status) {
+            case REQUESTED, PROCESSING -> {
+            }
+            case SUCCEEDED -> cancellation.succeed("test-cancel-tx-" + uniqueSuffix(), Instant.now());
+            case FAILED -> cancellation.fail(TEST_FAILURE_CODE);
+            case RECONCILING -> cancellation.markReconciling();
+        }
+
+        entityManager.persist(cancellation);
+        entityManager.flush();
+        return cancellation.getId();
     }
 
     // 좌석 1개 생성: 등급 가격 -> 템플릿 좌석 -> 회차 좌석 -> 예매 좌석 (외래키 순서)

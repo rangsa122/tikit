@@ -105,7 +105,7 @@ export default function BookingHistoryPage() {
 
                 <main className="min-w-0 flex-1">
 
-                    <div className="border-b border-[#ddd] pb-5">
+                    <div className="pb-2">
                         <h2 className="text-[26px] font-bold">
                             예매 내역
                         </h2>

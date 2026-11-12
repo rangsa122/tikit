@@ -30,6 +30,16 @@ public class CancellationQueryService {
     private final CancellationRepository cancellationRepository;
     private final Clock clock;
 
+    // 회원 본인의 취소 결과 조회 (없는 취소, 다른 회원의 취소는 모두 404)
+    public CancellationResponseDTO getOwnedCancellation(Long cancellationId, Long memberId) {
+        String detail = "cancellationId=" + cancellationId + ", memberId=" + memberId;
+
+        Long bookingId = cancellationRepository.findOwnedBookingId(cancellationId, memberId)
+                .orElseThrow(() -> new PaymentException(ErrorCode.RESOURCE_NOT_FOUND, detail));
+
+        return getCancellation(cancellationId, bookingId, memberId);
+    }
+
     public CancellationResponseDTO getCancellation(Long cancellationId, Long bookingId, Long memberId) {
         String detail = "cancellationId=" + cancellationId + ", bookingId=" + bookingId + ", memberId=" + memberId;
         Instant now = Instant.now(clock);
