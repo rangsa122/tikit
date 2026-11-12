@@ -290,6 +290,11 @@ export default function PerformanceListPage() {
                                     ) : (
                                         <>
                                             <ActionButton
+                                                onClick={() => navigate(`/manager/performances/${performance.performanceId}/booking-status`)}
+                                            >
+                                                예매 현황
+                                            </ActionButton>
+                                            <ActionButton
                                                 disabled={
                                                     actingId !== null ||
                                                     (performance.salesStatus === 'STOPPED' &&
