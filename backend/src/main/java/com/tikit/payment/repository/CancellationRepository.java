@@ -24,4 +24,18 @@ public interface CancellationRepository extends JpaRepository<Cancellation, Long
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT c FROM Cancellation c WHERE c.id = :id")
     Optional<Cancellation> findByIdForUpdate(@Param("id") Long id);
+
+    // 회원 본인 예매의 취소면 그 예매 ID를 조회 (취소 -> 결제 시도 -> 예매를 따라가 본인 확인)
+    @Query("""
+            SELECT pa.bookingId
+            FROM Cancellation c
+            JOIN PaymentAttempt pa ON pa.id = c.paymentAttemptId
+            JOIN Booking b ON b.id = pa.bookingId
+            WHERE c.id = :cancellationId
+              AND b.memberId = :memberId
+            """)
+    Optional<Long> findOwnedBookingId(
+            @Param("cancellationId") Long cancellationId,
+            @Param("memberId") Long memberId
+    );
 }

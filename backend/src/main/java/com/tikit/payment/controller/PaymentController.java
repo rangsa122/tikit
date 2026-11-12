@@ -11,6 +11,7 @@ import com.tikit.payment.service.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.coyote.Response;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -27,6 +28,7 @@ public class PaymentController {
     private final PaymentConfirmService paymentConfirmService;
     private final CancellationQuoteService cancellationQuoteService;
     private final CancellationService cancellationService;
+    private final CancellationQueryService cancellationQueryService;
 
     // 결제 준비 (새 결제 시도면 201, 기존 READY 결제 시도면 200)
     @PostMapping("/bookings/{bookingId}/payment-attempts")
@@ -118,5 +120,19 @@ public class PaymentController {
         return ResponseEntity
                 .status(HttpStatus.ACCEPTED)
                 .body(ResponseDTO.success("전체 취소 요청이 접수되었습니다.", result.response()));
+    }
+
+    // 전체 취소와 환불 결과 조회 (처리 중, 확인 중이어도 200, 진행 상태는 data.status)
+    @GetMapping("/cancellations/{cancellationId}")
+    public ResponseEntity<ResponseDTO<CancellationResponseDTO>> getCancellation(
+            @PathVariable Long cancellationId,
+            @AuthenticationPrincipal String accountId
+    ) {
+        CancellationResponseDTO response =
+                cancellationQueryService.getOwnedCancellation(cancellationId, Long.valueOf(accountId));
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(ResponseDTO.success("전체 취소 결과 조회 성공", response));
     }
 }
