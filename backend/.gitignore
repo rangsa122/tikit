@@ -60,3 +60,6 @@ replay_pid*
 !.env.example
 
 /src/main/resources/secrets.properties
+
+# Local documentation
+/docs/
