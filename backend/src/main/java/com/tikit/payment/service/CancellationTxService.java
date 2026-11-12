@@ -4,6 +4,8 @@ import com.tikit.booking.entity.Booking;
 import com.tikit.booking.entity.BookingStatus;
 import com.tikit.booking.service.BookingCancelService;
 import com.tikit.common.ErrorCode;
+import com.tikit.common.job.BackgroundJobService;
+import com.tikit.common.job.BackgroundJobType;
 import com.tikit.payment.dto.request.CancellationCreateRequestDTO;
 import com.tikit.payment.entity.Cancellation;
 import com.tikit.payment.entity.CancellationInitiatorRole;
@@ -36,6 +38,7 @@ public class CancellationTxService {
     private final PaymentAttemptRepository paymentAttemptRepository;
     private final CancellationRepository cancellationRepository;
     private final BookingCancelService bookingCancelService;
+    private final BackgroundJobService backgroundJobService;
     private final Clock clock;
 
     // 1차: 예매·결제 잠금 -> 취소 가능·견적 재검증 -> 취소 요청 저장(처리 중) -> 커밋
@@ -83,6 +86,9 @@ public class CancellationTxService {
                 request.getReason(), paidAmount, feeAmount, policy.getVersion(), UUID.randomUUID().toString());
         cancellation.startProcessing();
         cancellationRepository.save(cancellation);
+
+        // 8. 결과 확인 작업 예약 (같은 트랜잭션: Toss 취소 중 서버가 멈춰도 처리 중으로 남지 않게 함)
+        backgroundJobService.schedule(BackgroundJobType.CANCELLATION_RECONCILE, cancellation.getId(), now);
 
         log.info("cancellation started: {}, cancellationId={}, refundAmount={}", detail, cancellation.getId(), refundAmount);
 

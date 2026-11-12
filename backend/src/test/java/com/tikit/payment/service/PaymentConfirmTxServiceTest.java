@@ -2,6 +2,7 @@ package com.tikit.payment.service;
 
 import com.tikit.booking.entity.Booking;
 import com.tikit.booking.service.BookingConfirmService;
+import com.tikit.common.job.BackgroundJobService;
 import com.tikit.payment.entity.PaymentAttempt;
 import com.tikit.payment.entity.PaymentAttemptStatus;
 import com.tikit.payment.repository.PaymentAttemptRepository;
@@ -31,6 +32,7 @@ class PaymentConfirmTxServiceTest {
 
     private PaymentAttemptRepository paymentAttemptRepository;
     private BookingConfirmService bookingConfirmService;
+    private BackgroundJobService backgroundJobService;
     private PaymentConfirmTxService paymentConfirmTxService;
     private Booking booking;
     private PaymentAttempt attempt;
@@ -39,7 +41,9 @@ class PaymentConfirmTxServiceTest {
     void setup() {
         paymentAttemptRepository = mock(PaymentAttemptRepository.class);
         bookingConfirmService = mock(BookingConfirmService.class);
-        paymentConfirmTxService = new PaymentConfirmTxService(paymentAttemptRepository, bookingConfirmService);
+        backgroundJobService = mock(BackgroundJobService.class);
+        paymentConfirmTxService = new PaymentConfirmTxService(
+                paymentAttemptRepository, bookingConfirmService, backgroundJobService);
 
         booking = mock(Booking.class);
         attempt = mock(PaymentAttempt.class);
