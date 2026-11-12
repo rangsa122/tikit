@@ -154,3 +154,30 @@ export async function changeVisibility(
     return response.data.data
 }
 
+// 부분 수정. 보내지 않은 필드는 서버가 건드리지 않는다
+export interface PerformanceUpdateRequest {
+    expectedVersion: number
+    title?: string
+    genreCode?: string
+    venueName?: string
+    organizerName?: string
+    description?: string
+    posterUrl?: string
+    startDate?: string
+    endDate?: string
+    bookingLimitPerMember?: number
+}
+
+export async function updatePerformance(
+    performanceId: number,
+    request: PerformanceUpdateRequest,
+): Promise<ManagerPerformance> {
+    const response = await apiClient.patch<ApiResponse<ManagerPerformance>>(
+        `/api/v1/manager/performances/${performanceId}`,
+        request,
+    )
+    if (response.data.code !== 'SUCCESS' || !response.data.data) {
+        throw new Error(response.data.message || '공연을 수정하지 못했습니다')
+    }
+    return response.data.data
+}

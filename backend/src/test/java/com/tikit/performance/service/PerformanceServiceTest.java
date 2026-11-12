@@ -42,8 +42,6 @@ import java.util.List;
 import java.util.Optional;
 import com.tikit.performance.dto.PublicPerformanceSummaryDTO;
 import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
@@ -76,6 +74,23 @@ public class PerformanceServiceTest {
 
     private static final Long MEMBER_ID = 1L;
 
+    @Test
+    void demotedManagerCannotUsePerformanceManagementEvenWithExistingIdentity() {
+        Member formerManager = Member.create("former@example.com", "hash", "회원", Role.MANAGER);
+        formerManager.changeRole(Role.MEMBER);
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(formerManager));
+
+        assertThatThrownBy(() -> service.create(MEMBER_ID, null))
+                .isInstanceOfSatisfying(PerformanceException.class,
+                        error -> assertThat(error.getErrorCode()).isEqualTo(ErrorCode.ACCESS_DENIED));
+        assertThatThrownBy(() -> service.update(MEMBER_ID, 10L, null))
+                .isInstanceOf(PerformanceException.class);
+        assertThatThrownBy(() -> service.list(MEMBER_ID, null, 0, 20))
+                .isInstanceOf(PerformanceException.class);
+        assertThatThrownBy(() -> service.get(MEMBER_ID, 10L))
+                .isInstanceOf(PerformanceException.class);
+        verifyNoInteractions(performanceRepository);
+    }
     private static final Long PERFORMANCE_ID = 10L;
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
@@ -738,6 +753,7 @@ public class PerformanceServiceTest {
                 ErrorCode.ACCESS_DENIED);
         verify(performanceRepository, never()).flush();
     }
+
     // =====================================================
 // 이슈 #157 공개 공연 목록 조회 테스트
 // =====================================================

@@ -88,6 +88,12 @@ public class SecurityConfig {
                                         "/api/v1/sessions/*/seats"
                                 ).permitAll()
 
+                                // 장르 목록/카테고리 비로그인 사용자도 조회
+                                .requestMatchers(
+                                        HttpMethod.GET,
+                                        "/api/v1/genres"
+                                ).permitAll()
+
                                 // 일반 사용자용 공개 공연 상세 조회
                                 .requestMatchers(
                                         HttpMethod.GET,

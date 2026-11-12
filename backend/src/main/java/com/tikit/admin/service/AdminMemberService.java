@@ -1,6 +1,7 @@
 package com.tikit.admin.service;
 
 import com.tikit.admin.dto.request.AdminMemberSearchRequestDTO;
+import com.tikit.admin.dto.request.AdminMemberRoleChangeRequestDTO;
 import com.tikit.admin.dto.request.AdminMemberStatusChangeRequestDTO;
 import com.tikit.admin.dto.response.AdminMemberDetailResponseDTO;
 import com.tikit.admin.dto.response.AdminMemberListResponseDTO;
@@ -19,6 +20,8 @@ import com.tikit.common.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.List;
+
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +32,28 @@ public class AdminMemberService {
     private final AuditLogRepository auditLogRepository;
     private final RefreshTokenRepository refreshTokenRepository;
 
+    @Transactional
+    public AdminMemberSummaryResponseDTO changeRole(Long actorId, Long memberId,
+                                                    AdminMemberRoleChangeRequestDTO request) {
+        validateAdmin(actorId);
+        if (actorId.equals(memberId)) {
+            throw new MemberStatusChangeException(ErrorCode.ADMIN_ACCOUNT_PROTECTED);
+        }
+        if (request.role() != Role.MEMBER && request.role() != Role.MANAGER) {
+            throw new MemberStatusChangeException(ErrorCode.VALIDATION_ERROR);
+        }
+        Member member = memberRepository.findById(memberId).orElseThrow(AdminMemberNotFoundException::new);
+        if (!member.getVersion().equals(request.expectedVersion())) {
+            throw new MemberStatusChangeException(ErrorCode.VERSION_CONFLICT);
+        }
+        Role before = member.getRole();
+        member.changeRole(request.role());
+        // 회원 변경과 이력을 함께 flush하여 낙관적 잠금 충돌을 검사하고 최신 version을 응답합니다.
+        auditLogRepository.saveAndFlush(AuditLog.memberRoleChange(
+                actorId, memberId, request.reason(), before, member.getRole()));
+        return AdminMemberSummaryResponseDTO.from(member);
+    }
+
     public AdminMemberListResponseDTO getMembers(AdminMemberSearchRequestDTO request) {
         return AdminMemberListResponseDTO.from(memberRepository.findAll(
                 AdminMemberSpecifications.search(request.getKeyword(), request.getStatus(), request.getRole()),
@@ -37,22 +62,22 @@ public class AdminMemberService {
     }
 
     public AdminMemberDetailResponseDTO getMember(Long memberId) {
-        return memberRepository.findById(memberId)
-                .map(AdminMemberDetailResponseDTO::from)
-                .orElseThrow(AdminMemberNotFoundException::new);
+        Member member = memberRepository.findById(memberId).orElseThrow(AdminMemberNotFoundException::new);
+        AuditLog latestStatusChange = null;
+        if (member.getStatus() == MemberStatus.SUSPENDED) {
+            // 역할 변경 이력은 제외하고 마지막 정지·해제만 조회합니다. 과거 정지 사유를 현재 것으로 오인하지 않습니다.
+            latestStatusChange = auditLogRepository
+                    .findFirstByTargetTypeAndTargetIdAndActionInOrderByCreatedAtDescIdDesc(
+                            "MEMBER", memberId, List.of("MEMBER_SUSPEND", "MEMBER_RESUME"))
+                    .orElse(null);
+        }
+        return AdminMemberDetailResponseDTO.from(member, latestStatusChange);
     }
 
     @Transactional
     public AdminMemberSummaryResponseDTO changeStatus(Long actorId, Long memberId,
                                                      AdminMemberStatusChangeRequestDTO request) {
-        Member actor = memberRepository.findById(actorId)
-                .orElseThrow(() -> new MemberStatusChangeException(ErrorCode.ACCESS_DENIED));
-        if (actor.getRole() != Role.ADMIN) {
-            throw new MemberStatusChangeException(ErrorCode.ACCESS_DENIED);
-        }
-        if (actor.getStatus() != MemberStatus.ACTIVE) {
-            throw new MemberStatusChangeException(ErrorCode.ACCOUNT_RESTRICTED);
-        }
+        validateAdmin(actorId);
         if (actorId.equals(memberId)) {
             throw new MemberStatusChangeException(ErrorCode.ADMIN_ACCOUNT_PROTECTED);
         }
@@ -84,5 +109,16 @@ public class AdminMemberService {
         }
 
         return AdminMemberSummaryResponseDTO.from(member);
+    }
+
+    private void validateAdmin(Long actorId) {
+        Member actor = memberRepository.findById(actorId)
+                .orElseThrow(() -> new MemberStatusChangeException(ErrorCode.ACCESS_DENIED));
+        if (actor.getRole() != Role.ADMIN) {
+            throw new MemberStatusChangeException(ErrorCode.ACCESS_DENIED);
+        }
+        if (actor.getStatus() != MemberStatus.ACTIVE) {
+            throw new MemberStatusChangeException(ErrorCode.ACCOUNT_RESTRICTED);
+        }
     }
 }
