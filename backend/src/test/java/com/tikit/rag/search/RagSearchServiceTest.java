@@ -5,110 +5,58 @@ import com.tikit.rag.dto.response.RagSearchMatch;
 import com.tikit.rag.embedding.OllamaEmbeddingClient;
 import com.tikit.rag.exception.RagEmbeddingException;
 import com.tikit.rag.exception.RagSearchUnavailableException;
-import org.junit.jupiter.api.BeforeEach;
+import com.tikit.rag.repository.RagChunkSearchRepository;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.json.JsonMapper;
-
+import org.springframework.dao.DataAccessResourceFailureException;
 import java.util.List;
-
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class RagSearchServiceTest {
-    private OllamaEmbeddingClient client;
-    private RagPrototypeChunkRepository repository;
-    private List<RagPrototypeChunk> chunks;
-    private List<String> texts;
+    private final OllamaEmbeddingClient client = mock(OllamaEmbeddingClient.class);
+    private final RagChunkSearchRepository repository = mock(RagChunkSearchRepository.class);
+    // 시제품 플래그가 꺼져 있어도 DB 검색을 사용한다.
+    private final RagSearchService service = new RagSearchService(client, repository,
+            new RagSearchProperties(false, 3, 0.5));
+    private final List<Double> query = List.of(1.0, 0.0);
 
-    @BeforeEach
-    void setUp() {
-        client = mock(OllamaEmbeddingClient.class);
-        repository = mock(RagPrototypeChunkRepository.class);
-        // 실제 fixture와 그 출처를 검색 대상으로 사용한다.
-        chunks = new RagPrototypeChunkRepository(JsonMapper.builder().build()).findAll();
-        texts = chunks.stream().map(RagPrototypeChunk::content).toList();
-        when(repository.findAll()).thenReturn(chunks);
+    @Test
+    @DisplayName("질문만 임베딩하고 매 요청마다 DB의 최신 검색 결과를 조회한다")
+    void embedsOnlyEachQuestionAndReadsFreshStoredResults() {
+        var first = new RagSearchMatch("11", "1", "환불 v1", 0, "수수료 0원", 0.9);
+        var second = new RagSearchMatch("12", "1", "환불 v2", 0, "수수료 100원", 0.9);
+        when(client.embed(List.of("환불?"))).thenReturn(List.of(query));
+        when(repository.search(query, 0.5, 3)).thenReturn(List.of(first), List.of(second));
+
+        assertThat(service.search("환불?")).containsExactly(first);
+        assertThat(service.search("환불?")).containsExactly(second);
+        verify(client, times(2)).embed(List.of("환불?"));
+        verify(repository, times(2)).search(query, 0.5, 3);
+        verifyNoMoreInteractions(client, repository);
     }
 
     @Test
-    void ranksByCosineInsteadOfVectorMagnitudeAndAppliesTopK() {
-        // 정규화하지 않은 내적이면 두 번째 청크가 잘못 1위가 된다.
-        when(client.embed(texts)).thenReturn(List.of(v(2, 0), v(100, 100), v(1, 2),
-                v(0, 1), v(-1, 0), v(0, -1)));
-        when(client.embed(List.of("취소 수수료는?"))).thenReturn(List.of(v(1, 0)));
-
-        var result = service(2, 0.5).search("취소 수수료는?");
-
-        assertThat(result).extracting(RagSearchMatch::chunkId)
-                .containsExactly("refund-v1-01", "refund-v1-02");
-        assertThat(result.getFirst().score()).isCloseTo(1.0, within(0.000001));
-        assertThat(result.get(1).score()).isCloseTo(1 / Math.sqrt(2), within(0.000001));
-        assertThat(result.getFirst().documentId()).isEqualTo("fixture-refund-v1");
-        assertThat(result.getFirst().content()).isEqualTo(chunks.getFirst().content());
+    @DisplayName("DB에 관련 근거가 없으면 빈 검색 결과를 반환한다")
+    void returnsEmptyWhenDatabaseHasNoEvidence() {
+        when(client.embed(List.of("주차?"))).thenReturn(List.of(query));
+        when(repository.search(query, 0.5, 3)).thenReturn(List.of());
+        assertThat(service.search("주차?")).isEmpty();
     }
 
     @Test
-    void reusesDocumentVectorsButEmbedsEachQuestionWithSameClient() {
-        when(client.embed(texts)).thenReturn(List.of(v(1, 0), v(1, 0), v(1, 0),
-                v(0, 1), v(0, 1), v(0, 1)));
-        when(client.embed(List.of("환불"))).thenReturn(List.of(v(1, 0)));
-        when(client.embed(List.of("예매"))).thenReturn(List.of(v(0, 1)));
-        var service = service(3, 0.5);
-
-        assertThat(service.search("환불")).allSatisfy(match ->
-                assertThat(match.documentId()).isEqualTo("fixture-refund-v1"));
-        assertThat(service.search("예매")).allSatisfy(match ->
-                assertThat(match.documentId()).isEqualTo("fixture-booking-v1"));
-
-        verify(client, times(1)).embed(texts);
-        verify(client).embed(List.of("환불"));
-        verify(client).embed(List.of("예매"));
-        verify(repository, times(1)).findAll();
+    @DisplayName("질문 임베딩에 실패하면 DB를 조회하지 않는다")
+    void embeddingFailureDoesNotQueryDatabase() {
+        when(client.embed(List.of("환불?"))).thenThrow(new RagEmbeddingException("failure"));
+        assertThatThrownBy(() -> service.search("환불?")).isInstanceOf(RagEmbeddingException.class);
+        verifyNoInteractions(repository);
     }
 
     @Test
-    void returnsEmptyWhenAllScoresAreBelowThreshold() {
-        when(client.embed(texts)).thenReturn(java.util.Collections.nCopies(chunks.size(), v(1, 0)));
-        when(client.embed(List.of("주차"))).thenReturn(List.of(v(0, 1)));
-        assertThat(service(3, 0.5).search("주차")).isEmpty();
-    }
-
-    @Test
-    void doesNotPublishPartialIndexAfterEmbeddingFailure() {
-        when(client.embed(texts)).thenThrow(new RagEmbeddingException("failure"))
-                .thenReturn(java.util.Collections.nCopies(chunks.size(), v(1, 0)));
-        when(client.embed(List.of("환불"))).thenReturn(List.of(v(1, 0)));
-        var service = service(3, 0.5);
-
-        assertThatThrownBy(() -> service.search("환불")).isInstanceOf(RagEmbeddingException.class);
-        assertThat(service.search("환불")).hasSize(3);
-        verify(client, times(2)).embed(texts);
-    }
-
-    @Test
-    void queryFailureIsAnErrorAndKeepsCompletedDocumentIndex() {
-        when(client.embed(texts)).thenReturn(java.util.Collections.nCopies(chunks.size(), v(1, 0)));
-        when(client.embed(List.of("환불"))).thenThrow(new RagEmbeddingException("failure"))
-                .thenReturn(List.of(v(1, 0)));
-        var service = service(3, 0.5);
-        assertThatThrownBy(() -> service.search("환불")).isInstanceOf(RagEmbeddingException.class);
-        assertThat(service.search("환불")).hasSize(3);
-        verify(client, times(1)).embed(texts);
-    }
-
-    @Test
-    void disabledPrototypeDoesNotReadCorpusOrCallOllama() {
-        var service = new RagSearchService(client, repository, new RagSearchProperties(false, 3, 0.5));
-        assertThatThrownBy(() -> service.search("환불")).isInstanceOf(RagSearchUnavailableException.class);
-        verifyNoInteractions(client);
-        verify(repository, never()).findAll();
-    }
-
-    private RagSearchService service(int topK, double minScore) {
-        return new RagSearchService(client, repository, new RagSearchProperties(true, topK, minScore));
-    }
-
-    private List<Double> v(double x, double y) {
-        return List.of(x, y);
+    @DisplayName("DB 검색 실패는 근거 없음과 구분하여 오류로 전달한다")
+    void databaseFailureIsNotReportedAsNoEvidence() {
+        when(client.embed(List.of("환불?"))).thenReturn(List.of(query));
+        when(repository.search(query, 0.5, 3)).thenThrow(new DataAccessResourceFailureException("failure"));
+        assertThatThrownBy(() -> service.search("환불?")).isInstanceOf(RagSearchUnavailableException.class);
     }
 }
