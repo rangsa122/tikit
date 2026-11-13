@@ -11,7 +11,7 @@ import java.io.Serializable;
 
 @Embeddable
 @Getter
-@EqualsAndHashCode
+@EqualsAndHashCode//두 객체의 필드 값이 같으면 키로 비교하고 같은 해시를 얻는다
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RagDocumentVersionId implements Serializable {
 

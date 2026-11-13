@@ -22,7 +22,7 @@ import java.net.URI;
 @RestController
 @RequestMapping("/api/v1/admin/rag/documents")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasRole('ADMIN')")//클래스 요청 처리 메서드에 ADMIN 권한 조건을 검 ->EnableMethodSecurity 설정과 연결됨
 public class AdminRagDocumentController {
 
     private final RagDocumentService ragDocumentService;
@@ -30,8 +30,8 @@ public class AdminRagDocumentController {
     // 공통 정책 문서 등록
     @PostMapping
     public ResponseEntity<ResponseDTO<RagDocumentDetailResponse>> createDocument(
-            @AuthenticationPrincipal String accountId,
-            @Valid @RequestBody RagDocumentCreateRequest request
+            @AuthenticationPrincipal String accountId, //jwt필터가 넣은 String 사용자 ID를 받음 요청 JSON으로 작성자를 받지 않아 다른 사람 ID를 임의로 제출하지 못하게함
+            @Valid @RequestBody RagDocumentCreateRequest request //JSON요청을 DTO로 변환하고 제목,본문 제약을 검사함,request안에는 제목,본문이 들어있음
     ) {
         Long adminId = Long.valueOf(accountId);
 
