@@ -10,6 +10,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import java.time.Duration;
 import java.time.Instant;
 
 // 서버가 꺼져도 잊으면 안 되는 일 (결제·환불 결과 확인 등)
@@ -86,11 +87,75 @@ public class BackgroundJob {
         return job;
     }
 
+    // 실행 시작: 점유자와 점유 기한 기록 (대기 중이거나 이전 점유 기한이 지난 작업만)
+    public void lease(String owner, Instant now, Duration leaseDuration) {
+        if (!isLeasable(now)) {
+            throw new IllegalStateException("점유할 수 없는 작업입니다. id=" + id + ", status=" + status);
+        }
+        this.status = BackgroundJobStatus.RUNNING;
+        this.leaseOwner = owner;
+        this.leaseUntil = now.plus(leaseDuration);
+        this.attemptCount++;
+    }
+
+    // 점유 가능 여부: QUEUED이고 실행 시각이 됨 / RUNNING인데 점유 기한이 지남(실행하던 서버가 멈춤)
+    public boolean isLeasable(Instant now) {
+        if (status == BackgroundJobStatus.QUEUED) {
+            return !nextRunAt.isAfter(now);
+        }
+        if (status == BackgroundJobStatus.RUNNING) {
+            return leaseUntil != null && !leaseUntil.isAfter(now);
+        }
+        return false;
+    }
+
+    // 이 실행자가 아직 점유 중인지 (Toss 조회 뒤 결과 반영 전에 다시 확인)
+    public boolean isLeasedBy(String owner, Instant now) {
+        return status == BackgroundJobStatus.RUNNING
+                && owner.equals(leaseOwner)
+                && leaseUntil.isAfter(now);
+    }
+
+    // 완료: 대상(결제 시도·취소)이 확정됨
+    public void succeed(String owner) {
+        requireLeasedBy(owner);
+        this.status = BackgroundJobStatus.SUCCEEDED;
+        clearLease();
+    }
+
+    // 아직 결과를 모름: 대기로 되돌리고 다음 실행 시각을 늦춤
+    public void retryLater(String owner, String errorCode, Instant nextRunAt) {
+        requireLeasedBy(owner);
+        this.status = BackgroundJobStatus.QUEUED;
+        this.nextRunAt = nextRunAt;
+        this.lastErrorCode = errorCode;
+        clearLease();
+    }
+
+    // 재시도 한도 초과: 자동 확인 중단, 관리자 확인 대상
+    public void giveUp(String owner, String errorCode) {
+        requireLeasedBy(owner);
+        this.status = BackgroundJobStatus.FAILED;
+        this.lastErrorCode = errorCode;
+        clearLease();
+    }
+
     // 작업 종류마다 확인할 대상 (멱등 기록의 결과 리소스 이름과 같게)
     private static String resourceTypeOf(BackgroundJobType type) {
         return switch (type) {
             case PAYMENT_RECONCILE -> "PAYMENT_ATTEMPT";
             case CANCELLATION_RECONCILE -> "CANCELLATION";
         };
+    }
+
+    private void requireLeasedBy(String owner) {
+        if (status != BackgroundJobStatus.RUNNING || !owner.equals(leaseOwner)) {
+            throw new IllegalStateException("점유하지 않은 작업입니다. id=" + id + ", owner=" + owner);
+        }
+    }
+
+    private void clearLease() {
+        this.leaseOwner = null;
+        this.leaseUntil = null;
     }
 }
