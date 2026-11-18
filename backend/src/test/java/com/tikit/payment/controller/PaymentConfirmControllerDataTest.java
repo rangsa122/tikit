@@ -6,6 +6,9 @@ import com.tikit.auth.entity.Role;
 import com.tikit.booking.entity.Booking;
 import com.tikit.booking.entity.BookingStatus;
 import com.tikit.common.ErrorCode;
+import com.tikit.common.job.BackgroundJob;
+import com.tikit.common.job.BackgroundJobStatus;
+import com.tikit.common.job.BackgroundJobType;
 import com.tikit.payment.client.TossPaymentClient;
 import com.tikit.payment.dto.toss.TossPaymentResponseDTO;
 import com.tikit.payment.entity.PaymentAttempt;
@@ -31,6 +34,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -38,6 +42,7 @@ import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import java.util.List;
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -534,6 +539,103 @@ public class PaymentConfirmControllerDataTest {
         resultActions.andExpect(jsonPath("$.code").value(errorCode.name()));
     }
 
+    @Test
+    @DisplayName("승인을 시작하면 결과 확인 작업 1건이 QUEUED로 저장되고, 시작 시각 2분 뒤에 실행되도록 예약")
+    void confirm_payment_schedules_reconcile_job() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = dataHelper.createBooking(memberId, BookingStatus.PENDING_PAYMENT,
+                Instant.now().plus(5, ChronoUnit.MINUTES), AMOUNT);
+        Long paymentAttemptId = dataHelper.createPaymentAttempt(bookingId, PaymentAttemptStatus.READY, AMOUNT);
+        String orderId = entityManager.find(PaymentAttempt.class, paymentAttemptId).getOrderId();
+        given(tossPaymentClient.confirmPayment(any(), any()))
+                .willReturn(tossApprovedResponse(orderId, AMOUNT, OffsetDateTime.now(ZoneOffset.ofHours(9))));
+
+        // when
+        ResultActions resultActions = mvc.perform(confirmRequest(paymentAttemptId, memberId, orderId));
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        assertThat(httpStatusCode).isEqualTo(200);
+
+        PaymentAttempt attempt = entityManager.find(PaymentAttempt.class, paymentAttemptId);
+        List<BackgroundJob> jobs = reconcileJobsOf(paymentAttemptId);
+        assertThat(jobs).hasSize(1);
+
+        BackgroundJob job = jobs.getFirst();
+        assertThat(job.getType()).isEqualTo(BackgroundJobType.PAYMENT_RECONCILE);
+        assertThat(job.getResourceType()).isEqualTo("PAYMENT_ATTEMPT");
+        assertThat(job.getResourceId()).isEqualTo(paymentAttemptId);
+        assertThat(job.getStatus()).isEqualTo(BackgroundJobStatus.QUEUED);
+        assertThat(job.getAttemptCount()).isZero();
+        assertThat(job.getPayload()).isEqualTo("{}");
+        assertThat(job.getNextRunAt()).isEqualTo(attempt.getConfirmationRequestedAt().plus(Duration.ofMinutes(2)));
+    }
+
+    @Test
+    @DisplayName("승인된 결제를 다른 멱등키로 다시 요청해도 결과 확인 작업은 1건만 남음")
+    void confirm_payment_again_does_not_duplicate_job() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = dataHelper.createBooking(memberId, BookingStatus.PENDING_PAYMENT,
+                Instant.now().plus(5, ChronoUnit.MINUTES), AMOUNT);
+        Long paymentAttemptId = dataHelper.createPaymentAttempt(bookingId, PaymentAttemptStatus.READY, AMOUNT);
+        String orderId = entityManager.find(PaymentAttempt.class, paymentAttemptId).getOrderId();
+        given(tossPaymentClient.confirmPayment(any(), any()))
+                .willReturn(tossApprovedResponse(orderId, AMOUNT, OffsetDateTime.now(ZoneOffset.ofHours(9))));
+
+        mvc.perform(confirmRequest(paymentAttemptId, memberId, orderId));
+
+        // when
+        ResultActions resultActions = mvc.perform(confirmRequest(paymentAttemptId, memberId, orderId));
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        assertThat(httpStatusCode).isEqualTo(200);
+        assertThat(reconcileJobsOf(paymentAttemptId)).hasSize(1);
+        then(tossPaymentClient).should(times(1)).confirmPayment(any(), any());
+    }
+
+    @Test
+    @DisplayName("결제 기한이 지나 승인을 거절하면 결과 확인 작업도 저장되지 않음")
+    void confirm_payment_expired_no_job() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = dataHelper.createBooking(memberId, BookingStatus.PENDING_PAYMENT,
+                Instant.now().minus(1, ChronoUnit.MINUTES), AMOUNT);
+        Long paymentAttemptId = dataHelper.createPaymentAttempt(bookingId, PaymentAttemptStatus.READY, AMOUNT);
+        String orderId = entityManager.find(PaymentAttempt.class, paymentAttemptId).getOrderId();
+
+        // when
+        ResultActions resultActions = mvc.perform(confirmRequest(paymentAttemptId, memberId, orderId));
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        ErrorCode errorCode = ErrorCode.BOOKING_EXPIRED;
+
+        assertThat(httpStatusCode).isEqualTo(errorCode.getStatus().value());
+        resultActions.andExpect(jsonPath("$.code").value(errorCode.name()));
+        assertThat(entityManager.find(PaymentAttempt.class, paymentAttemptId).getStatus())
+                .isEqualTo(PaymentAttemptStatus.READY);
+        assertThat(reconcileJobsOf(paymentAttemptId)).isEmpty();
+        then(tossPaymentClient).should(never()).confirmPayment(any(), any());
+    }
+
     private String confirmRequestBody(String orderId, Long amount) {
         return """
                 {
@@ -570,5 +672,23 @@ public class PaymentConfirmControllerDataTest {
     // 테스트마다 겹치지 않는 멱등키 (프론트는 confirm-{paymentKey} 형식)
     private String newIdempotencyKey() {
         return "confirm-" + UUID.randomUUID();
+    }
+
+
+    // 결제 승인 요청 (새 멱등키)
+    private MockHttpServletRequestBuilder confirmRequest(Long paymentAttemptId, Long memberId, String orderId) {
+        return post("/api/v1/payment-attempts/" + paymentAttemptId + "/confirmation")
+                .header("Authorization", "Bearer " + accessTokenFor(memberId))
+                .header("Idempotency-Key", newIdempotencyKey())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(confirmRequestBody(orderId, AMOUNT));
+    }
+
+    // 이 결제 시도의 결과 확인 작업 목록 (중복 방지 키로 조회)
+    private List<BackgroundJob> reconcileJobsOf(Long paymentAttemptId) {
+        return entityManager.createQuery(
+                        "select j from BackgroundJob j where j.deduplicationKey = :key", BackgroundJob.class)
+                .setParameter("key", BackgroundJobType.PAYMENT_RECONCILE.deduplicationKey(paymentAttemptId))
+                .getResultList();
     }
 }
