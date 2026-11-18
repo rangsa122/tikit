@@ -53,6 +53,41 @@ public class RagIndexJob {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    public void succeed(String owner, Instant completedAt) {
+        if (status != RagIndexJobStatus.RUNNING || !Objects.equals(leaseOwner, owner)) {
+            throw new IllegalStateException("선점한 워커만 실행 중인 작업을 완료할 수 있습니다.");
+        }
+        this.completedAt = Objects.requireNonNull(completedAt, "완료 시각은 필수입니다.");
+        status = RagIndexJobStatus.SUCCEEDED;
+        failureCode = null;
+        leaseOwner = null;
+        leaseUntil = null;
+    }
+
+    public void fail(String owner, String code, Instant completedAt) {
+        if (status != RagIndexJobStatus.RUNNING || !Objects.equals(leaseOwner, owner)) {
+            throw new IllegalStateException("선점한 워커만 실행 중인 작업을 실패 처리할 수 있습니다.");
+        }
+        failureCode = Objects.requireNonNull(code, "실패 코드는 필수입니다.");
+        this.completedAt = Objects.requireNonNull(completedAt, "완료 시각은 필수입니다.");
+        status = RagIndexJobStatus.FAILED;
+        leaseOwner = null;
+        leaseUntil = null;
+    }
+
+    public void requeueFailed() {
+        if (status != RagIndexJobStatus.FAILED) {
+            throw new IllegalStateException("실패한 작업만 재처리할 수 있습니다.");
+        }
+        status = RagIndexJobStatus.QUEUED;
+        failureCode = null;
+        completedAt = null;
+        leaseOwner = null;
+        leaseUntil = null;
+        // attemptCount는 다음 선점 시 증가시켜 이전 시도의 결과와 구분한다.
+    }
+
+//필수 아이디와 버전을 확인한 뒤 큐,attemptCount=0으로 초기화한다
     public static RagIndexJob createQueued(
             Long documentId,
             Integer documentVersion,

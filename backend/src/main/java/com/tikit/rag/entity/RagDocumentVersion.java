@@ -46,6 +46,40 @@ public class RagDocumentVersion {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    public void startIndexing(String model, int dimensions) {
+        if (indexStatus != RagIndexStatus.QUEUED && indexStatus != RagIndexStatus.NOT_INDEXED
+                && indexStatus != RagIndexStatus.FAILED) {
+            throw new IllegalStateException("인덱싱을 시작할 수 없는 문서 버전 상태입니다.");
+        }
+        embeddingModel = Objects.requireNonNull(model, "임베딩 모델은 필수입니다.");
+        if (dimensions < 1) {
+            throw new IllegalArgumentException("임베딩 차원은 1 이상이어야 합니다.");
+        }
+        embeddingDimensions = dimensions;
+        indexStatus = RagIndexStatus.RUNNING;
+    }
+
+    public void queueForRetry() {
+        if (indexStatus != RagIndexStatus.FAILED) {
+            throw new IllegalStateException("실패한 문서 버전만 재처리할 수 있습니다.");
+        }
+        indexStatus = RagIndexStatus.QUEUED;
+    }
+
+    public void completeIndexing() {
+        if (indexStatus != RagIndexStatus.RUNNING) {
+            throw new IllegalStateException("실행 중인 문서 버전만 완료할 수 있습니다.");
+        }
+        indexStatus = RagIndexStatus.READY;
+    }
+
+    public void failIndexing() {
+        if (indexStatus != RagIndexStatus.RUNNING) {
+            throw new IllegalStateException("실행 중인 문서 버전만 실패 처리할 수 있습니다.");
+        }
+        indexStatus = RagIndexStatus.FAILED;
+    }
+
     public static RagDocumentVersion createFirstVersion(
             Long documentId,
             String title,
