@@ -7,6 +7,37 @@ interface ApiResponse<T> {
   data: T | null
 }
 
+export interface PublicPerformanceSummary {
+  performanceId: string
+  title: string
+  genreCode: string
+  venueName: string
+  posterUrl: string | null
+  startDate: string
+  endDate: string
+  minPrice: number | null
+  salesStatus: string
+  nextSalesOpenAt: string | null
+}
+
+export interface PublicPerformancePage {
+  items: PublicPerformanceSummary[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
+export interface PerformanceListParams {
+  page?: number
+  size?: number
+  keyword?: string
+  genreCode?: string
+  fromDate?: string
+  toDate?: string
+  sort?: string
+}
+
 export interface PublicPerformanceDetail {
   performanceId: string
   title: string
@@ -51,12 +82,18 @@ export interface PerformanceSessionList {
 /**
  * 공연 목록 조회
  */
-export async function getPerformances(): Promise<unknown> {
-  const response = await apiClient.get<ApiResponse<unknown>>(
-    '/api/v1/performances',
-  )
+export async function getPerformances(
+  params: PerformanceListParams = {},
+): Promise<PublicPerformancePage> {
+  const response = await apiClient.get<
+    ApiResponse<PublicPerformancePage>
+  >('/api/v1/performances', {params})
 
-  if (response.data.code !== 'SUCCESS') {
+  if (
+    response.data.code !== 'SUCCESS' ||
+    !response.data.data ||
+    !Array.isArray(response.data.data.items)
+  ) {
     throw new Error(
       response.data.message || '공연 목록을 불러오지 못했습니다.',
     )

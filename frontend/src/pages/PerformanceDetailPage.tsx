@@ -1,6 +1,7 @@
+
 import {useEffect, useState} from 'react'
 import {Link, useParams} from 'react-router'
-import {mockPerformances} from '../mocks/performances'
+import {categories} from '../constants/categories'
 import SessionSelector from '../components/performance/SessionSelector'
 import type {PerformanceSession as SelectorSession} from '../components/performance/SessionSelector'
 import {
@@ -14,15 +15,6 @@ import {
   removeFavoritePerformance,
 } from '../api/favoritePerformanceApi'
 
-const CATEGORY_LABELS: Record<string, string> = {
-  theater: '연극',
-  musical: '뮤지컬',
-  concert: '콘서트',
-  classic: '클래식',
-  exhibition: '전시',
-  sports: '스포츠',
-}
-
 const DETAIL_TABS = [
   {id: 'notice', label: '공지사항'},
   {id: 'casting', label: '캐스팅'},
@@ -32,53 +24,6 @@ const DETAIL_TABS = [
 ] as const
 
 type DetailTab = (typeof DETAIL_TABS)[number]['id']
-
-function createMockSessions(period: string): SelectorSession[] {
-  const dates = period.match(/\d{2}\.\d{2}\.\d{2}/g)
-
-  if (!dates || dates.length !== 2) {
-    return []
-  }
-
-  const [startYear, startMonth, startDay] = dates[0]
-    .split('.')
-    .map(Number)
-
-  const [endYear, endMonth, endDay] = dates[1]
-    .split('.')
-    .map(Number)
-
-  const start = new Date(2000 + startYear, startMonth - 1, startDay)
-  const end = new Date(2000 + endYear, endMonth - 1, endDay)
-
-  if (start > end) {
-    return []
-  }
-
-  const sessions: SelectorSession[] = []
-
-  for (
-    const current = new Date(start);
-    current <= end;
-    current.setDate(current.getDate() + 1)
-  ) {
-    const date = [
-      current.getFullYear(),
-      String(current.getMonth() + 1).padStart(2, '0'),
-      String(current.getDate()).padStart(2, '0'),
-    ].join('-')
-
-    for (const time of ['14:00', '19:00']) {
-      sessions.push({
-        id: `${date}-${time}`,
-        date,
-        time,
-      })
-    }
-  }
-
-  return sessions
-}
 
 function formatPeriod(startDate: string, endDate: string) {
   return `${startDate} ~ ${endDate}`
@@ -153,58 +98,25 @@ export default function PerformanceDetailPage() {
       ? parsedId
       : null
 
-  const isRealPerformance = numericPerformanceId !== null
+  const isValidPerformance = numericPerformanceId !== null
 
   const detailQuery = usePerformanceDetail(
-    isRealPerformance ? performanceId : undefined,
+    isValidPerformance ? performanceId : undefined,
   )
 
   const sessionsQuery = usePerformanceSessions(
-    isRealPerformance ? performanceId : undefined,
+    isValidPerformance ? performanceId : undefined,
   )
 
-  const mockPerformance = mockPerformances.find(
-    item => item.id === performanceId,
-  )
-
-  const realPerformance = isRealPerformance
-    ? detailQuery.data
-    : undefined
-
-  const performance = realPerformance
-    ? {
-        id: realPerformance.performanceId,
-        title: realPerformance.title,
-        categoryId: realPerformance.genreCode,
-        venue: realPerformance.venueName,
-        period: formatPeriod(
-          realPerformance.startDate,
-          realPerformance.endDate,
-        ),
-        posterUrl: realPerformance.posterUrl,
-        description: realPerformance.description,
-        minPrice: realPerformance.minPrice,
-        salesStatus: realPerformance.salesStatus,
-      }
-    : !isRealPerformance && mockPerformance
-      ? {
-          id: mockPerformance.id,
-          title: mockPerformance.title,
-          categoryId: mockPerformance.categoryId,
-          venue: mockPerformance.venue,
-          period: mockPerformance.period,
-          posterUrl: null,
-          description: null,
-          minPrice: null,
-          salesStatus: 'MOCK',
-        }
-      : null
+  const performance = detailQuery.data
 
   const [selectedSession, setSelectedSession] =
     useState<SelectorSession | null>(null)
 
   const [activeTab, setActiveTab] = useState<DetailTab>('detail')
   const [bookingNotice, setBookingNotice] = useState(false)
+  const [failedPosterUrl, setFailedPosterUrl] =
+    useState<string | null>(null)
 
   const [isFavorite, setIsFavorite] = useState(false)
   const [favoriteLoading, setFavoriteLoading] = useState(false)
@@ -216,6 +128,8 @@ export default function PerformanceDetailPage() {
   useEffect(() => {
     setSelectedSession(null)
     setBookingNotice(false)
+    setActiveTab('detail')
+    setFailedPosterUrl(null)
   }, [performanceId])
 
   useEffect(() => {
@@ -246,20 +160,24 @@ export default function PerformanceDetailPage() {
         // 관심 공연이 여러 페이지에 있어도 정확히 확인합니다.
         while (currentPage < totalPages && !found && !cancelled) {
           const result = await getFavoritePerformances(currentPage, 100)
+
           if (cancelled) return
 
           found = result.items.some(
             item => item.performanceId === targetId,
           )
+
           totalPages = result.totalPages
           currentPage += 1
         }
 
         if (cancelled) return
+
         setIsFavorite(found)
         setFavoriteStateReady(true)
       } catch {
         if (cancelled) return
+
         setFavoriteError('관심 공연 상태를 확인하지 못했습니다.')
       } finally {
         if (!cancelled) {
@@ -289,9 +207,7 @@ export default function PerformanceDetailPage() {
     }
 
     if (numericPerformanceId === null) {
-      setFavoriteNotice(
-        '테스트용 공연은 관심 공연으로 등록할 수 없습니다.',
-      )
+      setFavoriteError('유효하지 않은 공연입니다.')
       return
     }
 
@@ -327,7 +243,21 @@ export default function PerformanceDetailPage() {
     }
   }
 
-  if (isRealPerformance && detailQuery.isLoading) {
+  if (!isValidPerformance) {
+    return (
+      <main className="mx-auto max-w-[1320px] px-5 py-20 text-center">
+        <h1 className="text-2xl font-bold">
+          유효하지 않은 공연입니다.
+        </h1>
+
+        <Link to="/" className="mt-6 inline-block underline">
+          메인으로 이동
+        </Link>
+      </main>
+    )
+  }
+
+  if (detailQuery.isLoading) {
     return (
       <main
         role="status"
@@ -338,7 +268,7 @@ export default function PerformanceDetailPage() {
     )
   }
 
-  if (isRealPerformance && detailQuery.isError) {
+  if (detailQuery.isError) {
     return (
       <main className="mx-auto max-w-[1320px] px-5 py-20 text-center">
         <h1 className="text-2xl font-bold">
@@ -370,22 +300,30 @@ export default function PerformanceDetailPage() {
     )
   }
 
-  const sessions: SelectorSession[] = isRealPerformance
-    ? toSelectorSessions(sessionsQuery.data?.items ?? [])
-    : createMockSessions(performance.period)
+  const sessions = toSelectorSessions(
+    sessionsQuery.data?.items ?? [],
+  )
+
+  const category = categories.find(
+    item => item.id === performance.genreCode,
+  )
 
   const categoryLabel =
-    CATEGORY_LABELS[performance.categoryId] ??
-    performance.categoryId
+    category?.label ?? performance.genreCode
+
+  const period = formatPeriod(
+    performance.startDate,
+    performance.endDate,
+  )
+
+  const hasPoster =
+    Boolean(performance.posterUrl) &&
+    performance.posterUrl !== failedPosterUrl
 
   return (
     <main className="mx-auto max-w-[1320px] px-5 py-10">
       <Link
-        to={
-          CATEGORY_LABELS[performance.categoryId]
-            ? `/categories/${performance.categoryId}`
-            : '/'
-        }
+        to={category ? `/categories/${category.id}` : '/'}
         className="text-sm text-gray-500 hover:text-blue-600"
       >
         ← 공연 목록으로
@@ -407,9 +345,7 @@ export default function PerformanceDetailPage() {
             disabled={
               favoriteLoading ||
               favoriteSaving ||
-              (isRealPerformance &&
-                Boolean(accessToken) &&
-                !favoriteStateReady)
+              (Boolean(accessToken) && !favoriteStateReady)
             }
             aria-pressed={isFavorite}
             aria-label={
@@ -451,10 +387,13 @@ export default function PerformanceDetailPage() {
       <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
         <section className="min-w-0">
           <div className="grid gap-7 sm:grid-cols-[230px_minmax(0,1fr)]">
-            {performance.posterUrl ? (
+            {hasPoster ? (
               <img
-                src={performance.posterUrl}
+                src={performance.posterUrl ?? undefined}
                 alt={`${performance.title} 포스터`}
+                onError={() =>
+                  setFailedPosterUrl(performance.posterUrl)
+                }
                 className="aspect-[3/4] w-full rounded-xl object-cover shadow-sm"
               />
             ) : (
@@ -481,39 +420,35 @@ export default function PerformanceDetailPage() {
                   공연 장소
                 </dt>
                 <dd className="font-medium">
-                  {performance.venue}
+                  {performance.venueName}
                 </dd>
 
                 <dt className="font-semibold text-gray-500">
                   공연 기간
                 </dt>
-                <dd>{performance.period}</dd>
+                <dd>{period}</dd>
 
                 <dt className="font-semibold text-gray-500">
                   예매 상태
                 </dt>
                 <dd>
                   <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-                    {isRealPerformance
-                      ? performance.salesStatus
-                      : '테스트 일정'}
+                    {performance.salesStatus === 'ENABLED'
+                      ? '판매 가능'
+                      : performance.salesStatus === 'STOPPED'
+                        ? '판매 중지'
+                        : performance.salesStatus}
                   </span>
                 </dd>
 
-                {isRealPerformance && (
-                  <>
-                    <dt className="font-semibold text-gray-500">
-                      가격
-                    </dt>
-                    <dd>{formatPrice(performance.minPrice)}</dd>
-                  </>
-                )}
+                <dt className="font-semibold text-gray-500">
+                  가격
+                </dt>
+                <dd>{formatPrice(performance.minPrice)}</dd>
               </dl>
 
               <div className="mt-7 rounded-xl bg-gray-50 p-4 text-sm text-gray-600">
-                {isRealPerformance
-                  ? '공연 및 예매 정보를 확인해 주세요.'
-                  : '현재는 테스트용 공연 일정이 표시됩니다. 실제 예매 기능은 API 연동 후 제공됩니다.'}
+                공연 및 예매 정보를 확인해 주세요.
               </div>
             </div>
           </div>
@@ -555,6 +490,7 @@ export default function PerformanceDetailPage() {
                   <h3 className="text-lg font-bold">
                     공지사항
                   </h3>
+
                   <p className="mt-4 text-sm leading-7 text-gray-600">
                     공연 관련 공지사항은 추후 등록될 예정입니다.
                   </p>
@@ -566,6 +502,7 @@ export default function PerformanceDetailPage() {
                   <h3 className="text-lg font-bold">
                     캐스팅
                   </h3>
+
                   <p className="mt-4 text-sm leading-7 text-gray-600">
                     캐스팅 정보는 추후 제공될 예정입니다.
                   </p>
@@ -580,12 +517,12 @@ export default function PerformanceDetailPage() {
 
                   <p className="mt-4 whitespace-pre-line text-sm leading-7 text-gray-600">
                     {performance.description ||
-                      `${performance.title} 공연의 상세 안내 페이지입니다. 공연 소개와 상세 이미지는 추후 등록될 예정입니다.`}
+                      '등록된 공연 상세정보가 없습니다.'}
                   </p>
 
                   <div className="mt-6 rounded-lg bg-gray-50 p-5 text-sm leading-7 text-gray-600">
-                    <p>공연 장소: {performance.venue}</p>
-                    <p>공연 기간: {performance.period}</p>
+                    <p>공연 장소: {performance.venueName}</p>
+                    <p>공연 기간: {period}</p>
                   </div>
                 </>
               )}
@@ -597,9 +534,7 @@ export default function PerformanceDetailPage() {
                   </h3>
 
                   <p className="mt-4 text-sm leading-7 text-gray-600">
-                    {isRealPerformance
-                      ? `최저 가격: ${formatPrice(performance.minPrice)}`
-                      : '좌석 등급별 가격은 실제 공연 데이터 연동 후 제공됩니다.'}
+                    최저 가격: {formatPrice(performance.minPrice)}
                   </p>
                 </>
               )}
@@ -610,11 +545,9 @@ export default function PerformanceDetailPage() {
                     이용안내
                   </h3>
 
-                  <p className="mt-4 text-sm leading-7 text-gray-600">
-                    {isRealPerformance &&
-                    realPerformance?.cancellationPolicy
-                      ? realPerformance.cancellationPolicy
-                      : '예매 및 관람 안내는 추후 제공될 예정입니다.'}
+                  <p className="mt-4 whitespace-pre-line text-sm leading-7 text-gray-600">
+                    {performance.cancellationPolicy ||
+                      '예매 및 관람 안내는 추후 제공될 예정입니다.'}
                   </p>
                 </>
               )}
@@ -623,23 +556,38 @@ export default function PerformanceDetailPage() {
         </section>
 
         <aside className="lg:sticky lg:top-6">
-          {isRealPerformance && sessionsQuery.isLoading ? (
+          {sessionsQuery.isLoading ? (
             <div
               role="status"
               className="rounded-xl border border-gray-200 p-6 text-sm text-gray-500"
             >
               공연 회차를 불러오는 중입니다...
             </div>
-          ) : isRealPerformance && sessionsQuery.isError ? (
+          ) : sessionsQuery.isError ? (
             <div
               role="alert"
               className="rounded-xl border border-red-200 p-6 text-sm text-red-600"
             >
-              공연 회차를 불러오지 못했습니다.
+              <p>공연 회차를 불러오지 못했습니다.</p>
+
+              <button
+                type="button"
+                onClick={() => void sessionsQuery.refetch()}
+                className="mt-3 underline"
+              >
+                다시 시도
+              </button>
+            </div>
+          ) : sessions.length === 0 ? (
+            <div
+              role="status"
+              className="rounded-xl border border-gray-200 p-6 text-sm text-gray-500"
+            >
+              등록된 공연 회차가 없습니다.
             </div>
           ) : (
             <SessionSelector
-              key={performance.id}
+              key={performance.performanceId}
               sessions={sessions}
               onSessionChange={session => {
                 setSelectedSession(session)
@@ -665,9 +613,9 @@ export default function PerformanceDetailPage() {
               type="button"
               disabled={
                 !selectedSession ||
-                (isRealPerformance &&
-                  (sessionsQuery.isLoading ||
-                    sessionsQuery.isError))
+                sessionsQuery.isLoading ||
+                sessionsQuery.isError ||
+                performance.salesStatus !== 'ENABLED'
               }
               onClick={() => {
                 // 실제 대기열 연결은 별도 검증 후 활성화
@@ -693,4 +641,3 @@ export default function PerformanceDetailPage() {
     </main>
   )
 }
-

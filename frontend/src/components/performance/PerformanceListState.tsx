@@ -54,7 +54,10 @@ export default function PerformanceListState({
   }
 
   return (
-    <div className="flex min-h-64 flex-col items-center justify-center gap-3 py-12 text-center">
+    <div
+      role="status"
+      className="flex min-h-64 flex-col items-center justify-center gap-3 py-12 text-center"
+    >
       <p className="text-lg font-semibold text-[#111]">
         등록된 공연이 없습니다.
       </p>
