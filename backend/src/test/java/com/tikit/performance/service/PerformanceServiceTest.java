@@ -7,6 +7,8 @@ import com.tikit.auth.repository.MemberRepository;
 import com.tikit.common.ErrorCode;
 import com.tikit.performance.dto.PerformanceSessionListDTO;
 import com.tikit.performance.dto.PublicPerformanceDetailDTO;
+import com.tikit.performance.dto.PublicPerformancePageDTO;
+import com.tikit.performance.dto.PublicPerformanceSummaryDTO;
 import com.tikit.performance.dto.request.PerformanceCreateRequestDTO;
 import com.tikit.performance.dto.request.PerformanceUpdateRequestDTO;
 import com.tikit.performance.dto.request.SalesStatusUpdateRequestDTO;
@@ -29,19 +31,15 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.*;
 import org.springframework.test.util.ReflectionTestUtils;
-import com.tikit.performance.dto.PublicPerformancePageDTO;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
-import com.tikit.performance.dto.PublicPerformanceSummaryDTO;
-import org.springframework.data.domain.PageImpl;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
@@ -928,23 +926,6 @@ public class PerformanceServiceTest {
         when(performanceSessionRepository.findByPerformanceIds(List.of(10L)))
                 .thenReturn(List.of(first, second));
 
-    @Test
-    @DisplayName("다른 운영자의 공연은 수정할 수 없다")
-    void update_notOwner() {
-        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
-
-        Member otherManager = member(Role.MANAGER, MemberStatus.ACTIVE);
-        ReflectionTestUtils.setField(otherManager, "id", 99L);
-
-        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
-        when(performanceRepository.findDetail(PERFORMANCE_ID))
-                .thenReturn(Optional.of(draftPerformance(otherManager)));
-
-        assertFails(() -> service.update(MEMBER_ID, PERFORMANCE_ID, updateRequest(0L)),
-                ErrorCode.ACCESS_DENIED);
-    }
-
-
         when(sessionGradePriceRepository.findBySessions(List.of(101L, 102L)))
                 .thenReturn(List.of(firstPrice, secondPrice));
 
@@ -998,5 +979,21 @@ public class PerformanceServiceTest {
 
         verify(saleOpeningRepository)
                 .findByPerformanceIds(List.of(10L));
+    }
+
+    @Test
+    @DisplayName("다른 운영자의 공연은 수정할 수 없다")
+    void update_notOwner() {
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
+
+        Member otherManager = member(Role.MANAGER, MemberStatus.ACTIVE);
+        ReflectionTestUtils.setField(otherManager, "id", 99L);
+
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findDetail(PERFORMANCE_ID))
+                .thenReturn(Optional.of(draftPerformance(otherManager)));
+
+        assertFails(() -> service.update(MEMBER_ID, PERFORMANCE_ID, updateRequest(0L)),
+                ErrorCode.ACCESS_DENIED);
     }
 }
