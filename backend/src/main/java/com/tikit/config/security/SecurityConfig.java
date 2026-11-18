@@ -97,6 +97,7 @@ public class SecurityConfig {
                                 // 일반 사용자용 공개 공연 상세 조회
                                 .requestMatchers(
                                         HttpMethod.GET,
+                                        "/api/v1/performances",
                                         "/api/v1/performances/*"
                                 ).permitAll()
 

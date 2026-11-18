@@ -30,13 +30,18 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
-
+import com.tikit.performance.dto.PublicPerformancePageDTO;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
-
+import com.tikit.performance.dto.PublicPerformanceSummaryDTO;
+import org.springframework.data.domain.PageImpl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
@@ -747,5 +752,234 @@ public class PerformanceServiceTest {
                         MEMBER_ID, PERFORMANCE_ID, visibilityRequest(Visibility.HIDDEN, 0L)),
                 ErrorCode.ACCESS_DENIED);
         verify(performanceRepository, never()).flush();
+    }
+
+    // =====================================================
+// 이슈 #157 공개 공연 목록 조회 테스트
+// =====================================================
+
+    @Test
+    @DisplayName("공개 공연 목록 조회 시 음수 페이지 번호는 거절한다")
+    void getPublicPerformances_negativePage() {
+        assertFails(
+                () -> service.getPublicPerformances(
+                        -1, 20, null, null,
+                        null, null, "startDate"
+                ),
+                ErrorCode.VALIDATION_ERROR
+        );
+
+        verifyNoInteractions(performanceRepository);
+    }
+    @Test
+    @DisplayName("공개 공연 목록 조회 시 잘못된 페이지 크기는 거절한다")
+    void getPublicPerformances_invalidSize() {
+        assertFails(
+                () -> service.getPublicPerformances(
+                        0, 0, null, null,
+                        null, null, "startDate"
+                ),
+                ErrorCode.VALIDATION_ERROR
+        );
+
+        assertFails(
+                () -> service.getPublicPerformances(
+                        0, 101, null, null,
+                        null, null, "startDate"
+                ),
+                ErrorCode.VALIDATION_ERROR
+        );
+
+        verifyNoInteractions(performanceRepository);
+    }
+    @Test
+    @DisplayName("공개 공연 목록 조회 시 시작일이 종료일보다 늦으면 거절한다")
+    void getPublicPerformances_invalidDateRange() {
+        assertFails(
+                () -> service.getPublicPerformances(
+                        0, 20, null, null,
+                        LocalDate.of(2026, 12, 31),
+                        LocalDate.of(2026, 11, 1),
+                        "startDate"
+                ),
+                ErrorCode.VALIDATION_ERROR
+        );
+
+        verifyNoInteractions(performanceRepository);
+    }
+    @Test
+    @DisplayName("공개 공연 목록 조회 시 지원하지 않는 정렬 기준은 거절한다")
+    void getPublicPerformances_invalidSort() {
+        assertFails(
+                () -> service.getPublicPerformances(
+                        0, 20, null, null,
+                        null, null, "title"
+                ),
+                ErrorCode.VALIDATION_ERROR
+        );
+
+        verifyNoInteractions(performanceRepository);
+    }
+    @Test
+    @DisplayName("공개 공연이 없으면 빈 목록과 페이지 정보를 반환한다")
+    void getPublicPerformances_empty() {
+        Page<Performance> emptyPage = Page.empty(
+                PageRequest.of(
+                        0,
+                        20,
+                        Sort.by(
+                                Sort.Order.asc("startDate"),
+                                Sort.Order.asc("id")
+                        )
+                )
+        );
+
+        when(performanceRepository.searchPublicPerformances(
+                eq(PublicationStatus.PUBLISHED),
+                eq(Visibility.PUBLIC),
+                eq(""),
+                isNull(),
+                eq(LocalDate.of(1, 1, 1)),
+                eq(LocalDate.of(9999, 12, 31)),
+                any(Pageable.class)
+        )).thenReturn(emptyPage);
+
+        PublicPerformancePageDTO result =
+                service.getPublicPerformances(
+                        0, 20, null, null,
+                        null, null, "startDate"
+                );
+
+        assertThat(result.items()).isEmpty();
+        assertThat(result.page()).isZero();
+        assertThat(result.size()).isEqualTo(20);
+        assertThat(result.totalElements()).isZero();
+        assertThat(result.totalPages()).isZero();
+
+        verify(performanceRepository).searchPublicPerformances(
+                eq(PublicationStatus.PUBLISHED),
+                eq(Visibility.PUBLIC),
+                eq(""),
+                isNull(),
+                eq(LocalDate.of(1, 1, 1)),
+                eq(LocalDate.of(9999, 12, 31)),
+                any(Pageable.class)
+        );
+
+        verifyNoInteractions(
+                performanceSessionRepository,
+                saleOpeningRepository,
+                sessionGradePriceRepository
+        );
+    }
+    @Test
+    @DisplayName("공개 공연 목록 조회 시 최저 가격과 판매 오픈 정보를 반환한다")
+    void getPublicPerformances_success() {
+        // 공개 공연 데이터
+        Performance performance = publicPerformance();
+
+        // 공연 회차 2개
+        PerformanceSession first = session(
+                performance,
+                101L,
+                Instant.parse("2026-12-01T10:00:00Z")
+        );
+
+        PerformanceSession second = session(
+                performance,
+                102L,
+                Instant.parse("2026-12-02T10:00:00Z")
+        );
+
+        // 회차별 가격
+        SessionGradePrice firstPrice =
+                mockPrice(101L, "R", 50000L);
+
+        SessionGradePrice secondPrice =
+                mockPrice(102L, "S", 30000L);
+
+        // 판매 오픈 예정 정보
+        SaleOpening opening = mock(SaleOpening.class);
+
+        when(opening.getPerformance()).thenReturn(performance);
+        when(opening.getOpensAt()).thenReturn(
+                Instant.now().plusSeconds(3600)
+        );
+
+        Page<Performance> performancePage = new PageImpl<>(
+                List.of(performance),
+                PageRequest.of(0, 20, Sort.by(
+                        Sort.Order.asc("startDate"),
+                        Sort.Order.asc("id")
+                )),
+                1
+        );
+
+        when(performanceRepository.searchPublicPerformances(
+                eq(PublicationStatus.PUBLISHED),
+                eq(Visibility.PUBLIC),
+                eq(""),
+                isNull(),
+                eq(LocalDate.of(1, 1, 1)),
+                eq(LocalDate.of(9999, 12, 31)),
+                any(Pageable.class)
+        )).thenReturn(performancePage);
+
+        when(performanceSessionRepository.findByPerformanceIds(List.of(10L)))
+                .thenReturn(List.of(first, second));
+
+        when(sessionGradePriceRepository.findBySessions(List.of(101L, 102L)))
+                .thenReturn(List.of(firstPrice, secondPrice));
+
+        when(saleOpeningRepository.findByPerformanceIds(List.of(10L)))
+                .thenReturn(List.of(opening));
+
+        // 서비스 실행
+        PublicPerformancePageDTO result =
+                service.getPublicPerformances(
+                        0, 20, null, null,
+                        null, null, "startDate"
+                );
+
+        // 페이지 검증
+        assertThat(result.items()).hasSize(1);
+        assertThat(result.page()).isZero();
+        assertThat(result.size()).isEqualTo(20);
+        assertThat(result.totalElements()).isEqualTo(1);
+        assertThat(result.totalPages()).isEqualTo(1);
+
+        // 공연 정보 검증
+        PublicPerformanceSummaryDTO item = result.items().getFirst();
+
+        assertThat(item.performanceId()).isEqualTo("10");
+        assertThat(item.title()).isEqualTo("제목");
+        assertThat(item.genreCode()).isEqualTo("THEATER");
+        assertThat(item.venueName()).isEqualTo("장소");
+
+        // 최저 가격 검증
+        assertThat(item.minPrice()).isEqualTo(30000L);
+
+        // 판매 오픈 예정 시간 검증
+        assertThat(item.nextSalesOpenAt()).isNotNull();
+
+        // Repository 호출 검증
+        verify(performanceRepository).searchPublicPerformances(
+                eq(PublicationStatus.PUBLISHED),
+                eq(Visibility.PUBLIC),
+                eq(""),
+                isNull(),
+                eq(LocalDate.of(1, 1, 1)),
+                eq(LocalDate.of(9999, 12, 31)),
+                any(Pageable.class)
+        );
+
+        verify(performanceSessionRepository)
+                .findByPerformanceIds(List.of(10L));
+
+        verify(sessionGradePriceRepository)
+                .findBySessions(List.of(101L, 102L));
+
+        verify(saleOpeningRepository)
+                .findByPerformanceIds(List.of(10L));
     }
 }
