@@ -19,7 +19,7 @@ class DefaultRagIndexProcessorTest {
     private final RagIndexTask task = new RagIndexTask(1L, 2L, 1, "가나다라마", "Qwen/Qwen3-Embedding-8B", 4096, "owner", 1);
 
     @Test
- dev
+
     void passesOrderedChunksAndEmbeddingsToCompletion() {
         var vectors = List.of(List.of(1.0), List.of(2.0));
         when(embedding.embed(List.of("가나다", "라마"))).thenReturn(vectors);
