@@ -63,3 +63,6 @@ replay_pid*
 
 # Local documentation
 /docs/
+
+# Local helper scripts
+/scripts/

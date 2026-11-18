@@ -35,14 +35,15 @@ public class RagDocumentService {
 
     // 공통 정책 문서 등록
     @Transactional
-    public RagDocumentDetailResponse createPolicy(
+    public RagDocumentDetailResponse createPolicy(//등록단위 시작 기본 롤백 대상인 RuntimeException이 전파되면 함께 저장한 데이터가 롤백된다.
             Long adminId,
             RagDocumentCreateRequest request
     ) {
-        RagDocument document = RagDocument.createPolicy(adminId);
+        RagDocument document = RagDocument.createPolicy(adminId);//문서 식별자 확보
         RagDocument savedDocument = documentRepository.save(document);
 
-        String contentHash = calculateHash(request.content());
+        String contentHash = calculateHash(request.content());//본문을 SHA-256으로 요약,해시만 계산하며 중복 등록 차단 로직은 없다
+        //문서 ID와 제목 본문 해시 작성자로 최초 버전을 만든다
         RagDocumentVersion version =
                 RagDocumentVersion.createFirstVersion(
                         savedDocument.getId(),
@@ -83,7 +84,7 @@ public class RagDocumentService {
                 );
 
         List<RagDocumentVersionId> versionIds =
-                documents.getContent().stream()
+                documents.getContent().stream() //stream().map():문서 목록을 하나씩 보면서 키 목록으로 바꾼다
                         .map(document -> new RagDocumentVersionId(
                                 document.getId(),
                                 document.getLatestVersion()

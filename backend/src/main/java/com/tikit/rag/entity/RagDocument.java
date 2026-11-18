@@ -49,6 +49,16 @@ public class RagDocument {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    public void activateVersion(int version) {
+        if (deletedAt != null || version < 1 || version > latestVersion) {
+            throw new IllegalStateException("활성화할 수 없는 문서 버전입니다.");
+        }
+        // 이전 버전의 인덱싱이 늦게 끝나도 활성 버전을 과거로 되돌리지 않는다.
+        if (activeVersion == null || version > activeVersion) {
+            activeVersion = version;
+        }
+    }
+
     public static RagDocument createPolicy(Long adminId) {
         RagDocument document = new RagDocument();
 
