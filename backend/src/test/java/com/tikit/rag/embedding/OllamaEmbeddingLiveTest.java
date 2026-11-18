@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @EnabledIfEnvironmentVariable(named = "RAG_OLLAMA_LIVE_TEST", matches = "true")
 class OllamaEmbeddingLiveTest {
     @Test
-    @org.junit.jupiter.api.DisplayName("설치된 실제 모델로 한국어 청크의 임베딩을 생성한다")
+
     void embedsKoreanChunksWithInstalledModel() {
         new ApplicationContextRunner()
                 .withUserConfiguration(RagConfiguration.class, RagOllamaConfiguration.class, RagChunkSplitter.class)

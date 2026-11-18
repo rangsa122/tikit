@@ -8,6 +8,9 @@ import com.tikit.booking.entity.Booking;
 import com.tikit.booking.entity.BookingStatus;
 import com.tikit.booking.entity.TicketStatus;
 import com.tikit.common.ErrorCode;
+import com.tikit.common.job.BackgroundJob;
+import com.tikit.common.job.BackgroundJobStatus;
+import com.tikit.common.job.BackgroundJobType;
 import com.tikit.payment.client.TossPaymentClient;
 import com.tikit.payment.dto.toss.TossCancelRequestDTO;
 import com.tikit.payment.dto.toss.TossPaymentResponseDTO;
@@ -40,6 +43,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
@@ -362,6 +366,66 @@ public class CancellationControllerDataTest {
         then(tossPaymentClient).should(never()).cancelPayment(any(), any(), any());
     }
 
+    @Test
+    @DisplayName("취소를 시작하면 환불 결과 확인 작업 1건이 QUEUED로 저장되고, 2분 뒤에 실행되도록 예약")
+    void cancel_booking_schedules_reconcile_job() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = confirmedBooking(memberId);
+        given(tossPaymentClient.cancelPayment(any(), any(), any())).willReturn(tossCanceledResponse(AMOUNT));
+        Instant before = Instant.now();
+
+        // when
+        ResultActions resultActions = mvc.perform(cancelRequest(bookingId, memberId, AMOUNT, "v1", newIdempotencyKey()));
+        Instant after = Instant.now();
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        assertThat(httpStatusCode).isEqualTo(202);
+
+        Cancellation cancellation = latestCancellation(bookingId);
+        List<BackgroundJob> jobs = reconcileJobsOf(cancellation.getId());
+        assertThat(jobs).hasSize(1);
+
+        BackgroundJob job = jobs.getFirst();
+        assertThat(job.getType()).isEqualTo(BackgroundJobType.CANCELLATION_RECONCILE);
+        assertThat(job.getResourceType()).isEqualTo("CANCELLATION");
+        assertThat(job.getResourceId()).isEqualTo(cancellation.getId());
+        assertThat(job.getStatus()).isEqualTo(BackgroundJobStatus.QUEUED);
+        assertThat(job.getAttemptCount()).isZero();
+        assertThat(job.getNextRunAt()).isBetween(before.plus(Duration.ofMinutes(2)), after.plus(Duration.ofMinutes(2)));
+    }
+
+    @Test
+    @DisplayName("견적이 바뀌어 취소를 거절하면 환불 결과 확인 작업도 저장되지 않음")
+    void cancel_booking_quote_changed_no_job() throws Exception {
+        // given
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Long bookingId = confirmedBooking(memberId);
+        long jobCountBefore = cancellationJobCount();
+
+        // when
+        ResultActions resultActions = mvc.perform(cancelRequest(bookingId, memberId, AMOUNT - 1, "v1", newIdempotencyKey()));
+
+        String responseBody = resultActions.andReturn().getResponse().getContentAsString();
+        int httpStatusCode = resultActions.andReturn().getResponse().getStatus();
+
+        System.out.println("테스트: " + responseBody);
+        System.out.println("테스트: " + httpStatusCode);
+
+        // then
+        ErrorCode errorCode = ErrorCode.CANCELLATION_QUOTE_CHANGED;
+
+        assertThat(httpStatusCode).isEqualTo(errorCode.getStatus().value());
+        assertThat(cancellationJobCount()).isEqualTo(jobCountBefore);
+        then(tossPaymentClient).should(never()).cancelPayment(any(), any(), any());
+    }
+
     // 기한 전 확정 예매 + 승인된 결제 (좌석 SOLD, 티켓 1장)
     private Long confirmedBooking(Long memberId) {
         Long bookingId = dataHelper.createBooking(memberId, BookingStatus.CONFIRMED,
@@ -444,5 +508,22 @@ public class CancellationControllerDataTest {
     private String accessTokenFor(Long memberId) {
         Member member = entityManager.find(Member.class, memberId);
         return jwtProvider.generateAccessToken(member);
+    }
+
+
+    // 이 취소의 결과 확인 작업 목록 (중복 방지 키로 조회)
+    private List<BackgroundJob> reconcileJobsOf(Long cancellationId) {
+        return entityManager.createQuery(
+                        "select j from BackgroundJob j where j.deduplicationKey = :key", BackgroundJob.class)
+                .setParameter("key", BackgroundJobType.CANCELLATION_RECONCILE.deduplicationKey(cancellationId))
+                .getResultList();
+    }
+
+    // 환불 결과 확인 작업 전체 개수 (거절된 요청 전후 비교용)
+    private long cancellationJobCount() {
+        return entityManager.createQuery(
+                        "select count(j) from BackgroundJob j where j.type = :type", Long.class)
+                .setParameter("type", BackgroundJobType.CANCELLATION_RECONCILE)
+                .getSingleResult();
     }
 }

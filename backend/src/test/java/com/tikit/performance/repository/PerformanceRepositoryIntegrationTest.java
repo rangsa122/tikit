@@ -9,7 +9,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
+import java.time.LocalDate;
 import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -101,5 +106,40 @@ class PerformanceRepositoryIntegrationTest {
                 );
 
         assertTrue(result.isEmpty());
+    }
+    @Test
+    @DisplayName("공개 공연을 검색어, 장르, 날짜 조건으로 조회한다")
+    void searchPublicPerformances() throws Exception {
+        verifyDatabase();
+
+        Pageable pageable = PageRequest.of(
+                0,
+                20,
+                Sort.by(
+                        Sort.Order.asc("startDate"),
+                        Sort.Order.asc("id")
+                )
+        );
+
+        Page<Performance> result =
+                performanceRepository.searchPublicPerformances(
+                        PublicationStatus.PUBLISHED,
+                        Visibility.PUBLIC,
+                        "TIKIT",
+                        "TEST",
+                        LocalDate.of(2026, 11, 15),
+                        LocalDate.of(2026, 11, 30),
+                        pageable
+                );
+
+        assertFalse(result.isEmpty());
+
+        assertTrue(result.getContent().stream()
+                .anyMatch(performance ->
+                        performance.getId().equals(PERFORMANCE_ID)
+                ));
+
+        assertEquals(1, result.getTotalElements());
+        assertEquals(1, result.getTotalPages());
     }
 }

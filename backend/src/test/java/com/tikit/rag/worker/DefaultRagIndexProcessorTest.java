@@ -19,7 +19,7 @@ class DefaultRagIndexProcessorTest {
     private final RagIndexTask task = new RagIndexTask(1L, 2L, 1, "가나다라마", "Qwen/Qwen3-Embedding-8B", 4096, "owner", 1);
 
     @Test
-    @org.junit.jupiter.api.DisplayName("분할한 청크와 임베딩을 순서대로 완료 저장 서비스에 전달한다")
+ dev
     void passesOrderedChunksAndEmbeddingsToCompletion() {
         var vectors = List.of(List.of(1.0), List.of(2.0));
         when(embedding.embed(List.of("가나다", "라마"))).thenReturn(vectors);
@@ -30,7 +30,7 @@ class DefaultRagIndexProcessorTest {
     }
 
     @Test
-    @org.junit.jupiter.api.DisplayName("임베딩 생성에 실패하면 청크와 성공 상태를 저장하지 않는다")
+
     void doesNotStoreAnythingIfEmbeddingFails() {
         when(embedding.embed(anyList())).thenThrow(new RagEmbeddingException("모델 호출 실패"));
         assertThatThrownBy(() -> processor.process(task)).isInstanceOf(RagEmbeddingException.class);
