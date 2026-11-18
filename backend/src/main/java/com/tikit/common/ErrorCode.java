@@ -178,7 +178,7 @@ public enum ErrorCode {
     ),
     WITHDRAWAL_BLOCKED(
             HttpStatus.CONFLICT,
-            "진행 중 거래가 있어 탈퇴할 수 없습니다."
+            "관람 전인 티켓이 있어 탈퇴할 수 없습니다."
     );
 
 

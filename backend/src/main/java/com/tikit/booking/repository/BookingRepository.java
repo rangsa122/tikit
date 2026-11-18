@@ -87,4 +87,12 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
             group by b.sessionId
             """)
     List<BookingCount> countBySessions(@Param("sessionIds") Collection<Long> sessionIds);
+
+    // 회원의 관람 전 확정 예매 존재 여부 확인
+    boolean existsByMemberIdAndStatusAndStartsAtSnapshotAfter(
+            Long memberId,
+            BookingStatus status,
+            Instant now
+    );
+
 }

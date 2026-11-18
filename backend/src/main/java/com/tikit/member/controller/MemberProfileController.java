@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.http.ResponseEntity;
 import jakarta.validation.Valid;
 
 // 회원 정보 API 컨트롤러
@@ -50,5 +52,18 @@ public class MemberProfileController {
         
         return ResponseDTO.success("회원정보 수정 성공", profile);
     }
+
+    // 회원 탈퇴 API
+    @PreAuthorize("hasAnyRole('MEMBER', 'MANAGER', 'ADMIN')")
+    @DeleteMapping
+    public ResponseEntity<Void> withdrawMe(
+            @AuthenticationPrincipal String memberId
+    ) {
+        // 유효 예매 확인 후 회원 탈퇴 처리
+        memberProfileService.withdrawMyAccount(Long.parseLong(memberId));
+
+        return ResponseEntity.noContent().build();
+    }
+
 
 }
