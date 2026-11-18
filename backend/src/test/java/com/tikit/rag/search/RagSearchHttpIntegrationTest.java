@@ -10,6 +10,7 @@ import com.tikit.rag.embedding.OllamaEmbeddingClient;
 import com.tikit.rag.config.RagGenerationProperties;
 import com.tikit.rag.generation.OllamaAnswerClient;
 import com.tikit.rag.service.RagQuestionService;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -31,10 +32,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class RagSearchHttpIntegrationTest {
     @Test
-    void searchesFixturesThroughRealClientAndControllerUsingSame4096DimensionModel() throws Exception {
+    @DisplayName("질문 하나만 임베딩하고 DB 검색 결과로 답변과 출처를 HTTP 응답에 전달한다")
+    void embedsOnlyQuestionAndPassesDatabaseResultsToAnswerAndController() throws Exception {
         var mapper = JsonMapper.builder().build();
-        var repository = new RagPrototypeChunkRepository(mapper);
-        var chunks = repository.findAll();
+        var chunks = new RagPrototypeChunkRepository(mapper).findAll();
+        var repository = org.mockito.Mockito.mock(com.tikit.rag.repository.RagChunkSearchRepository.class);
+        org.mockito.Mockito.when(repository.search(vector(0), 0.5, 3)).thenReturn(List.of(
+                new com.tikit.rag.dto.response.RagSearchMatch(chunks.getFirst().chunkId(),
+                        chunks.getFirst().documentId(), chunks.getFirst().documentTitle(), 0,
+                        chunks.getFirst().content(), 1.0)));
         var builder = RestClient.builder().baseUrl("http://localhost:11434");
         var server = MockRestServiceServer.bindTo(builder).build();
         var client = new OllamaEmbeddingClient(builder.build(),
@@ -47,17 +53,6 @@ class RagSearchHttpIntegrationTest {
                         new RagQuestionService(service, answerClient)))
                 .setControllerAdvice(new GlobalExceptionHandler(), new RagQuestionControllerAdvice()).build();
 
-        List<List<Double>> corpusVectors = new ArrayList<>();
-        for (int i = 0; i < chunks.size(); i++) {
-            corpusVectors.add(vector(i));
-        }
-        server.expect(requestTo("http://localhost:11434/api/embed"))
-                .andExpect(jsonPath("$.model").value("qwen3-embedding:8b"))
-                .andExpect(jsonPath("$.dimensions").value(4096))
-                .andExpect(jsonPath("$.input.length()").value(6))
-                .andExpect(jsonPath("$.input[0]").value(chunks.getFirst().content()))
-                .andRespond(withSuccess(mapper.writeValueAsString(Map.of("model", "qwen3-embedding:8b",
-                        "embeddings", corpusVectors)), MediaType.APPLICATION_JSON));
         server.expect(requestTo("http://localhost:11434/api/embed"))
                 .andExpect(jsonPath("$.model").value("qwen3-embedding:8b"))
                 .andExpect(jsonPath("$.dimensions").value(4096))

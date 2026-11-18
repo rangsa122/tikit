@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 class OllamaEmbeddingClientHttpTest {
     @Test
+
     void configuredReadTimeoutStopsAStalledHttpResponse() throws Exception {
         var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         var release = new CountDownLatch(1);

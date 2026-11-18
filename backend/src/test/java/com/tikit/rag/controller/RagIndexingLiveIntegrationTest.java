@@ -55,6 +55,7 @@ class RagIndexingLiveIntegrationTest {
     }
 
     @Test
+    @DisplayName("관리자 문서 등록 후 실제 모델로 인덱싱하고 활성 버전과 저장 벡터를 조회한다")
     void indexesRegisteredPolicyWithRealOllamaAndReadsReadyDocument() throws Exception {
         String extensionSchema = jdbc.queryForObject("""
                 select n.nspname from pg_extension e join pg_namespace n on n.oid = e.extnamespace

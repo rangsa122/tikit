@@ -112,6 +112,7 @@ class RagConfigurationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("기본 처리기를 연결한 워커는 시작 시 모델을 호출하지 않는다")
     void enabledWorkerWithDefaultProcessorStartsWithoutCallingModels() {
         runner.withPropertyValues("rag.indexing.enabled=true")
                 .withUserConfiguration(DefaultRagIndexProcessor.class)
@@ -121,6 +122,7 @@ class RagConfigurationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("서버 호출 없이 Ollama 기본 설정을 바인딩한다")
     void bindsOllamaDefaultsWithoutCallingServer() {
         runner.run(context -> {
             assertThat(context).hasNotFailed().hasSingleBean(OllamaEmbeddingClient.class);
@@ -132,6 +134,7 @@ class RagConfigurationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("유효하지 않은 Ollama 설정을 거부한다")
     void rejectsInvalidOllamaSettings() {
         for (String property : new String[]{"rag.ollama.base-url=file:///tmp/model",
                 "rag.ollama.base-url=http://user:password@localhost:11434", "rag.ollama.base-url=relative",
