@@ -69,7 +69,7 @@ class CancellationServiceTest {
         given(idempotencyService.start(eq(MEMBER_ID), eq("BOOKING_CANCEL"), eq(IDEMPOTENCY_KEY), anyString()))
                 .willReturn(IdempotencyStart.started(IDEMPOTENCY_REQUEST_ID));
         given(cancellationTxService.startCancellation(BOOKING_ID, MEMBER_ID, request))
-                .willReturn(new CancellationStart(CANCELLATION_ID, BOOKING_ID, PAYMENT_KEY, "개인 사정", AMOUNT, PG_IDEMPOTENCY_KEY));
+                .willReturn(new CancellationStart(CANCELLATION_ID, BOOKING_ID, MEMBER_ID, PAYMENT_KEY, "개인 사정", AMOUNT, PG_IDEMPOTENCY_KEY));
         currentResult = CancellationResponseDTO.builder().cancellationId(CANCELLATION_ID).build();
         given(cancellationQueryService.getCancellation(CANCELLATION_ID, BOOKING_ID, MEMBER_ID)).willReturn(currentResult);
     }
