@@ -928,6 +928,23 @@ public class PerformanceServiceTest {
         when(performanceSessionRepository.findByPerformanceIds(List.of(10L)))
                 .thenReturn(List.of(first, second));
 
+    @Test
+    @DisplayName("다른 운영자의 공연은 수정할 수 없다")
+    void update_notOwner() {
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
+
+        Member otherManager = member(Role.MANAGER, MemberStatus.ACTIVE);
+        ReflectionTestUtils.setField(otherManager, "id", 99L);
+
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findDetail(PERFORMANCE_ID))
+                .thenReturn(Optional.of(draftPerformance(otherManager)));
+
+        assertFails(() -> service.update(MEMBER_ID, PERFORMANCE_ID, updateRequest(0L)),
+                ErrorCode.ACCESS_DENIED);
+    }
+
+
         when(sessionGradePriceRepository.findBySessions(List.of(101L, 102L)))
                 .thenReturn(List.of(firstPrice, secondPrice));
 

@@ -1,6 +1,7 @@
 package com.tikit.performance.service;
 
 import com.tikit.auth.entity.Member;
+import com.tikit.auth.entity.Role;
 import com.tikit.common.ErrorCode;
 import com.tikit.performance.dto.PerformanceSessionListDTO;
 import com.tikit.performance.dto.PublicPerformanceDetailDTO;
@@ -122,14 +123,18 @@ public class PerformanceService {
             int page,
             int size
     ) {
-        accessChecker.requireViewer(memberId);
+        Member member = accessChecker.requireViewer(memberId);
 
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
 
+        // ADMIN은 전체, MANAGER는 본인 공연만
+        Long ownerId = member.getRole() == Role.ADMIN ? null : member.getId();
+
         return performanceRepository
                 .findAllByStatus(
                         status,
+                        ownerId,
                         PageRequest.of(safePage, safeSize)
                 )
                 .map(PerformanceResponseDTO::from);
@@ -142,11 +147,12 @@ public class PerformanceService {
             Long memberId,
             Long performanceId
     ) {
-        accessChecker.requireViewer(memberId);
+        Member member = accessChecker.requireViewer(memberId);
 
-        return PerformanceResponseDTO.from(
-                findPerformance(performanceId)
-        );
+        Performance performance = findPerformance(performanceId);
+        accessChecker.requireOwner(member, performance);
+
+        return PerformanceResponseDTO.from(performance);
     }
 
     /**
@@ -502,9 +508,10 @@ public class PerformanceService {
             Long performanceId,
             PerformanceUpdateRequestDTO request
     ) {
-        accessChecker.requireManager(memberId);
+        Member manager = accessChecker.requireManager(memberId);
 
         Performance performance = findPerformance(performanceId);
+        accessChecker.requireOwner(manager, performance);
 
         if (performance.getPublicationStatus() != PublicationStatus.DRAFT) {
             throw new PerformanceException(
@@ -628,12 +635,13 @@ public class PerformanceService {
             Long performanceId,
             SalesStatusUpdateRequestDTO request
     ) {
-        accessChecker.requireManager(memberId);
+        Member manager = accessChecker.requireManager(memberId);
 
         Performance performance = performanceRepository.findById(performanceId)
                 .orElseThrow(() ->
                         new PerformanceException(ErrorCode.RESOURCE_NOT_FOUND)
                 );
+        accessChecker.requireOwner(manager, performance);
 
         if (request.getSalesStatus() == SalesStatus.ENABLED) {
             // 재개: 게시됐고 공개 상태일 때만 가능
@@ -667,7 +675,7 @@ public class PerformanceService {
             Long performanceId,
             VisibilityUpdateRequestDTO request
     ) {
-        accessChecker.requireManager(memberId);
+        Member manager = accessChecker.requireManager(memberId);
 
         // 이 API로는 PUBLIC, HIDDEN만 지정할 수 있다 (PRIVATE은 게시 전 상태)
         if (request.getVisibility() != Visibility.PUBLIC
@@ -679,6 +687,7 @@ public class PerformanceService {
                 .orElseThrow(() ->
                         new PerformanceException(ErrorCode.RESOURCE_NOT_FOUND)
                 );
+        accessChecker.requireOwner(manager, performance);
 
         if (performance.getPublicationStatus() != PublicationStatus.PUBLISHED) {
             throw new PerformanceException(ErrorCode.PERFORMANCE_NOT_PUBLISHED);

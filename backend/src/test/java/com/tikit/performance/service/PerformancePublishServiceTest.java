@@ -222,4 +222,21 @@ public class PerformancePublishServiceTest {
                 ErrorCode.ACCESS_DENIED);
         verify(performanceRepository, never()).findById(anyLong());
     }
+
+    @Test
+    @DisplayName("다른 운영자의 공연은 게시할 수 없다")
+    void publish_notOwner() {
+        Member manager = member(Role.MANAGER);
+
+        Member otherManager = member(Role.MANAGER);
+        ReflectionTestUtils.setField(otherManager, "id", 99L);
+
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findById(PERFORMANCE_ID))
+                .thenReturn(Optional.of(draftPerformance(otherManager)));
+
+        assertFails(() -> service.publish(MEMBER_ID, PERFORMANCE_ID, 0L, REQUEST_ID),
+                ErrorCode.ACCESS_DENIED);
+        verifyNoInteractions(performanceSessionRepository);
+    }
 }
