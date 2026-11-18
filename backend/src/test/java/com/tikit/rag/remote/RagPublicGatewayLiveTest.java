@@ -1,5 +1,6 @@
 package com.tikit.rag.remote;
 
+import com.tikit.util.JWTProvider;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.http.HttpServletRequest;
@@ -10,6 +11,7 @@ import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.support.ResourcePropertySource;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestClient;
 
 import java.net.URI;
@@ -61,8 +63,11 @@ class RagPublicGatewayLiveTest {
         var factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(10000);
         factory.setReadTimeout(300000);
+        var jwtProvider = new JWTProvider();
+        ReflectionTestUtils.setField(jwtProvider, "secret", secret);
+        ReflectionTestUtils.invokeMethod(jwtProvider, "init");
         var client = new RemoteRagQuestionClient(RestClient.builder().baseUrl(baseUrl)
-                .requestFactory(factory).build(), beans.getBeanProvider(HttpServletRequest.class));
+                .requestFactory(factory).build(), beans.getBeanProvider(HttpServletRequest.class), jwtProvider);
         var response = client.answer("예매를 취소하면 수수료가 얼마인가요?");
         assertThat(response.answer()).contains("0원");
         assertThat(response.sources()).anySatisfy(source -> assertThat(source.documentId()).isEqualTo("fixture-refund-v1"));

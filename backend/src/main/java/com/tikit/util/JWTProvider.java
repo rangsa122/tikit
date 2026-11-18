@@ -20,6 +20,8 @@ public class JWTProvider {
     private String secret;
 
     private SecretKey secretKey;
+    public static final String RAG_SERVICE_TOKEN_TYPE = "RAG_SERVICE";
+    public static final String RAG_SERVICE_SUBJECT = "tikit-rag-backend";
 
     private static final long ACCESS_TOKEN_EXPIRATION_MILLIS = 10L * 60 * 1000; // 10분
     private static final long REFRESH_TOKEN_EXPIRATION_MILLIS = 60L * 60 * 1000; // 60분
@@ -39,6 +41,17 @@ public class JWTProvider {
                 .claim("tokenType", "ACCESS")
                 .issuedAt(now)
                 .expiration(expire)
+                .signWith(secretKey, Jwts.SIG.HS256)
+                .compact();
+    }
+
+    public String generateRagServiceToken() {
+        Date now = new Date();
+        return Jwts.builder()
+                .subject(RAG_SERVICE_SUBJECT)
+                .claim("tokenType", RAG_SERVICE_TOKEN_TYPE)
+                .issuedAt(now)
+                .expiration(new Date(now.getTime() + 60_000))
                 .signWith(secretKey, Jwts.SIG.HS256)
                 .compact();
     }
