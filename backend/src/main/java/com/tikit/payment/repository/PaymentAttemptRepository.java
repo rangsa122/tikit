@@ -101,4 +101,9 @@ public interface PaymentAttemptRepository extends JpaRepository<PaymentAttempt, 
               AND b.id = pa.bookingId
             """)
     Optional<Long> findMemberIdById(@Param("paymentAttemptId") Long paymentAttemptId);
+
+    // 관리자 환불: 예매 ID로 예매 행 잠금 (주인 상관없음, 관리자 권한은 서비스에서 확인)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT b FROM Booking b WHERE b.id = :bookingId")
+    Optional<Booking> findBookingByIdForUpdate(@Param("bookingId") Long bookingId);
 }
