@@ -31,6 +31,9 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     // 내 예매 목록 (상태 필터)
     Page<Booking> findByMemberIdAndStatus(Long memberId, BookingStatus status, Pageable pageable);
 
+    // 회원의 특정 상태 예매 전체 조회
+    List<Booking> findByMemberIdAndStatus(Long memberId, BookingStatus status);
+
     // 회원이 회차에 가진 결제 대기와 확정 매수 합계
     @Query("""
             select coalesce(sum(b.seatCount), 0)
