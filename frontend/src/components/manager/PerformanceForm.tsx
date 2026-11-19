@@ -1,7 +1,7 @@
 import {useState} from 'react'
 import type {ChangeEvent, FocusEvent, FormEvent, ReactNode} from 'react'
 import {useGenres} from '../../hooks/useGenres.ts'
-import {uploadPoster} from '../../api/managerPerformanceApi.ts'
+import {uploadImage} from '../../api/managerPerformanceApi.ts'
 import {toMessage} from '../../api/apiError.ts'
 
 export interface FormState {
@@ -11,6 +11,7 @@ export interface FormState {
     organizerName: string
     description: string
     posterUrl: string
+    bannerUrl: string
     startDate: string
     endDate: string
     bookingLimitPerMember: string
@@ -26,6 +27,7 @@ export const INITIAL_FORM: FormState = {
     organizerName: '',
     description: '',
     posterUrl: '',
+    bannerUrl: '',
     startDate: '',
     endDate: '',
     bookingLimitPerMember: '4',
@@ -60,14 +62,17 @@ function validate(form: FormState): FormErrors {
         errors.description = '공연 설명은 10000자 이하로 입력해 주세요.'
     }
 
-    // 포스터 주소는 두 종류다.
+    // 이미지 주소는 두 종류다.
     // KOPIS에서 받아온 외부 주소(https://)와 우리 서버에 업로드한 주소(/uploads/)
-    if (
-        form.posterUrl &&
-        !form.posterUrl.startsWith('https://') &&
-        !form.posterUrl.startsWith('/uploads/')
-    ) {
+    const imageUrlValid = (url: string) =>
+        url.startsWith('https://') || url.startsWith('/uploads/')
+
+    if (form.posterUrl && !imageUrlValid(form.posterUrl)) {
         errors.posterUrl = '포스터 이미지를 다시 업로드해 주세요.'
+    }
+
+    if (form.bannerUrl && !imageUrlValid(form.bannerUrl)) {
+        errors.bannerUrl = '배너 이미지를 다시 업로드해 주세요.'
     }
 
     if (!form.startDate) {
@@ -120,6 +125,81 @@ function Field({
     )
 }
 
+type ImageField = 'posterUrl' | 'bannerUrl'
+
+// 포스터와 배너가 같은 모양의 입력을 쓴다. 미리보기 비율만 다르다.
+function ImageUploadField({
+                              label,
+                              hint,
+                              previewClass,
+                              value,
+                              uploading,
+                              disabled,
+                              error,
+                              onSelect,
+                              onRemove,
+                          }: {
+    label: string
+    hint: string
+    previewClass: string
+    value: string
+    uploading: boolean
+    disabled: boolean
+    error?: string
+    onSelect: (e: ChangeEvent<HTMLInputElement>) => void
+    onRemove: () => void
+}) {
+    return (
+        <Field label={label} error={error}>
+            <div className="flex items-start gap-4">
+                {value ? (
+                    <img
+                        src={value}
+                        alt={`${label} 미리보기`}
+                        className={`${previewClass} shrink-0 rounded-lg border border-gray-200 object-cover`}
+                    />
+                ) : (
+                    <div
+                        className={`${previewClass} flex shrink-0 items-center justify-center rounded-lg border border-dashed border-gray-300 text-xs text-gray-400`}
+                    >
+                        미리보기
+                    </div>
+                )}
+
+                <div className="flex min-w-0 flex-col gap-2">
+                    <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        disabled={uploading || disabled}
+                        onChange={onSelect}
+                        className="text-sm text-gray-700 file:mr-3 file:rounded-lg file:border file:border-gray-300 file:bg-white file:px-4 file:py-2 file:text-sm file:font-semibold file:text-gray-700 disabled:opacity-50"
+                    />
+
+                    <p className="text-xs text-gray-500">
+                        {hint}
+                    </p>
+
+                    {uploading && (
+                        <p className="text-xs text-gray-500">
+                            업로드 중...
+                        </p>
+                    )}
+
+                    {value && !uploading && (
+                        <button
+                            type="button"
+                            onClick={onRemove}
+                            className="self-start text-xs font-semibold text-gray-500 underline"
+                        >
+                            이미지 삭제
+                        </button>
+                    )}
+                </div>
+            </div>
+        </Field>
+    )
+}
+
 // 등록 화면과 수정 화면이 함께 사용하는 입력 폼.
 // 입력값과 유효성 검증을 담당하고, 서버 호출은 부모 컴포넌트에서 처리한다.
 export default function PerformanceForm({
@@ -139,8 +219,8 @@ export default function PerformanceForm({
 }) {
     const [form, setForm] = useState<FormState>(initial)
     const [touched, setTouched] = useState<Touched>({})
-    const [uploading, setUploading] = useState(false)
-    const [uploadError, setUploadError] = useState('')
+    const [uploading, setUploading] = useState({posterUrl: false, bannerUrl: false})
+    const [uploadError, setUploadError] = useState({posterUrl: '', bannerUrl: ''})
 
     // 서버에서 장르 목록 조회
     const {
@@ -174,7 +254,8 @@ export default function PerformanceForm({
         !genresLoading &&
         !genresError &&
         genreValid &&
-        !uploading
+        !uploading.posterUrl &&
+        !uploading.bannerUrl
 
     // 사용자가 한 번 건드린 입력칸에만 오류 표시
     const shownError = (name: keyof FormState) =>
@@ -213,32 +294,39 @@ export default function PerformanceForm({
     }
 
     // 파일을 고르는 즉시 업로드하고, 돌려받은 주소를 폼에 담는다.
-    const handlePosterChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    // 포스터와 배너가 같은 업로드 API를 쓰므로 한 함수로 처리한다.
+    const handleImageChange = async (
+        field: ImageField,
+        e: ChangeEvent<HTMLInputElement>,
+    ) => {
         const input = e.target
         const file = input.files?.[0]
 
         if (!file) return
 
-        setUploadError('')
-        setUploading(true)
+        setUploadError((prev) => ({...prev, [field]: ''}))
+        setUploading((prev) => ({...prev, [field]: true}))
 
         try {
-            const posterUrl = await uploadPoster(file)
+            const imageUrl = await uploadImage(file)
 
-            setForm((prev) => ({...prev, posterUrl}))
-            setTouched((prev) => ({...prev, posterUrl: true}))
+            setForm((prev) => ({...prev, [field]: imageUrl}))
+            setTouched((prev) => ({...prev, [field]: true}))
         } catch (error: unknown) {
-            setUploadError(toMessage(error, '포스터를 업로드하지 못했습니다'))
+            setUploadError((prev) => ({
+                ...prev,
+                [field]: toMessage(error, '이미지를 업로드하지 못했습니다'),
+            }))
         } finally {
-            setUploading(false)
+            setUploading((prev) => ({...prev, [field]: false}))
             // 같은 파일을 다시 고를 수 있도록 비워 둔다
             input.value = ''
         }
     }
 
-    const handlePosterRemove = () => {
-        setUploadError('')
-        setForm((prev) => ({...prev, posterUrl: ''}))
+    const handleImageRemove = (field: ImageField) => {
+        setUploadError((prev) => ({...prev, [field]: ''}))
+        setForm((prev) => ({...prev, [field]: ''}))
     }
 
     const handleSubmit = (e: FormEvent) => {
@@ -369,54 +457,29 @@ export default function PerformanceForm({
                 />
             </Field>
 
-            <Field
+            <ImageUploadField
                 label="포스터 이미지"
-                error={uploadError || shownError('posterUrl')}
-            >
-                <div className="flex items-start gap-4">
-                    {form.posterUrl ? (
-                        <img
-                            src={form.posterUrl}
-                            alt="포스터 미리보기"
-                            className="h-[160px] w-[120px] shrink-0 rounded-lg border border-gray-200 object-cover"
-                        />
-                    ) : (
-                        <div className="flex h-[160px] w-[120px] shrink-0 items-center justify-center rounded-lg border border-dashed border-gray-300 text-xs text-gray-400">
-                            미리보기
-                        </div>
-                    )}
+                hint="JPG, PNG, WEBP · 5MB 이하 · 세로 3:4 권장 (예: 600×800)"
+                previewClass="h-[160px] w-[120px]"
+                value={form.posterUrl}
+                uploading={uploading.posterUrl}
+                disabled={submitting}
+                error={uploadError.posterUrl || shownError('posterUrl')}
+                onSelect={(e) => void handleImageChange('posterUrl', e)}
+                onRemove={() => handleImageRemove('posterUrl')}
+            />
 
-                    <div className="flex min-w-0 flex-col gap-2">
-                        <input
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp"
-                            disabled={uploading || submitting}
-                            onChange={(e) => void handlePosterChange(e)}
-                            className="text-sm text-gray-700 file:mr-3 file:rounded-lg file:border file:border-gray-300 file:bg-white file:px-4 file:py-2 file:text-sm file:font-semibold file:text-gray-700 disabled:opacity-50"
-                        />
-
-                        <p className="text-xs text-gray-500">
-                            JPG, PNG, WEBP · 5MB 이하
-                        </p>
-
-                        {uploading && (
-                            <p className="text-xs text-gray-500">
-                                업로드 중...
-                            </p>
-                        )}
-
-                        {form.posterUrl && !uploading && (
-                            <button
-                                type="button"
-                                onClick={handlePosterRemove}
-                                className="self-start text-xs font-semibold text-gray-500 underline"
-                            >
-                                포스터 삭제
-                            </button>
-                        )}
-                    </div>
-                </div>
-            </Field>
+            <ImageUploadField
+                label="배너 이미지 (선택)"
+                hint="등록하면 홈 배너에 노출됩니다 · 가로 1320×415 권장 · 5MB 이하"
+                previewClass="h-[62px] w-[198px]"
+                value={form.bannerUrl}
+                uploading={uploading.bannerUrl}
+                disabled={submitting}
+                error={uploadError.bannerUrl || shownError('bannerUrl')}
+                onSelect={(e) => void handleImageChange('bannerUrl', e)}
+                onRemove={() => handleImageRemove('bannerUrl')}
+            />
 
             <div className="grid grid-cols-2 gap-4">
                 <Field

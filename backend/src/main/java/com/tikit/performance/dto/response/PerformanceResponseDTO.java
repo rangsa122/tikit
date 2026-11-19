@@ -22,6 +22,7 @@ public class PerformanceResponseDTO {
     private String organizerName;
     private String description;
     private String posterUrl;
+    private String bannerUrl;
     private LocalDate startDate;
     private LocalDate endDate;
     private PublicationStatus publicationStatus;
@@ -45,6 +46,7 @@ public class PerformanceResponseDTO {
                 p.getOrganizerName(),
                 p.getDescription(),
                 p.getPosterUrl(),
+                p.getBannerUrl(),
                 p.getStartDate(),
                 p.getEndDate(),
                 p.getPublicationStatus(),

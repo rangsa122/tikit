@@ -42,6 +42,9 @@ public class PerformanceCreateRequestDTO {
 
     private String posterUrl;
 
+    // 홈 배너용 이미지. 선택 항목이다.
+    private String bannerUrl;
+
     @NotNull
     private LocalDate startDate;
 

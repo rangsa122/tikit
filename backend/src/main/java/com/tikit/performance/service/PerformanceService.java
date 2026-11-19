@@ -109,6 +109,9 @@ public class PerformanceService {
             );
         }
 
+        // 배너 이미지는 생성 메서드의 인자를 늘리지 않고 따로 설정한다.
+        performance.changeBannerUrl(blankToNull(request.getBannerUrl()));
+
         performanceRepository.save(performance);
 
         return PerformanceResponseDTO.from(performance);
@@ -551,6 +554,11 @@ public class PerformanceService {
                 request.getBookingLimitPerMember()
         );
 
+        // 보내지 않으면(null) 그대로 두고, 빈 문자열을 보내면 배너에서 내린다.
+        if (request.getBannerUrl() != null) {
+            performance.changeBannerUrl(blankToNull(request.getBannerUrl()));
+        }
+
         performanceRepository.flush();
 
         return PerformanceResponseDTO.from(performance);
@@ -586,6 +594,11 @@ public class PerformanceService {
     /**
      * 활성화된 장르 조회
      */
+    // 빈 문자열은 "값 없음"으로 저장한다. 화면에서 이미지를 지웠을 때 들어온다.
+    private String blankToNull(String value) {
+        return (value == null || value.isBlank()) ? null : value;
+    }
+
     private Genre findActiveGenre(String code) {
         return genreRepository.findActive(code)
                 .orElseThrow(() ->

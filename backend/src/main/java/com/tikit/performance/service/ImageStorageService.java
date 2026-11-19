@@ -19,11 +19,11 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 공연 포스터 이미지를 서버 디스크에 저장한다.
+ * 공연 포스터·배너 이미지를 서버 디스크에 저장한다.
  * 저장된 파일은 WebMvcConfig가 설정한 공개 주소로 제공된다.
  */
 @Service
-public class PosterStorageService {
+public class ImageStorageService {
 
     // 확장자와 Content-Type을 짝으로 둔다. 확장자만 이미지로 바꾼 파일을 거르기 위해 둘 다 확인한다.
     private static final Map<String, String> ALLOWED_TYPES = Map.of(
@@ -39,9 +39,9 @@ public class PosterStorageService {
     private final String publicPrefix;
     private final Clock clock;
 
-    public PosterStorageService(
-            @Value("${tikit.upload.poster-dir}") String posterDir,
-            @Value("${tikit.upload.poster-public-prefix}") String publicPrefix,
+    public ImageStorageService(
+            @Value("${tikit.upload.image-dir}") String posterDir,
+            @Value("${tikit.upload.image-public-prefix}") String publicPrefix,
             Clock clock) {
         this.baseDir = Path.of(posterDir).toAbsolutePath().normalize();
         this.publicPrefix = publicPrefix;
@@ -50,7 +50,7 @@ public class PosterStorageService {
 
     /**
      * 파일을 저장하고 공개 주소를 돌려준다.
-     * 예: /uploads/posters/2026/11/3f2a....jpg
+     * 예: /uploads/images/2026/11/3f2a....jpg
      */
     public String store(MultipartFile file) {
         validate(file);
