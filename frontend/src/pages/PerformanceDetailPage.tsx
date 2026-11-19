@@ -1,5 +1,7 @@
-
-import {useEffect, useState} from 'react'
+import {useEffect, useRef, useState} from 'react'
+import {isAxiosError} from 'axios'
+import OpeningNotificationModal from '../components/performance/OpeningNotificationModal'
+import {subscribeOpeningSubscription} from '../api/notificationApi'
 import {Link, useNavigate, useParams} from 'react-router'
 import {categories} from '../constants/categories'
 import SessionSelector from '../components/performance/SessionSelector'
@@ -127,6 +129,55 @@ export default function PerformanceDetailPage() {
   const [favoriteNotice, setFavoriteNotice] = useState<string | null>(null)
   const [favoriteStateReady, setFavoriteStateReady] = useState(false)
 
+  const [openingModalOpen, setOpeningModalOpen] = useState(false)
+  const [openingSubmitting, setOpeningSubmitting] = useState(false)
+  const [openingError, setOpeningError] = useState<string | null>(null)
+  const openingRequest = useRef(false)
+  const openingContext = useRef(0)
+
+  useEffect(() => {
+    openingContext.current += 1
+    openingRequest.current = false
+    setOpeningModalOpen(false)
+    setOpeningSubmitting(false)
+    setOpeningError(null)
+    setFavoriteSaving(false)
+    return () => { openingContext.current += 1 }
+  }, [accessToken, numericPerformanceId])
+
+  const handleOpeningClose = () => {
+    if (openingRequest.current) return
+    setOpeningModalOpen(false)
+    setOpeningError(null)
+  }
+
+  const handleOpeningConfirm = async () => {
+    if (!openingModalOpen || !accessToken || numericPerformanceId === null || openingRequest.current) return
+
+    const context = openingContext.current
+    openingRequest.current = true
+    setOpeningSubmitting(true)
+    setOpeningError(null)
+
+    try {
+      await subscribeOpeningSubscription(numericPerformanceId)
+      if (context !== openingContext.current) return
+      setFavoriteNotice('관심 공연 등록 및 예매 시작 알림 신청이 완료되었습니다.')
+      setOpeningModalOpen(false)
+    } catch (error) {
+      if (context !== openingContext.current) return
+      const message = isAxiosError<{message?: string}>(error)
+        ? error.response?.data?.message
+        : undefined
+      setOpeningError(message || '알림 신청에 실패했습니다. 다시 시도해 주세요.')
+    } finally {
+      if (context === openingContext.current) {
+        openingRequest.current = false
+        setOpeningSubmitting(false)
+      }
+    }
+  }
+
   useEffect(() => {
     setSelectedSession(null)
     setBookingNotice(false)
@@ -220,28 +271,35 @@ export default function PerformanceDetailPage() {
       return
     }
 
+    const context = openingContext.current
+
     try {
       setFavoriteSaving(true)
 
       if (isFavorite) {
         await removeFavoritePerformance(numericPerformanceId)
+        if (context !== openingContext.current) return
 
         setIsFavorite(false)
         setFavoriteNotice('관심 공연을 해제했습니다.')
       } else {
         await addFavoritePerformance(numericPerformanceId)
+        if (context !== openingContext.current) return
 
         setIsFavorite(true)
         setFavoriteNotice('관심 공연에 등록했습니다.')
+        setOpeningError(null)
+        setOpeningModalOpen(true)
       }
     } catch (error) {
+      if (context !== openingContext.current) return
       setFavoriteError(
         error instanceof Error
           ? error.message
           : '관심 공연 처리 중 오류가 발생했습니다.',
       )
     } finally {
-      setFavoriteSaving(false)
+      if (context === openingContext.current) setFavoriteSaving(false)
     }
   }
 
@@ -351,6 +409,13 @@ export default function PerformanceDetailPage() {
 
   return (
     <main className="mx-auto max-w-[1320px] px-5 py-10">
+      <OpeningNotificationModal
+        isOpen={openingModalOpen}
+        isSubmitting={openingSubmitting}
+        error={openingError}
+        onClose={handleOpeningClose}
+        onConfirm={() => void handleOpeningConfirm()}
+      />
       <Link
         to={category ? `/categories/${category.id}` : '/'}
         className="text-sm text-gray-500 hover:text-blue-600"
