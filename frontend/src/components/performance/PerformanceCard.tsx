@@ -43,7 +43,7 @@ export default function PerformanceCard({
 
         <div className="flex flex-col gap-3 pt-4 pr-2 pl-1 leading-[normal]">
           {variant === 'opening' && (
-            <p className="text-lg leading-[normal] font-semibold">
+            <p className="text-lg leading-[normal] font-bold text-[#4338CA]">
               {performance.openingLabel}
             </p>
           )}
