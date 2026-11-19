@@ -178,7 +178,7 @@ public enum ErrorCode {
     ),
     WITHDRAWAL_BLOCKED(
             HttpStatus.CONFLICT,
-            "진행 중 거래가 있어 탈퇴할 수 없습니다."
+            "유효한 예매 또는 처리 중인 결제·환불 내역이 있어 탈퇴할 수 없습니다."
     );
 
 
