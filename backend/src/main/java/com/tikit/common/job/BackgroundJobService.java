@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 
 // 복구 작업 예약 (실행은 별도 실행부가 담당)
 @Slf4j
@@ -32,5 +33,25 @@ public class BackgroundJobService {
         BackgroundJob job = BackgroundJob.queue(type, resourceId, now.plus(FIRST_RUN_DELAY));
         backgroundJobRepository.save(job);
         log.info("background job scheduled: key={}, nextRunAt={}", deduplicationKey, job.getNextRunAt());
+    }
+
+    // 관리자 재확인 요청: 작업이 있으면 바로 다시 확인하게 되돌리고, 없으면 바로 실행되게 새로 예약
+    // (대상 상태 확인과 같은 트랜잭션에서만 호출, 응답에 쓸 작업 ID·상태를 위해 작업을 돌려줌)
+    @Transactional(propagation = Propagation.MANDATORY)
+    public BackgroundJob requestRecheck(BackgroundJobType type, Long resourceId, Instant now) {
+        String deduplicationKey = type.deduplicationKey(resourceId);
+
+        Optional<BackgroundJob> existing = backgroundJobRepository.findByDeduplicationKeyForUpdate(deduplicationKey);
+        if (existing.isPresent()) {
+            BackgroundJob job = existing.get();
+            job.requestRecheck(now);
+            log.info("background job recheck requested: key={}, status={}, nextRunAt={}",
+                    deduplicationKey, job.getStatus(), job.getNextRunAt());
+            return job;
+        }
+
+        BackgroundJob job = backgroundJobRepository.save(BackgroundJob.queue(type, resourceId, now));
+        log.info("background job scheduled by recheck: key={}, nextRunAt={}", deduplicationKey, job.getNextRunAt());
+        return job;
     }
 }
