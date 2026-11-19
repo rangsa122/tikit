@@ -20,6 +20,20 @@ public interface CancellationRepository extends JpaRepository<Cancellation, Long
     // 이 결제에 해당 상태의 취소가 있는지 (진행 중 취소 확인용)
     boolean existsByPaymentAttemptIdAndStatusIn(Long paymentAttemptId, Collection<CancellationStatus> statuses);
 
+    // 회원의 진행 중인 취소·환불 존재 여부
+    @Query("""
+        SELECT (COUNT(c) > 0)
+        FROM Cancellation c
+        JOIN PaymentAttempt pa ON pa.id = c.paymentAttemptId
+        JOIN Booking b ON b.id = pa.bookingId
+        WHERE b.memberId = :memberId
+          AND c.status IN :statuses
+        """)
+    boolean existsByMemberIdAndStatusIn(
+            @Param("memberId") Long memberId,
+            @Param("statuses") Collection<CancellationStatus> statuses
+    );
+
     // 취소 행 잠금 (2차 기록이 동시에 와도 하나씩 처리)
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT c FROM Cancellation c WHERE c.id = :id")
