@@ -1,4 +1,3 @@
-
 import {useState} from 'react'
 import {useNavigate} from 'react-router'
 import {
@@ -131,14 +130,25 @@ export default function KopisSearchPage() {
 
     return (
         <div className="mx-auto max-w-[900px] px-6 py-10">
-            <h1 className="text-2xl font-bold text-gray-900">
-                KOPIS에서 공연 등록
-            </h1>
+            <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                    <h1 className="text-2xl font-bold text-gray-900">
+                        KOPIS에서 공연 등록
+                    </h1>
 
-            <p className="mt-1 text-sm text-gray-500">
-                공연예술통합전산망에서 공연을 찾아 등록합니다.
-                선택하면 등록 폼이 채워진 채로 열려요.
-            </p>
+                    <p className="mt-1 text-sm text-gray-500">
+                        공연예술통합전산망에서 공연을 찾아 등록합니다.
+                        선택하면 등록 폼이 채워진 채로 열려요.
+                    </p>
+                </div>
+
+                <button
+                    onClick={() => navigate('/manager/performances')}
+                    className="h-10 shrink-0 rounded-lg border border-gray-300 px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                    목록으로
+                </button>
+            </div>
 
             <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6">
                 <div className="grid grid-cols-2 gap-4">
