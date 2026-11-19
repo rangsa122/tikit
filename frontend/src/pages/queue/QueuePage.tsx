@@ -4,6 +4,7 @@ import {useLocation, useNavigate, useParams} from 'react-router'
 import {subscribeOpening} from '../../api/queueApi'
 import type {QueueApiError, QueueEntry} from '../../api/queueApi'
 import timerIcon from '../../assets/queue/timer.svg'
+import tikitLogo from '../../assets/navigation/tikit-logo.png'
 import {usePaymentCountdown} from '../../hooks/usePaymentCountdown'
 import {useQueueEntry, useSessionOpening} from '../../hooks/useQueueEntry'
 import type {SessionOpening} from '../../hooks/useQueueEntry'
@@ -418,7 +419,7 @@ function HeaderMinimal() {
     return (
         <header className="h-16 shrink-0 border-b border-[#e4e6eb] bg-white">
             <div className="mx-auto flex h-full max-w-[1280px] items-center justify-between gap-4 px-4">
-                <p className="text-2xl font-bold text-[#111318]">TIKIT</p>
+                <img src={tikitLogo} alt="TIKIT" className="block h-8 w-auto object-contain" />
                 <p className="truncate text-[13px] text-[#5b616e]">공정한 예매를 위해 대기열을 운영하고 있어요</p>
             </div>
         </header>
