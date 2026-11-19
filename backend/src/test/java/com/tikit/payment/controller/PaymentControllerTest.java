@@ -5,9 +5,13 @@ import com.tikit.common.idempotency.IdempotencyStart;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import com.tikit.auth.entity.Member;
+import com.tikit.auth.entity.MemberStatus;
 import com.tikit.auth.entity.Role;
 import com.tikit.common.ErrorCode;
+import com.tikit.payment.support.PaymentTestDataHelper;
 import com.tikit.util.JWTProvider;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,9 +19,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.transaction.annotation.Transactional;
 
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -29,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ActiveProfiles("local")
 @AutoConfigureMockMvc // Mock(가짜) 환경에 MockMvc가 등록
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@Transactional
 public class PaymentControllerTest {
 
     private static final String VALID_CONFIRM_BODY = """
@@ -45,12 +50,18 @@ public class PaymentControllerTest {
     @Autowired
     private JWTProvider jwtProvider;
 
-    // 컨트롤러 테스트는 DB 회원이 없는 가짜 토큰을 써서, 멱등 기록 저장(회원 FK)은 가짜로 대체
+    // 컨트롤러 테스트는 요청 형식·인증·없는 대상만 확인하므로 멱등 기록 저장은 가짜로 대체
     @MockitoBean
     private IdempotencyService idempotencyService;
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    private PaymentTestDataHelper dataHelper;
+
     @BeforeEach
     void setup() {
+        dataHelper = new PaymentTestDataHelper(entityManager);
         given(idempotencyService.start(any(), any(), any(), any())).willReturn(IdempotencyStart.started(1L));
     }
 
@@ -78,15 +89,7 @@ public class PaymentControllerTest {
     @DisplayName("존재하지 않는 예매로 결제를 준비하면 404를 반환")
     void prepare_payment_attempt_booking_not_found() throws Exception {
         // given
-        Member member = Member.create(
-                "payment-test@example.com",
-                "encodedPassword",
-                "tester",
-                Role.MEMBER
-        );
-        ReflectionTestUtils.setField(member, "id", 1L);
-
-        String accessToken = jwtProvider.generateAccessToken(member);
+        String accessToken = activeMemberAccessToken();
 
         // when
         ResultActions resultActions = mvc.perform(
@@ -131,15 +134,7 @@ public class PaymentControllerTest {
     @DisplayName("존재하지 않는 결제 시도를 조회하면 404를 반환")
     void get_payment_attempt_not_found() throws Exception {
         // given
-        Member member = Member.create(
-                "payment-test@example.com",
-                "encodedPassword",
-                "tester",
-                Role.MEMBER
-        );
-        ReflectionTestUtils.setField(member, "id", 1L);
-
-        String accessToken = jwtProvider.generateAccessToken(member);
+        String accessToken = activeMemberAccessToken();
 
         // when
         ResultActions resultActions = mvc.perform(
@@ -189,15 +184,7 @@ public class PaymentControllerTest {
     @DisplayName("존재하지 않는 결제 시도를 승인하면 404를 반환")
     void confirm_payment_attempt_not_found() throws Exception {
         // given
-        Member member = Member.create(
-                "payment-test@example.com",
-                "encodedPassword",
-                "tester",
-                Role.MEMBER
-        );
-        ReflectionTestUtils.setField(member, "id", 1L);
-
-        String accessToken = jwtProvider.generateAccessToken(member);
+        String accessToken = activeMemberAccessToken();
 
         // when
         ResultActions resultActions = mvc.perform(
@@ -225,15 +212,7 @@ public class PaymentControllerTest {
     @DisplayName("주문 번호 형식이 잘못된 요청으로 결제를 승인하면 400을 반환")
     void confirm_payment_invalid_order_id() throws Exception {
         // given
-        Member member = Member.create(
-                "payment-test@example.com",
-                "encodedPassword",
-                "tester",
-                Role.MEMBER
-        );
-        ReflectionTestUtils.setField(member, "id", 1L);
-
-        String accessToken = jwtProvider.generateAccessToken(member);
+        String accessToken = activeMemberAccessToken();
 
         String invalidBody = """
                 {
@@ -270,15 +249,7 @@ public class PaymentControllerTest {
     @DisplayName("Idempotency-Key 헤더 없이 결제를 승인하면 400 VALIDATION_ERROR를 반환")
     void confirm_payment_without_idempotency_key() throws Exception {
         // given
-        Member member = Member.create(
-                "payment-test@example.com",
-                "encodedPassword",
-                "tester",
-                Role.MEMBER
-        );
-        ReflectionTestUtils.setField(member, "id", 1L);
-
-        String accessToken = jwtProvider.generateAccessToken(member);
+        String accessToken = activeMemberAccessToken();
 
         // when
         ResultActions resultActions = mvc.perform(
@@ -325,15 +296,7 @@ public class PaymentControllerTest {
     @DisplayName("존재하지 않는 예매의 전체 취소 예상 금액을 조회하면 404를 반환")
     void get_cancellation_quote_booking_not_found() throws Exception {
         // given
-        Member member = Member.create(
-                "payment-test@example.com",
-                "encodedPassword",
-                "tester",
-                Role.MEMBER
-        );
-        ReflectionTestUtils.setField(member, "id", 1L);
-
-        String accessToken = jwtProvider.generateAccessToken(member);
+        String accessToken = activeMemberAccessToken();
 
         // when
         ResultActions resultActions = mvc.perform(
@@ -351,5 +314,12 @@ public class PaymentControllerTest {
 
         assertThat(httpStatusCode).isEqualTo(errorCode.getStatus().value());
         resultActions.andExpect(jsonPath("$.code").value(errorCode.name()));
+    }
+
+    // JWT 필터가 요청마다 DB 회원 상태를 확인하므로(#198) 실제로 저장한 ACTIVE 회원의 토큰 사용 (테스트 끝나면 롤백)
+    private String activeMemberAccessToken() {
+        Long memberId = dataHelper.createMember(MemberStatus.ACTIVE, Role.MEMBER);
+        Member member = entityManager.find(Member.class, memberId);
+        return jwtProvider.generateAccessToken(member);
     }
 }

@@ -140,6 +140,22 @@ public class BackgroundJob {
         clearLease();
     }
 
+    // 관리자 재확인 요청: 곧바로 다시 확인하도록 대기 상태로 되돌림
+    // FAILED·SUCCEEDED -> QUEUED, 시도 횟수 0, 실행 시각 지금 (자동 재시도를 처음부터 다시)
+    // QUEUED -> 실행 시각만 지금으로 당김 / RUNNING -> 이미 확인 중이라 그대로 둠
+    public void requestRecheck(Instant now) {
+        if (status == BackgroundJobStatus.FAILED || status == BackgroundJobStatus.SUCCEEDED) {
+            this.status = BackgroundJobStatus.QUEUED;
+            this.attemptCount = 0;
+            this.nextRunAt = now;
+            clearLease();
+            return;
+        }
+        if (status == BackgroundJobStatus.QUEUED && nextRunAt.isAfter(now)) {
+            this.nextRunAt = now;
+        }
+    }
+
     // 작업 종류마다 확인할 대상 (멱등 기록의 결과 리소스 이름과 같게)
     private static String resourceTypeOf(BackgroundJobType type) {
         return switch (type) {
