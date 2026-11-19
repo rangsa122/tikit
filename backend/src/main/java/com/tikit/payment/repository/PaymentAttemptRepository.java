@@ -65,6 +65,19 @@ public interface PaymentAttemptRepository extends JpaRepository<PaymentAttempt, 
     // 같은 예매에 해당 상태의 결제 시도가 있는지 확인 (진행 중 결제 확인용)
     boolean existsByBookingIdAndStatusIn(Long bookingId, Collection<PaymentAttemptStatus> statuses);
 
+    // 회원의 처리 중이거나 확인 중인 결제 존재 여부
+    @Query("""
+        select (count(pa) > 0)
+        from PaymentAttempt pa, Booking b
+        where pa.bookingId = b.id
+          and b.memberId = :memberId
+          and pa.status in :statuses
+        """)
+    boolean existsByMemberIdAndStatusIn(
+            @Param("memberId") Long memberId,
+            @Param("statuses") Collection<PaymentAttemptStatus> statuses
+    );
+
     // 같은 예매의 해당 상태 결제 시도 조회 (READY 재사용용)
     Optional<PaymentAttempt> findFirstByBookingIdAndStatus(Long bookingId, PaymentAttemptStatus status);
 
@@ -101,4 +114,10 @@ public interface PaymentAttemptRepository extends JpaRepository<PaymentAttempt, 
               AND b.id = pa.bookingId
             """)
     Optional<Long> findMemberIdById(@Param("paymentAttemptId") Long paymentAttemptId);
+
+    // 관리자 환불: 예매 ID로 예매 행 잠금 (주인 상관없음, 관리자 권한은 서비스에서 확인)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT b FROM Booking b WHERE b.id = :bookingId")
+    Optional<Booking> findBookingByIdForUpdate(@Param("bookingId") Long bookingId);
 }
+
