@@ -15,7 +15,7 @@ const accountMenus = [
     { label: '내 정보 조회', path: '/mypage/profile' },
     { label: '비밀번호 변경', path: null },
     { label: '알림 설정', path: '/mypage/notifications' },
-    { label: '로그아웃', path: null },
+    { label: '회원 탈퇴', path: '/mypage/withdrawal' },
 ]
 
 export default function MyPageSidebar() {
