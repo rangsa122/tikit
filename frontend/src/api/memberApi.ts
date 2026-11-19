@@ -34,3 +34,22 @@ export async function updateMyProfile(
 
     return response.data.data
 }
+
+// 회원 탈퇴 가능 여부 응답
+export interface MemberWithdrawalEligibility {
+    eligible: boolean
+}
+
+// 회원 탈퇴 가능 여부 조회
+export async function getWithdrawalEligibility(): Promise<MemberWithdrawalEligibility> {
+    const response = await apiClient.get<ApiResponse<MemberWithdrawalEligibility>>(
+        '/api/v1/me/withdrawal-eligibility'
+    )
+
+    return response.data.data
+}
+
+// 회원 탈퇴 요청
+export async function withdrawMyAccount(password: string): Promise<void> {
+    await apiClient.post('/api/v1/me/withdrawal', { password })
+}
