@@ -1,4 +1,3 @@
-
 package com.tikit.performance.repository;
 
 import com.tikit.performance.entity.Performance;
@@ -58,6 +57,22 @@ public interface PerformanceRepository extends JpaRepository<Performance, Long> 
             @Param("id") Long id,
             @Param("publicationStatus") PublicationStatus publicationStatus,
             @Param("visibility") Visibility visibility
+    );
+
+    // 홈 배너에 노출할 공연. 배너 이미지를 등록한 공개 공연만 대상이다.
+    // 최근에 게시된 순으로 내려주고, 개수는 Pageable로 제한한다.
+    @Query("""
+            select p
+            from Performance p
+            where p.publicationStatus = :publicationStatus
+              and p.visibility = :visibility
+              and p.bannerUrl is not null
+            order by p.publishedAt desc, p.id desc
+            """)
+    List<Performance> findBanners(
+            @Param("publicationStatus") PublicationStatus publicationStatus,
+            @Param("visibility") Visibility visibility,
+            Pageable pageable
     );
 
     boolean existsByKopisId(String kopisId);

@@ -107,6 +107,9 @@ public class SecurityConfig {
                                         "/api/v1/performances/*/sessions"
                                 ).permitAll()
 
+                                // 홈 배너 조회
+                                .requestMatchers(HttpMethod.GET, "/api/v1/banners").permitAll()
+
                                 // 공개 AI 안내 질문
                                 .requestMatchers(HttpMethod.POST, "/api/v1/rag/questions").permitAll()
 

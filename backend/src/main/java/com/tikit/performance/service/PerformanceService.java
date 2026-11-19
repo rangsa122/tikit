@@ -12,6 +12,7 @@ import com.tikit.performance.dto.request.PerformanceUpdateRequestDTO;
 import com.tikit.performance.dto.request.SalesStatusUpdateRequestDTO;
 import com.tikit.performance.dto.request.VisibilityUpdateRequestDTO;
 import com.tikit.performance.dto.response.PerformancePublicationResponseDTO;
+import com.tikit.performance.dto.response.BannerResponseDTO;
 import com.tikit.performance.dto.response.PerformanceResponseDTO;
 import com.tikit.performance.dto.response.PerformanceSessionResponseDTO;
 import com.tikit.performance.entity.*;
@@ -594,6 +595,27 @@ public class PerformanceService {
     /**
      * 활성화된 장르 조회
      */
+    // =========================================================
+    // 홈 배너
+    // =========================================================
+
+    private static final int BANNER_LIMIT = 5;
+
+    /**
+     * 홈 배너에 노출할 공연 목록.
+     * 배너 이미지를 등록한 공개 공연만, 최근 게시 순으로 최대 5개를 내려준다.
+     */
+    @Transactional(readOnly = true)
+    public List<BannerResponseDTO> getBanners() {
+        return performanceRepository.findBanners(
+                        PublicationStatus.PUBLISHED,
+                        Visibility.PUBLIC,
+                        PageRequest.of(0, BANNER_LIMIT))
+                .stream()
+                .map(BannerResponseDTO::from)
+                .toList();
+    }
+
     // 빈 문자열은 "값 없음"으로 저장한다. 화면에서 이미지를 지웠을 때 들어온다.
     private String blankToNull(String value) {
         return (value == null || value.isBlank()) ? null : value;
@@ -710,7 +732,6 @@ public class PerformanceService {
             throw new PerformanceException(ErrorCode.VERSION_CONFLICT);
         }
 
-        // TODO: request.getReason()을 audit_logs에 남길지 팀 확인 필요 (현재는 저장하지 않음)
         performance.changeVisibility(request.getVisibility());
 
         performanceRepository.flush();
