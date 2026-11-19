@@ -41,6 +41,7 @@ export default function PerformanceBanner({variant = 'home'}: PerformanceBannerP
   const [dragOffset, setDragOffset] = useState(0)
   const [dragStep, setDragStep] = useState(1)
   const movingRef = useRef(false)
+  const draggedRef = useRef(false)
   const playbackButton = useRef<HTMLButtonElement>(null)
   const pointerStart = useRef<{id: number; x: number; y: number; step: number} | null>(null)
   const isCategory = variant === 'category'
@@ -85,24 +86,43 @@ export default function PerformanceBanner({variant = 'home'}: PerformanceBannerP
 
   function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
     if (!event.isPrimary || event.button !== 0 || movingRef.current) return
+
+    draggedRef.current = false
+
     const step = event.currentTarget.getBoundingClientRect().width + gap
     setDragStep(step)
+
     pointerStart.current = {
       id: event.pointerId,
       x: event.clientX,
       y: event.clientY,
       step,
     }
-    event.currentTarget.setPointerCapture(event.pointerId)
   }
 
   function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
     const start = pointerStart.current
     if (!start || start.id !== event.pointerId) return
-    const distance = event.clientX - start.x
-    if (Math.abs(distance) > Math.abs(event.clientY - start.y)) {
-      const limit = start.step * (banners.length - 1)
-      setDragOffset(Math.max(-limit, Math.min(limit, distance)))
+
+    const distanceX = event.clientX - start.x
+    const distanceY = event.clientY - start.y
+
+    // 가로로 8px 이상 이동하면 드래그로 판단
+    if (Math.abs(distanceX) > 8 && Math.abs(distanceX) > Math.abs(distanceY)) {
+      draggedRef.current = true
+
+      // 실제 드래그가 시작된 경우에만 포인터 캡처
+      if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.setPointerCapture(event.pointerId)
+      }
+    }
+
+    if (Math.abs(distanceX) > Math.abs(distanceY)) {
+      const limit = start.step * (bannerCount - 1)
+
+      setDragOffset(
+          Math.max(-limit, Math.min(limit, distanceX))
+      )
     }
   }
 
@@ -180,7 +200,15 @@ export default function PerformanceBanner({variant = 'home'}: PerformanceBannerP
     >
       <div className={`relative mx-auto w-[calc(100%-40px)] ${frameClass}`}>
         <div
-          className="h-full touch-pan-y cursor-grab select-none active:cursor-grabbing"
+            className="h-full touch-pan-y cursor-grab select-none active:cursor-grabbing"
+            onClickCapture={event => {
+              // 드래그 후 발생하는 클릭은 상세 페이지 이동 방지
+              if (draggedRef.current) {
+                event.preventDefault()
+                event.stopPropagation()
+                draggedRef.current = false
+              }
+            }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -214,31 +242,35 @@ export default function PerformanceBanner({variant = 'home'}: PerformanceBannerP
                   <Link
                       to={`/performances/${slide.performanceId}`}
                       tabIndex={index === centeredPosition ? 0 : -1}
+                      onDragStart={event => event.preventDefault()}
                       className="relative block h-full w-full overflow-hidden bg-[#222]"
                   >
                     {slide.posterUrl && !failedPosterUrls.includes(slide.posterUrl) ? (
                         <>
-                          {/* 배경 이미지 */}
+                          {/* 흐릿한 배경 이미지 */}
                           <img
                               src={slide.posterUrl}
                               alt=""
                               aria-hidden="true"
-                              className="absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-2xl"
+                              draggable={false}
+                              className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover blur-3xl brightness-[0.4]"
                           />
 
-                          {/* 공연 포스터 */}
+                          {/* 전체 포스터 */}
                           <img
                               src={slide.posterUrl}
                               alt={`${slide.title} 포스터`}
+                              draggable={false}
                               onError={() => {
                                 const url = slide.posterUrl
+
                                 if (url) {
                                   setFailedPosterUrls(current =>
                                       current.includes(url) ? current : [...current, url]
                                   )
                                 }
                               }}
-                              className="relative h-full w-full object-contain"
+                              className="pointer-events-none absolute inset-0 h-full w-full object-contain"
                           />
                         </>
                     ) : (
