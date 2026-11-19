@@ -119,10 +119,17 @@ export default function NavBar() {
           <img src={tikitLogo} alt="" className="block h-10 w-auto object-contain"/>
         </Link>
 
-        <div className="flex h-10 w-[400px] max-w-full items-center justify-between gap-4 max-sm:w-full">
+        <div className="flex h-10 w-[480px] max-w-full items-center justify-between gap-4 max-sm:w-full max-sm:gap-2">
           <PerformanceSearch key={keyword} initialKeyword={keyword} />
 
           <div className="flex h-full shrink-0 items-center gap-3 px-1">
+            <NavLink
+              to="/rag/questions"
+              className="rounded-lg px-2 py-1 text-sm font-semibold whitespace-nowrap text-indigo-700 hover:bg-indigo-50 aria-[current=page]:bg-indigo-50"
+            >
+              AI 안내
+            </NavLink>
+
             <Link
               to="/mypage/favorites"
               aria-label="관심 공연"
