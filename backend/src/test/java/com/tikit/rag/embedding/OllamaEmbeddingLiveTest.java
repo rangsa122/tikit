@@ -15,6 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @EnabledIfEnvironmentVariable(named = "RAG_OLLAMA_LIVE_TEST", matches = "true")
 class OllamaEmbeddingLiveTest {
     @Test
+
     void embedsKoreanChunksWithInstalledModel() {
         new ApplicationContextRunner()
                 .withUserConfiguration(RagConfiguration.class, RagOllamaConfiguration.class, RagChunkSplitter.class)

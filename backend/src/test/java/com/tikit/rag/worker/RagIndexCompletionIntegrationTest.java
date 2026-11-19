@@ -78,6 +78,7 @@ class RagIndexCompletionIntegrationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("모든 청크와 벡터를 저장한 뒤 문서 버전을 활성화한다")
     void savesVectorsAndActivatesOnlyAfterAllChunksAreStored() {
         var task = claim("가나다라마바", false);
         processor.process(task);
@@ -100,6 +101,7 @@ class RagIndexCompletionIntegrationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("동시에 중복 완료해도 청크를 교체하거나 중복 저장하지 않는다")
     void duplicateConcurrentCompletionDoesNotReplaceOrDuplicateChunks() throws Exception {
         var task = claim("가나다라마바", false);
         var texts = splitter.split(task.content());
@@ -119,6 +121,7 @@ class RagIndexCompletionIntegrationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("작업을 선점하지 않은 워커의 완료 요청을 거부한다")
     void rejectsCompletionByAnotherWorker() {
         var task = claim("가나다", false);
         var other = new RagIndexTask(task.jobId(), task.documentId(), task.documentVersion(), task.content(),
@@ -129,6 +132,7 @@ class RagIndexCompletionIntegrationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("잘못된 벡터 차원으로 성공 상태가 남지 않는다")
     void invalidDimensionsDoNotLeaveSuccessfulState() {
         var task = claim("가나다", false);
         assertThatThrownBy(() -> completion.complete(task, splitter.split(task.content()), List.of(List.of(1.0))))
@@ -137,6 +141,7 @@ class RagIndexCompletionIntegrationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("후속 청크 저장 실패 시 전체를 롤백하고 기존 활성 버전을 유지한다")
     void laterChunkFailureRollsBackAllChunksAndWorkerPreservesPreviousActiveVersion() {
         jdbc.execute("alter table rag_chunks add constraint reject_second_chunk check (content <> '실패문')");
         try {
@@ -155,6 +160,7 @@ class RagIndexCompletionIntegrationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("성공 상태 반영에 실패하면 JDBC 청크 저장도 롤백한다")
     void failureToFlushSuccessStateAlsoRollsBackJdbcInserts() {
         var task = claim("가나다라마바", false);
         jdbc.execute("alter table rag_index_jobs add constraint reject_success check (status <> 'SUCCEEDED')");
@@ -167,6 +173,7 @@ class RagIndexCompletionIntegrationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("새 버전 인덱싱 성공 후 활성 버전을 교체한다")
     void newVersionReplacesActiveVersionAfterSuccess() {
         var task = claim("가나다", true);
         processor.process(task);
@@ -175,6 +182,7 @@ class RagIndexCompletionIntegrationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("이전 버전 처리가 늦게 끝나도 최신 활성 버전을 되돌리지 않는다")
     void olderVersionFinishingLateDoesNotReplaceNewerActiveVersion() {
         var task = claim("가나다", true);
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
@@ -193,6 +201,7 @@ class RagIndexCompletionIntegrationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("임베딩 모델 호출 중 호출자의 DB 트랜잭션을 중단한다")
     void suspendsCallerTransactionWhileCallingEmbeddingModel() {
         var task = claim("가나다", false);
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> processor.process(task));
@@ -201,6 +210,7 @@ class RagIndexCompletionIntegrationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("실패 작업을 재처리해 해당 청크만 교체하고 다른 문서와 버전을 보존한다")
     void retriesFailedJobAndReplacesRemainingChunksWithoutTouchingOtherVersionsOrDocuments() {
         var task = claim("가나다라마바", true);
         seedChunks(task.documentId(), 1, "이전청크");
@@ -237,6 +247,7 @@ class RagIndexCompletionIntegrationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("재처리 저장 실패 시 기존 청크를 복원하고 활성 버전을 유지한다")
     void retryStorageFailureRestoresExistingChunksAndKeepsPreviousActiveVersion() {
         var task = claim("정상문실패문", true);
         seedChunks(task.documentId(), 1, "활성청크");
@@ -268,6 +279,7 @@ class RagIndexCompletionIntegrationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("같은 워커라도 이전 시도의 늦은 성공과 실패 반영을 거부한다")
     void rejectsLateSuccessAndFailureFromPreviousAttemptEvenWithTheSameWorkerOwner() {
         var old = claim("가나다라마바", false);
         jobs.fail(old);
@@ -285,6 +297,7 @@ class RagIndexCompletionIntegrationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("재등록된 작업은 하나의 워커만 선점해 청크를 저장한다")
     void onlyOneWorkerClaimsRequeuedJobAndStoresChunks() throws Exception {
         var old = claim("가나다라마바", false);
         jobs.fail(old);
@@ -305,6 +318,7 @@ class RagIndexCompletionIntegrationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("임베딩 실패 시 청크를 저장하지 않고 다음 작업은 계속 처리한다")
     void embeddingFailureDoesNotSaveChunksAndDoesNotStopNextJob() {
         Long failedId = createJob("가나다", true);
         Long successId = createJob("라마바", false);
@@ -328,6 +342,7 @@ class RagIndexCompletionIntegrationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("대기 중이거나 실행 중 또는 성공한 작업의 재등록을 거부한다")
     void rejectsRequeueOfQueuedRunningOrSuccessfulJobs() {
         Long id = createJob("가나다", false);
         assertThatThrownBy(() -> jobs.requeueFailed(id)).isInstanceOf(IllegalStateException.class);
@@ -343,6 +358,7 @@ class RagIndexCompletionIntegrationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("문서 버전 상태가 맞지 않으면 작업 재등록을 롤백한다")
     void inconsistentVersionStateRollsBackRequeue() {
         var task = claim("가나다", false);
         jobs.fail(task);

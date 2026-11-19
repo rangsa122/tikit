@@ -105,4 +105,19 @@ public interface PaymentAttemptRepository extends JpaRepository<PaymentAttempt, 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT pa FROM PaymentAttempt pa WHERE pa.id = :paymentAttemptId")
     Optional<PaymentAttempt> findByIdForUpdate(@Param("paymentAttemptId") Long paymentAttemptId);
+
+    // 복구 작업: 결제 시도의 예매 회원 ID (승인 2차 트랜잭션 메서드가 회원 ID로 예매를 잠금)
+    @Query("""
+            SELECT b.memberId
+            FROM PaymentAttempt pa, Booking b
+            WHERE pa.id = :paymentAttemptId
+              AND b.id = pa.bookingId
+            """)
+    Optional<Long> findMemberIdById(@Param("paymentAttemptId") Long paymentAttemptId);
+
+    // 관리자 환불: 예매 ID로 예매 행 잠금 (주인 상관없음, 관리자 권한은 서비스에서 확인)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT b FROM Booking b WHERE b.id = :bookingId")
+    Optional<Booking> findBookingByIdForUpdate(@Param("bookingId") Long bookingId);
 }
+

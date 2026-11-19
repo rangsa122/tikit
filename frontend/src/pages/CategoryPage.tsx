@@ -1,10 +1,16 @@
 
 import {useState} from 'react'
+import {useQuery} from '@tanstack/react-query'
 import {Link, useParams} from 'react-router'
 import {categories} from '../constants/categories'
-import {mockOpeningPerformances, mockPerformances} from '../mocks/performances'
+import {usePerformances} from '../hooks/usePerformances'
+import {
+  getOpeningPerformances,
+  toPerformance,
+} from '../utils/performanceUtils'
 import PerformanceBanner from '../components/performance/PerformanceBanner'
 import PerformanceSection from '../components/performance/PerformanceSection'
+import PerformanceListState from '../components/performance/PerformanceListState'
 import Pagination from '../components/performance/Pagination'
 import PromotionBanner from '../components/performance/PromotionBanner'
 
@@ -12,12 +18,33 @@ const PAGE_SIZE = 5
 
 function CategoryContent({categoryId}: {categoryId: string}) {
   const [currentPage, setCurrentPage] = useState(1)
-  const category = categories.find(item => item.id === categoryId)
+
+  const category = categories.find(
+    item => item.id === categoryId,
+  )
+
+  const performanceQuery = usePerformances(
+    {
+      page: currentPage - 1,
+      size: PAGE_SIZE,
+      genreCode: category?.id,
+      sort: 'startDate',
+    },
+    Boolean(category),
+  )
+
+  const openingQuery = useQuery({
+    queryKey: ['opening-performances', categoryId],
+    queryFn: () => getOpeningPerformances(categoryId),
+    enabled: Boolean(category),
+  })
 
   if (!category) {
     return (
       <div className="px-5 py-20 text-center">
-        <h1 className="text-2xl font-bold">존재하지 않는 카테고리입니다.</h1>
+        <h1 className="text-2xl font-bold">
+          존재하지 않는 카테고리입니다.
+        </h1>
         <Link to="/" className="mt-6 inline-block underline">
           메인으로 이동
         </Link>
@@ -25,47 +52,72 @@ function CategoryContent({categoryId}: {categoryId: string}) {
     )
   }
 
-  const openingPerformances = mockOpeningPerformances.filter(
-    performance => performance.categoryId === category.id,
+  const openingPerformances = (openingQuery.data ?? []).map(
+    item => toPerformance(item, category.id),
   )
 
-  const rankedPerformances = mockPerformances.filter(
-    performance => performance.categoryId === category.id,
+  const performances = (performanceQuery.data?.items ?? []).map(
+    item => toPerformance(item, category.id),
   )
 
-  const totalPages = Math.ceil(rankedPerformances.length / PAGE_SIZE)
-
-  const safeCurrentPage = Math.min(
-    Math.max(currentPage, 1),
-    Math.max(totalPages, 1),
-  )
-
-  const paginatedPerformances = rankedPerformances.slice(
-    (safeCurrentPage - 1) * PAGE_SIZE,
-    safeCurrentPage * PAGE_SIZE,
-  )
+  const totalPages = performanceQuery.data?.totalPages ?? 0
 
   return (
     <div className="pb-20">
       <h1 className="sr-only">{category.label} 공연</h1>
+
       <PerformanceBanner variant="category" />
 
       <div className="mx-auto max-w-[1320px]">
-        <PerformanceSection
-          key={`${category.id}-opening`}
-          title="오픈 예정"
-          performances={openingPerformances}
-          variant="opening"
-        />
+        {openingQuery.isPending || openingQuery.isError ? (
+          <section className="px-5 pt-8">
+            <h2 className="py-5 text-2xl font-bold">
+              오픈 예정
+            </h2>
 
-        <PerformanceSection
-          key={`${category.id}-ranking`}
-          title="일간 랭킹"
-          performances={paginatedPerformances}
-        />
+            <PerformanceListState
+              state={openingQuery.isError ? 'error' : 'loading'}
+              onRetry={() => void openingQuery.refetch()}
+            />
+          </section>
+        ) : (
+          <PerformanceSection
+            key={`${category.id}-opening`}
+            title="오픈 예정"
+            performances={openingPerformances}
+            variant="opening"
+          />
+        )}
+
+        {performanceQuery.isPending ||
+        performanceQuery.isError ||
+        performances.length === 0 ? (
+          <section className="px-5 pt-8">
+            <h2 className="py-5 text-2xl font-bold">
+              전체 공연
+            </h2>
+
+            <PerformanceListState
+              state={
+                performanceQuery.isError
+                  ? 'error'
+                  : performanceQuery.isPending
+                    ? 'loading'
+                    : 'empty'
+              }
+              onRetry={() => void performanceQuery.refetch()}
+            />
+          </section>
+        ) : (
+          <PerformanceSection
+            key={`${category.id}-list`}
+            title="전체 공연"
+            performances={performances}
+          />
+        )}
 
         <Pagination
-          currentPage={safeCurrentPage}
+          currentPage={currentPage}
           totalPages={totalPages}
           onPageChange={setCurrentPage}
         />
@@ -79,5 +131,10 @@ function CategoryContent({categoryId}: {categoryId: string}) {
 export default function CategoryPage() {
   const {categoryId} = useParams()
 
-  return <CategoryContent key={categoryId} categoryId={categoryId ?? ''} />
+  return (
+    <CategoryContent
+      key={categoryId}
+      categoryId={categoryId ?? ''}
+    />
+  )
 }

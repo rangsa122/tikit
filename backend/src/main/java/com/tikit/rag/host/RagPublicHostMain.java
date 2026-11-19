@@ -7,7 +7,7 @@ import com.tikit.rag.config.RagSearchProperties;
 import com.tikit.rag.embedding.OllamaEmbeddingClient;
 import com.tikit.rag.generation.OllamaAnswerClient;
 import com.tikit.rag.search.RagPrototypeChunkRepository;
-import com.tikit.rag.search.RagSearchService;
+import com.tikit.rag.search.RagPrototypeSearchService;
 import com.tikit.rag.service.RagQuestionService;
 import jakarta.validation.Validation;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -64,7 +64,7 @@ public final class RagPublicHostMain {
         var embedding = new OllamaEmbeddingClient(RestClient.builder().baseUrl(ollama.baseUrl().toString())
                 .requestFactory(embeddingFactory).build(), ollama,
                 new RagEmbeddingProperties("Qwen/Qwen3-Embedding-8B", 4096, ""));
-        var search = new RagSearchService(embedding, new RagPrototypeChunkRepository(mapper), searchProperties);
+        var search = new RagPrototypeSearchService(embedding, new RagPrototypeChunkRepository(mapper), searchProperties);
         var answer = new RagQuestionService(search, new OllamaAnswerClient(RestClient.builder()
                 .baseUrl(ollama.baseUrl().toString()).requestFactory(generationFactory).build(), mapper, generation));
         var host = new RagPublicHost(new InetSocketAddress(InetAddress.getByName("127.0.0.1"),

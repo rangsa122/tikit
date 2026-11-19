@@ -52,4 +52,13 @@ public interface CancellationRepository extends JpaRepository<Cancellation, Long
             @Param("cancellationId") Long cancellationId,
             @Param("memberId") Long memberId
     );
+
+    // 관리자: 취소의 예매 ID 조회 (취소 -> 결제 시도 -> 예매, 주인 상관없음)
+    @Query("""
+            SELECT pa.bookingId
+            FROM Cancellation c
+            JOIN PaymentAttempt pa ON pa.id = c.paymentAttemptId
+            WHERE c.id = :cancellationId
+            """)
+    Optional<Long> findBookingIdById(@Param("cancellationId") Long cancellationId);
 }

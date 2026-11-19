@@ -40,6 +40,7 @@ public class CancellationQueryService {
         return getCancellation(cancellationId, bookingId, memberId);
     }
 
+    // 회원 기준 응답 (재취소 가능 여부에 취소 기한 적용)
     public CancellationResponseDTO getCancellation(Long cancellationId, Long bookingId, Long memberId) {
         String detail = "cancellationId=" + cancellationId + ", bookingId=" + bookingId + ", memberId=" + memberId;
         Instant now = Instant.now(clock);
@@ -49,6 +50,26 @@ public class CancellationQueryService {
         Cancellation cancellation = cancellationRepository.findById(cancellationId)
                 .orElseThrow(() -> new PaymentException(ErrorCode.RESOURCE_NOT_FOUND, detail));
 
+        return toResponse(cancellation, booking, isRetryAllowed(cancellation, booking, now, true), now);
+    }
+
+    // 관리자 기준 응답 (주인 상관없이 조회, 재취소 가능 여부에 취소 기한 미적용)
+    public CancellationResponseDTO getAdminCancellation(Long cancellationId) {
+        String detail = "cancellationId=" + cancellationId + ", admin";
+        Instant now = Instant.now(clock);
+
+        Long bookingId = cancellationRepository.findBookingIdById(cancellationId)
+                .orElseThrow(() -> new PaymentException(ErrorCode.RESOURCE_NOT_FOUND, detail));
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new PaymentException(ErrorCode.RESOURCE_NOT_FOUND, detail));
+        Cancellation cancellation = cancellationRepository.findById(cancellationId)
+                .orElseThrow(() -> new PaymentException(ErrorCode.RESOURCE_NOT_FOUND, detail));
+
+        return toResponse(cancellation, booking, isRetryAllowed(cancellation, booking, now, false), now);
+    }
+
+    private CancellationResponseDTO toResponse(Cancellation cancellation, Booking booking,
+                                               boolean retryAllowed, Instant now) {
         return CancellationResponseDTO.builder()
                 .cancellationId(cancellation.getId())
                 .bookingId(booking.getId())
@@ -57,7 +78,7 @@ public class CancellationQueryService {
                 .feeAmount(cancellation.getFeeAmount())
                 .reason(cancellation.getReason())
                 .initiatorRole(cancellation.getInitiatorRole())
-                .retryAllowed(isRetryAllowed(cancellation, booking, now))
+                .retryAllowed(retryAllowed)
                 .failureCode(cancellation.getFailureCode())
                 .createdAt(toSeoul(cancellation.getCreatedAt()))
                 .completedAt(toSeoul(cancellation.getCompletedAt()))
@@ -65,10 +86,13 @@ public class CancellationQueryService {
                 .build();
     }
 
-    // 실패로 끝났고, 예매가 아직 확정이며, 예매 당시 정책의 기한 안이면 다시 취소 가능
-    private boolean isRetryAllowed(Cancellation cancellation, Booking booking, Instant now) {
+    // 실패로 끝났고 예매가 아직 확정이면 다시 취소 가능 (회원은 예매 당시 정책의 기한 안이어야 함)
+    private boolean isRetryAllowed(Cancellation cancellation, Booking booking, Instant now, boolean checkDeadline) {
         if (cancellation.getStatus() != CancellationStatus.FAILED || booking.getStatus() != BookingStatus.CONFIRMED) {
             return false;
+        }
+        if (!checkDeadline) {
+            return true;
         }
         CancellationPolicy policy = CancellationPolicy.from(booking.getPolicyVersionSnapshot());
         return policy.isCancellable(now, booking.getCancellationDeadlineSnapshot());
