@@ -4,12 +4,16 @@ import com.tikit.booking.entity.Booking;
 import com.tikit.booking.entity.BookingStatus;
 import com.tikit.booking.repository.BookingRepository;
 import com.tikit.common.ErrorCode;
+import com.tikit.payment.dto.response.AdminPageResponseDTO;
 import com.tikit.payment.dto.response.CancellationResponseDTO;
 import com.tikit.payment.entity.Cancellation;
 import com.tikit.payment.entity.CancellationStatus;
+import com.tikit.payment.entity.PaymentAttempt;
 import com.tikit.payment.exception.PaymentException;
 import com.tikit.payment.repository.CancellationRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +21,10 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 // 예매 전체 취소 결과 조회 (DB의 현재 상태로 응답)
 @Service
@@ -25,6 +33,7 @@ import java.time.ZoneId;
 public class CancellationQueryService {
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+    private static final int ADMIN_MAX_PAGE_SIZE = 100;
 
     private final BookingRepository bookingRepository;
     private final CancellationRepository cancellationRepository;
@@ -68,6 +77,40 @@ public class CancellationQueryService {
         return toResponse(cancellation, booking, isRetryAllowed(cancellation, booking, now, false), now);
     }
 
+    // 관리자 취소·환불 내역 (최신순, 예매 ID·상태는 선택). 항목은 관리자 기준 응답과 같은 형식
+    public AdminPageResponseDTO<CancellationResponseDTO> listAdminCancellations(
+            int page, int size, Long bookingId, String status) {
+        validateAdminPage(page, size);
+        CancellationStatus statusFilter = parseAdminStatus(status);
+        Instant now = Instant.now(clock);
+
+        Page<Cancellation> cancellations = cancellationRepository.searchForAdmin(
+                bookingId, statusFilter, PageRequest.of(page, size));
+
+        // 이 페이지의 취소 -> 결제 시도 -> 예매를 한 번에 연결 (취소마다 조회하지 않음)
+        Map<Long, Long> bookingIdByAttempt = cancellations.isEmpty()
+                ? Map.of()
+                : cancellationRepository.findPaymentAttemptsByIds(
+                        cancellations.stream().map(Cancellation::getPaymentAttemptId).distinct().toList())
+                .stream()
+                .collect(Collectors.toMap(PaymentAttempt::getId, PaymentAttempt::getBookingId));
+        Map<Long, Booking> bookings = bookingIdByAttempt.isEmpty()
+                ? Map.of()
+                : bookingRepository.findAllById(bookingIdByAttempt.values().stream().distinct().toList())
+                .stream()
+                .collect(Collectors.toMap(Booking::getId, Function.identity()));
+
+        List<CancellationResponseDTO> items = cancellations.getContent().stream()
+                .map(cancellation -> {
+                    Booking booking = bookings.get(bookingIdByAttempt.get(cancellation.getPaymentAttemptId()));
+                    return toResponse(cancellation, booking, isRetryAllowed(cancellation, booking, now, false), now);
+                })
+                .toList();
+
+        return new AdminPageResponseDTO<>(items, page, size,
+                cancellations.getTotalElements(), cancellations.getTotalPages());
+    }
+
     private CancellationResponseDTO toResponse(Cancellation cancellation, Booking booking,
                                                boolean retryAllowed, Instant now) {
         return CancellationResponseDTO.builder()
@@ -96,6 +139,25 @@ public class CancellationQueryService {
         }
         CancellationPolicy policy = CancellationPolicy.from(booking.getPolicyVersionSnapshot());
         return policy.isCancellable(now, booking.getCancellationDeadlineSnapshot());
+    }
+
+    // page 0 이상, size 1~100 (결제 내역과 같은 규칙)
+    private void validateAdminPage(int page, int size) {
+        if (page < 0 || size < 1 || size > ADMIN_MAX_PAGE_SIZE) {
+            throw new PaymentException(ErrorCode.VALIDATION_ERROR, "page=" + page + ", size=" + size);
+        }
+    }
+
+    // 상태 문자열 -> enum (없으면 조건 없음, 모르는 값은 400)
+    private CancellationStatus parseAdminStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return null;
+        }
+        try {
+            return CancellationStatus.valueOf(status.trim());
+        } catch (IllegalArgumentException e) {
+            throw new PaymentException(ErrorCode.VALIDATION_ERROR, "status=" + status);
+        }
     }
 
     private OffsetDateTime toSeoul(Instant instant) {
