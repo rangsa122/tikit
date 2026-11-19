@@ -1,5 +1,5 @@
 import {useEffect, useState} from 'react'
-import {useParams} from 'react-router'
+import {useNavigate, useParams} from 'react-router'
 import {
     getSalesConfiguration,
     getSeatTemplates,
@@ -132,6 +132,7 @@ function validate(
 
 export default function SalesConfigurationPage() {
     const {performanceId} = useParams()
+    const navigate = useNavigate()
     const id = Number(performanceId)
 
     const [templates, setTemplates] = useState<SeatTemplate[]>([])
@@ -249,11 +250,22 @@ export default function SalesConfigurationPage() {
 
     return (
         <div className="mx-auto max-w-4xl p-8">
-            <h1 className="text-2xl font-bold">판매 설정</h1>
-            <p className="mt-1 text-sm text-gray-500">
-                {performance?.title} · {performance?.startDate} ~ {performance?.endDate}
-                <span className="ml-2 text-gray-400">version {version}</span>
-            </p>
+            <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                    <h1 className="text-2xl font-bold">판매 설정</h1>
+                    <p className="mt-1 text-sm text-gray-500">
+                        {performance?.title} · {performance?.startDate} ~ {performance?.endDate}
+                        <span className="ml-2 text-gray-400">version {version}</span>
+                    </p>
+                </div>
+
+                <button
+                    onClick={() => navigate('/manager/performances')}
+                    className="h-10 shrink-0 rounded-lg border border-gray-300 px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                    목록으로
+                </button>
+            </div>
 
             <section className="mt-8">
                 <label className="block text-sm font-semibold">회원당 예매 제한</label>
