@@ -35,4 +35,9 @@ public interface BackgroundJobRepository extends JpaRepository<BackgroundJob, Lo
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT j FROM BackgroundJob j WHERE j.id = :id")
     Optional<BackgroundJob> findByIdForUpdate(@Param("id") Long id);
+
+    // 관리자 재확인 요청: 대상의 작업을 잠그고 조회 (실행부의 마무리와 동시에 바꾸지 않게)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT j FROM BackgroundJob j WHERE j.deduplicationKey = :deduplicationKey")
+    Optional<BackgroundJob> findByDeduplicationKeyForUpdate(@Param("deduplicationKey") String deduplicationKey);
 }
