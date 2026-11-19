@@ -4,6 +4,7 @@ package com.tikit.payment.service;
 public record CancellationStart(
         Long cancellationId,
         Long bookingId,
+        Long bookingMemberId,   // 예매 주인 (관리자가 요청해도 환불 반영은 주인 예매 기준)
         String paymentKey,
         String reason,
         Long refundAmount,

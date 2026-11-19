@@ -25,6 +25,7 @@ public class CancellationService {
 
     private static final String ALREADY_CANCELED_PAYMENT = "ALREADY_CANCELED_PAYMENT";
     private static final String OPERATION_CANCEL = "BOOKING_CANCEL";
+    private static final String OPERATION_ADMIN_CANCEL = "ADMIN_BOOKING_CANCEL";
     private static final String TARGET_BOOKING = "BOOKING";
     private static final String RESOURCE_CANCELLATION = "CANCELLATION";
 
@@ -55,7 +56,7 @@ public class CancellationService {
         }
 
         // 2. Toss 환불 요청 후 결과별 기록 (Toss 거절·결과 모름도 예외 없이 상태로 기록)
-        refundWithToss(start, memberId);
+        refundWithToss(start);
 
         // 3. 처리 끝 (성공·실패·결과 확인 중 모두) -> 같은 키 재요청은 이 취소 건의 현재 상태로 응답
         idempotencyService.succeed(idempotency.requestId(), RESOURCE_CANCELLATION, start.cancellationId());
@@ -65,8 +66,40 @@ public class CancellationService {
                 cancellationQueryService.getCancellation(start.cancellationId(), bookingId, memberId), false);
     }
 
-    // Toss 취소 요청 후 결과별로 2차 트랜잭션 기록
-    private void refundWithToss(CancellationStart start, Long memberId) {
+    // 관리자 수동 전체 환불: 회원 취소와 같은 순서 (1차 입구, 멱등 operation, 응답 기준만 관리자용)
+    // 멱등 기록의 회원 ID = 관리자 ID -> 취소 행의 requested_by, initiator_role과 함께 누가 환불했는지 남음
+    public CancellationResult cancelByAdmin(Long bookingId, Long adminId,
+                                            CancellationCreateRequestDTO request, String idempotencyKey) {
+        // 0. 서버 멱등키 (회원 취소와 operation을 나눠 같은 키가 섞이지 않게)
+        IdempotencyStart idempotency = idempotencyService.start(
+                adminId, OPERATION_ADMIN_CANCEL, idempotencyKey, requestHash(bookingId, request));
+        if (idempotency.replay()) {
+            return new CancellationResult(
+                    cancellationQueryService.getAdminCancellation(idempotency.resourceId()), true);
+        }
+
+        CancellationStart start;
+        try {
+            // 1. 1차 트랜잭션 (관리자 확인, 주인 상관없이 예매 잠금, 기한 제외 나머지 검사는 회원 취소와 같음)
+            start = cancellationTxService.startAdminCancellation(bookingId, adminId, request);
+        } catch (RuntimeException e) {
+            idempotencyService.fail(idempotency.requestId());
+            throw e;
+        }
+
+        // 2. Toss 환불 요청 후 결과별 기록 (환불 반영은 예매 주인 기준이라 관리자 요청도 그대로 처리)
+        refundWithToss(start);
+
+        // 3. 처리 끝 -> 같은 키 재요청은 이 취소 건의 현재 상태로 응답
+        idempotencyService.succeed(idempotency.requestId(), RESOURCE_CANCELLATION, start.cancellationId());
+
+        // 4. 관리자 기준 현재 상태로 응답 (재취소 가능 여부에 기한 미적용)
+        return new CancellationResult(
+                cancellationQueryService.getAdminCancellation(start.cancellationId()), false);
+    }
+
+    // Toss 취소 요청 후 결과별로 2차 트랜잭션 기록 (환불 반영은 요청자가 아니라 예매 주인 기준)
+    private void refundWithToss(CancellationStart start) {
         Long cancellationId = start.cancellationId();
         TossPaymentResponseDTO response;
 
@@ -105,7 +138,7 @@ public class CancellationService {
 
         // 3. 환불 성공 저장 + 예매 취소 (실패하면 롤백되어 PROCESSING 유지 -> 별도 트랜잭션으로 결과 확인 중 기록)
         try {
-            cancellationTxService.completeRefund(cancellationId, start.bookingId(), memberId,
+            cancellationTxService.completeRefund(cancellationId, start.bookingId(), start.bookingMemberId(),
                     refund.get().transactionKey(), refund.get().canceledAt().toInstant());
         } catch (RuntimeException e) {
             log.error("toss refunded but db update failed: cancellationId={}", cancellationId, e);

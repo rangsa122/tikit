@@ -38,13 +38,30 @@ public class CancellationQuoteService {
     private final CancellationRepository cancellationRepository;
     private final Clock clock;
 
+    // 회원 견적: 본인 예매만, 취소 기한 적용
     public CancellationQuoteResponseDTO getQuote(Long memberId, Long bookingId) {
         String detail = "bookingId=" + bookingId + ", memberId=" + memberId;
-        Instant now = Instant.now(clock);
 
         // 1. 본인 예매 (다른 회원 예매는 없는 예매와 같은 404)
         Booking booking = bookingRepository.findByIdAndMemberId(bookingId, memberId)
                 .orElseThrow(() -> new PaymentException(ErrorCode.RESOURCE_NOT_FOUND, detail));
+
+        return quote(booking, bookingId, detail, true);
+    }
+
+    // 관리자 견적: 주인 상관없이, 취소 기한이 지나도 가능 (운영 사유 환불, 권한은 SecurityConfig ADMIN)
+    public CancellationQuoteResponseDTO getAdminQuote(Long bookingId) {
+        String detail = "bookingId=" + bookingId + ", admin";
+
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new PaymentException(ErrorCode.RESOURCE_NOT_FOUND, detail));
+
+        return quote(booking, bookingId, detail, false);
+    }
+
+    // 견적 공통: 정책 결정 -> 승인 결제 -> 취소 불가 사유 -> 수수료·환불액 계산
+    private CancellationQuoteResponseDTO quote(Booking booking, Long bookingId, String detail, boolean checkDeadline) {
+        Instant now = Instant.now(clock);
 
         // 2. 예매 생성 때 저장된 정책 버전으로 정책 결정 (회차 현재 정책 아님)
         CancellationPolicy policy = CancellationPolicy.from(booking.getPolicyVersionSnapshot());
@@ -56,7 +73,8 @@ public class CancellationQuoteService {
         Long paidAmount = approved == null ? 0L : approved.getAmount();
 
         // 4. 취소 불가 사유 확인 → 가능하면 정책으로 수수료·환불액 계산, 불가면 환불액 0
-        CancellationIneligibleReason reason = findIneligibleReason(booking, approved, policy, now, detail);
+        CancellationIneligibleReason reason =
+                findIneligibleReason(booking, approved, policy, now, checkDeadline, detail);
         Long feeAmount = reason == null ? policy.calculateFee(paidAmount) : 0L;
         Long refundAmount = reason == null ? paidAmount - feeAmount : 0L;
 
@@ -74,9 +92,10 @@ public class CancellationQuoteService {
                 .build();
     }
 
-    // 검사 순서: 이미 취소 -> 확정 여부 -> 진행 중 취소 -> 취소 기한 (해당 없으면 null = 취소 가능)
+    // 검사 순서: 이미 취소 -> 확정 여부 -> 진행 중 취소 -> 취소 기한(회원만) (해당 없으면 null = 취소 가능)
     private CancellationIneligibleReason findIneligibleReason(Booking booking, PaymentAttempt approved,
-                                                              CancellationPolicy policy, Instant now, String detail) {
+                                                              CancellationPolicy policy, Instant now,
+                                                              boolean checkDeadline, String detail) {
         if (booking.getStatus() == BookingStatus.CANCELED) {
             return CancellationIneligibleReason.ALREADY_CANCELED;
         }
@@ -90,7 +109,7 @@ public class CancellationQuoteService {
         if (cancellationRepository.existsByPaymentAttemptIdAndStatusIn(approved.getId(), IN_PROGRESS)) {
             return CancellationIneligibleReason.CANCELLATION_IN_PROGRESS;
         }
-        if (!policy.isCancellable(now, booking.getCancellationDeadlineSnapshot())) {
+        if (checkDeadline && !policy.isCancellable(now, booking.getCancellationDeadlineSnapshot())) {
             return CancellationIneligibleReason.CANCELLATION_DEADLINE_PASSED;
         }
         return null;

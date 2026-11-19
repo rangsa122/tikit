@@ -1,5 +1,8 @@
 package com.tikit.payment.service;
 
+import com.tikit.auth.entity.Member;
+import com.tikit.auth.entity.MemberStatus;
+import com.tikit.auth.entity.Role;
 import com.tikit.booking.entity.Booking;
 import com.tikit.booking.entity.BookingStatus;
 import com.tikit.booking.service.BookingCancelService;
@@ -41,15 +44,48 @@ public class CancellationTxService {
     private final BackgroundJobService backgroundJobService;
     private final Clock clock;
 
-    // 1차: 예매·결제 잠금 -> 취소 가능·견적 재검증 -> 취소 요청 저장(처리 중) -> 커밋
+    // 1차(회원): 본인 예매 잠금 -> 공통 검사 -> 취소 요청 저장(처리 중) -> 커밋
     @Transactional
     public CancellationStart startCancellation(Long bookingId, Long memberId, CancellationCreateRequestDTO request) {
         String detail = "bookingId=" + bookingId + ", memberId=" + memberId;
-        Instant now = Instant.now(clock);
 
         // 1. 예매 잠금 (같은 예매 취소가 동시에 와도 하나씩 처리, 다른 회원 예매는 404)
         Booking booking = paymentAttemptRepository.findOwnedBookingForUpdate(bookingId, memberId)
                 .orElseThrow(() -> new PaymentException(ErrorCode.RESOURCE_NOT_FOUND, detail));
+
+        return start(bookingId, booking, memberId, CancellationInitiatorRole.MEMBER, request, true, detail);
+    }
+
+    // 1차(관리자): 관리자 확인 -> 예매 잠금(주인 상관없음) -> 공통 검사(기한 제외) -> 취소 요청 저장 -> 커밋
+    // 중복 환불·처리 중 충돌·견적 재검증은 회원 취소와 같은 코드를 타므로 우회할 수 없음
+    @Transactional
+    public CancellationStart startAdminCancellation(Long bookingId, Long adminId, CancellationCreateRequestDTO request) {
+        String detail = "bookingId=" + bookingId + ", adminId=" + adminId;
+
+        // 1. 관리자 확인 (토큰이 아니라 현재 DB 기준: 정지됐거나 역할이 바뀐 계정 차단, 회원 -> 예매 -> 결제 잠금 순서)
+        Member admin = paymentAttemptRepository.findMemberForUpdate(adminId)
+                .orElseThrow(() -> new PaymentException(ErrorCode.ACCESS_DENIED, detail));
+        if (admin.getStatus() != MemberStatus.ACTIVE) {
+            throw new PaymentException(ErrorCode.ACCOUNT_RESTRICTED, detail);
+        }
+        if (admin.getRole() != Role.ADMIN) {
+            throw new PaymentException(ErrorCode.ACCESS_DENIED, detail);
+        }
+
+        // 2. 예매 잠금 (관리자는 모든 회원의 예매를 환불할 수 있음)
+        Booking booking = paymentAttemptRepository.findBookingByIdForUpdate(bookingId)
+                .orElseThrow(() -> new PaymentException(ErrorCode.RESOURCE_NOT_FOUND, detail));
+
+        return start(bookingId, booking, adminId, CancellationInitiatorRole.ADMIN, request, false, detail);
+    }
+
+    // 1차 공통: 확정 확인 -> 결제 잠금 -> 진행 중 취소 차단 -> (회원만) 기한 확인 -> 견적 재검증 -> 저장 -> 결과 확인 작업 예약
+    // checkDeadline=false(관리자): 운영 사유로 기한 후에도 취소 가능. 금액은 같은 정책으로 서버가 계산
+    // (v1은 수수료가 항상 0. 시각별 수수료가 생기면 관리자 환불 금액 정책을 따로 정해야 함)
+    private CancellationStart start(Long bookingId, Booking booking, Long requestedBy,
+                                    CancellationInitiatorRole initiatorRole, CancellationCreateRequestDTO request,
+                                    boolean checkDeadline, String detail) {
+        Instant now = Instant.now(clock);
 
         // 2. 확정 예매만 취소 가능 (결제 전 예매는 선점 해제 API, 이미 취소면 불가)
         if (booking.getStatus() != BookingStatus.CONFIRMED) {
@@ -59,14 +95,14 @@ public class CancellationTxService {
         // 3. 승인된 결제 잠금 (확정 예매인데 없으면 데이터 불일치)
         PaymentAttempt approved = lockApprovedAttempt(bookingId, detail);
 
-        // 4. 진행 중 취소가 있으면 거절 (이중 환불 방지)
+        // 4. 진행 중 취소가 있으면 거절 (이중 환불 방지, 관리자도 우회 불가)
         if (cancellationRepository.existsByPaymentAttemptIdAndStatusIn(approved.getId(), IN_PROGRESS)) {
             throw new PaymentException(ErrorCode.CANCELLATION_IN_PROGRESS, detail);
         }
 
-        // 5. 예매 당시 정책으로 기한 확인
+        // 5. 예매 당시 정책으로 기한 확인 (관리자는 건너뜀)
         CancellationPolicy policy = CancellationPolicy.from(booking.getPolicyVersionSnapshot());
-        if (!policy.isCancellable(now, booking.getCancellationDeadlineSnapshot())) {
+        if (checkDeadline && !policy.isCancellable(now, booking.getCancellationDeadlineSnapshot())) {
             throw new PaymentException(ErrorCode.CANCELLATION_NOT_ALLOWED, detail + ", deadline passed");
         }
 
@@ -82,7 +118,7 @@ public class CancellationTxService {
         }
 
         // 7. 취소 요청 저장 -> 처리 중 (Toss 멱등키는 이 취소 건에 고정, 재시도·복구 때 같은 키 재사용)
-        Cancellation cancellation = Cancellation.create(approved.getId(), memberId, CancellationInitiatorRole.MEMBER,
+        Cancellation cancellation = Cancellation.create(approved.getId(), requestedBy, initiatorRole,
                 request.getReason(), paidAmount, feeAmount, policy.getVersion(), UUID.randomUUID().toString());
         cancellation.startProcessing();
         cancellationRepository.save(cancellation);
@@ -90,9 +126,11 @@ public class CancellationTxService {
         // 8. 결과 확인 작업 예약 (같은 트랜잭션: Toss 취소 중 서버가 멈춰도 처리 중으로 남지 않게 함)
         backgroundJobService.schedule(BackgroundJobType.CANCELLATION_RECONCILE, cancellation.getId(), now);
 
-        log.info("cancellation started: {}, cancellationId={}, refundAmount={}", detail, cancellation.getId(), refundAmount);
+        log.info("cancellation started: {}, cancellationId={}, initiatorRole={}, refundAmount={}",
+                detail, cancellation.getId(), initiatorRole, refundAmount);
 
-        return new CancellationStart(cancellation.getId(), bookingId, approved.getPaymentKey(),
+        // 환불 반영(completeRefund)은 예매 주인 기준 -> 예매 주인 ID를 함께 넘김
+        return new CancellationStart(cancellation.getId(), bookingId, booking.getMemberId(), approved.getPaymentKey(),
                 request.getReason(), refundAmount, cancellation.getPgIdempotencyKey());
     }
 
