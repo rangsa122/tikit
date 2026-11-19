@@ -89,6 +89,13 @@ function HomeContent() {
   const [selectedCategory, setSelectedCategory] =
     useState<CategoryId>('theater')
 
+  const today = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+
   const openingQuery = useQuery({
     queryKey: ['opening-performances', 'all'],
     queryFn: () => getOpeningPerformances(),
@@ -98,6 +105,7 @@ function HomeContent() {
     page: 0,
     size: CATEGORY_PAGE_SIZE,
     genreCode: selectedCategory,
+    fromDate: today,
     sort: 'startDate',
   })
 

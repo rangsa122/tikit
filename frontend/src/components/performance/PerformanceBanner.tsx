@@ -1,19 +1,40 @@
 import {useEffect, useRef, useState} from 'react'
+import {Link} from 'react-router'
+import {usePerformances} from '../../hooks/usePerformances'
 import type {PointerEvent} from 'react'
 
 interface PerformanceBannerProps {
   variant?: 'home' | 'category'
 }
 
-const banners = Array.from({length: 5}, (_, index) => ({
-  id: index + 1,
-  label: `추천 공연 배너 ${index + 1}`,
-}))
-const slides = [...banners, ...banners, ...banners]
 const transitionDuration = 450
 
 export default function PerformanceBanner({variant = 'home'}: PerformanceBannerProps) {
-  const [position, setPosition] = useState(banners.length)
+  const today = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+
+  // 공개된 공연 중 종료되지 않은 공연 조회
+  const bannerQuery = usePerformances({
+    page: 0,
+    size: 100,
+    fromDate: today,
+    sort: 'startDate',
+  })
+
+  // 판매 활성 공연 중 최대 5개 선택
+  const banners = (bannerQuery.data?.items ?? [])
+      .filter(item => item.salesStatus === 'ENABLED')
+      .slice(0, 5)
+
+  const slides = [...banners, ...banners, ...banners]
+  const bannerCount = banners.length
+
+  const [position, setPosition] = useState(0)
+  const [failedPosterUrls, setFailedPosterUrls] = useState<string[]>([])
   const [moving, setMoving] = useState(false)
   const [isPlaying, setIsPlaying] = useState(() => !window.matchMedia('(prefers-reduced-motion: reduce)').matches)
   const [isHovered, setIsHovered] = useState(false)
@@ -26,10 +47,19 @@ export default function PerformanceBanner({variant = 'home'}: PerformanceBannerP
   const gap = isCategory ? 18 : 20
   const visualPosition = position - dragOffset / dragStep
   const centeredPosition = Math.round(visualPosition)
-  const activeIndex = ((centeredPosition % banners.length) + banners.length) % banners.length
+  const activeIndex = bannerCount > 0
+      ? ((centeredPosition % bannerCount) + bannerCount) % bannerCount
+      : 0
+
+// 공연 데이터가 변경되면 슬라이드 위치 초기화
+  useEffect(() => {
+    movingRef.current = false
+    setMoving(false)
+    setPosition(bannerCount)
+  }, [bannerCount])
 
   function move(direction: number) {
-    if (movingRef.current) return
+    if (movingRef.current || bannerCount <= 1) return
     movingRef.current = true
     setMoving(true)
     setPosition(value => value + direction)
@@ -43,15 +73,15 @@ export default function PerformanceBanner({variant = 'home'}: PerformanceBannerP
       movingRef.current = false
     }, transitionDuration)
     return () => window.clearTimeout(timer)
-  }, [moving])
+  }, [moving, bannerCount])
 
   useEffect(() => {
-    if (!isPlaying || isHovered || moving) return
+    if (!isPlaying || isHovered || moving || bannerCount <= 1) return
     const timer = window.setInterval(() => {
       if (!document.hidden && !pointerStart.current) move(1)
     }, 4000)
     return () => window.clearInterval(timer)
-  }, [isPlaying, isHovered, moving])
+  }, [isPlaying, isHovered, moving, bannerCount])
 
   function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
     if (!event.isPrimary || event.button !== 0 || movingRef.current) return
@@ -93,6 +123,44 @@ export default function PerformanceBanner({variant = 'home'}: PerformanceBannerP
   let frameClass = 'aspect-[1321/415] min-h-[160px] max-w-[1321px]'
   if (isCategory) frameClass = 'aspect-[500/460] max-w-[500px]'
 
+  // 공연 조회 상태 처리
+  if (bannerQuery.isPending) {
+    return (
+        <div className="mx-auto max-w-[1321px] px-5 pt-6">
+          <div className="flex h-[300px] items-center justify-center rounded-xl bg-[#f7f7f7] text-[#777]">
+            추천 공연을 불러오는 중...
+          </div>
+        </div>
+    )
+  }
+
+  if (bannerQuery.isError) {
+    return (
+        <div className="mx-auto max-w-[1321px] px-5 pt-6">
+          <div className="flex h-[300px] flex-col items-center justify-center gap-4 rounded-xl bg-[#f7f7f7]">
+            <p>추천 공연을 불러오지 못했습니다.</p>
+            <button
+                type="button"
+                onClick={() => void bannerQuery.refetch()}
+                className="rounded border border-[#ccc] px-4 py-2"
+            >
+              다시 시도
+            </button>
+          </div>
+        </div>
+    )
+  }
+
+  if (bannerCount === 0) {
+    return (
+        <div className="mx-auto max-w-[1321px] px-5 pt-6">
+          <div className="flex h-[300px] items-center justify-center rounded-xl bg-[#f7f7f7] text-[#777]">
+            현재 추천할 공연이 없습니다.
+          </div>
+        </div>
+    )
+  }
+
   return (
     <section
       aria-label={isCategory ? '카테고리 추천 공연' : '추천 공연'}
@@ -130,19 +198,63 @@ export default function PerformanceBanner({variant = 'home'}: PerformanceBannerP
             style={{gap, transform: `translateX(calc(${-position * 100}% - ${position * gap}px + ${dragOffset}px))`}}
           >
             {slides.map((slide, index) => (
-              <div
-                key={`${slide.id}-${index}`}
-                role="group"
-                aria-roledescription="슬라이드"
-                aria-label={`${slide.id} / ${banners.length}: ${slide.label}`}
-                aria-hidden={index !== centeredPosition}
-                className={`h-full w-full shrink-0 rounded-xl bg-[#999] ease-out motion-reduce:transition-none ${moving ? 'transition-transform duration-[450ms]' : ''}`}
-                style={{
-                  transform: isCategory
-                    ? `scale(${1 - 0.08 * Math.min(Math.abs(index - visualPosition), 1)})`
-                    : undefined,
-                }}
-              />
+                <div
+                    key={`${slide.performanceId}-${index}`}
+                    role="group"
+                    aria-roledescription="슬라이드"
+                    aria-label={`${(index % bannerCount) + 1} / ${bannerCount}: ${slide.title}`}
+                    aria-hidden={index !== centeredPosition}
+                    className={`h-full w-full shrink-0 overflow-hidden rounded-xl ease-out motion-reduce:transition-none ${moving ? 'transition-transform duration-[450ms]' : ''}`}
+                    style={{
+                      transform: isCategory
+                          ? `scale(${1 - 0.08 * Math.min(Math.abs(index - visualPosition), 1)})`
+                          : undefined,
+                    }}
+                >
+                  <Link
+                      to={`/performances/${slide.performanceId}`}
+                      tabIndex={index === centeredPosition ? 0 : -1}
+                      className="relative block h-full w-full overflow-hidden bg-[#222]"
+                  >
+                    {slide.posterUrl && !failedPosterUrls.includes(slide.posterUrl) ? (
+                        <>
+                          {/* 배경 이미지 */}
+                          <img
+                              src={slide.posterUrl}
+                              alt=""
+                              aria-hidden="true"
+                              className="absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-2xl"
+                          />
+
+                          {/* 공연 포스터 */}
+                          <img
+                              src={slide.posterUrl}
+                              alt={`${slide.title} 포스터`}
+                              onError={() => {
+                                const url = slide.posterUrl
+                                if (url) {
+                                  setFailedPosterUrls(current =>
+                                      current.includes(url) ? current : [...current, url]
+                                  )
+                                }
+                              }}
+                              className="relative h-full w-full object-contain"
+                          />
+                        </>
+                    ) : (
+                        <div className="flex h-full w-full items-center justify-center text-white/70">
+                          포스터 이미지 없음
+                        </div>
+                    )}
+
+                    {/* 공연명 */}
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-8 py-7">
+                      <h2 className="text-xl font-semibold text-white">
+                        {slide.title}
+                      </h2>
+                    </div>
+                  </Link>
+                </div>
             ))}
           </div>
         </div>
