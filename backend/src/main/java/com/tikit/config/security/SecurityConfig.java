@@ -107,6 +107,9 @@ public class SecurityConfig {
                                         "/api/v1/performances/*/sessions"
                                 ).permitAll()
 
+                                // 공개 AI 안내 질문
+                                .requestMatchers(HttpMethod.POST, "/api/v1/rag/questions").permitAll()
+
                                 // 관리자 전용 API
                                 .requestMatchers(
                                         "/api/v1/admin/**"

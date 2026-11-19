@@ -4,6 +4,7 @@ import com.tikit.rag.dto.response.RagQuestionResponse;
 import com.tikit.rag.dto.response.RagSource;
 import com.tikit.rag.exception.RagGenerationException;
 import com.tikit.rag.service.RagQuestionAnswerer;
+import com.tikit.util.JWTProvider;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.AfterEach;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.net.InetAddress;
@@ -59,6 +61,19 @@ class RagPublicHostTest {
         assertThat(body.at("/data/answer").asString()).isEqualTo("수수료 0원");
         assertThat(body.at("/data/sources/0/documentId").asString()).isEqualTo("refund");
         assertThat(response.headers().firstValue("Cache-Control")).contains("no-store");
+    }
+
+    @Test
+    void acceptsBackendServiceTokensForQuestions() throws Exception {
+        var jwtProvider = new JWTProvider();
+        ReflectionTestUtils.setField(jwtProvider, "secret", SECRET);
+        ReflectionTestUtils.invokeMethod(jwtProvider, "init");
+        when(answerer.answer("수수료는?")).thenReturn(answer());
+
+        var response = post("{\"question\":\"수수료는?\"}", jwtProvider.generateRagServiceToken());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("수수료 0원");
     }
 
     @Test

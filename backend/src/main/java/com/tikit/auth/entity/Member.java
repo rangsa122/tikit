@@ -115,6 +115,12 @@ public class Member {
         this.status = MemberStatus.ACTIVE;
     }
 
+    public void withdraw() {
+        validateStatusChange(MemberStatus.ACTIVE);
+        this.status = MemberStatus.WITHDRAWN;
+        this.withdrawnAt = Instant.now();
+    }
+
     private void validateStatusChange(MemberStatus expectedStatus) {
         if (role == Role.ADMIN) {
             throw new MemberStatusChangeException(ErrorCode.ADMIN_ACCOUNT_PROTECTED);

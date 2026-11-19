@@ -1,9 +1,12 @@
 package com.tikit.payment.service;
 
+import com.tikit.auth.entity.Member;
 import com.tikit.auth.entity.MemberStatus;
 import com.tikit.auth.entity.Role;
+import com.tikit.booking.entity.Booking;
 import com.tikit.booking.entity.BookingStatus;
 import com.tikit.common.ErrorCode;
+import com.tikit.payment.dto.response.AdminPageResponseDTO;
 import com.tikit.payment.dto.response.PaymentAttemptResponseDTO;
 import com.tikit.payment.entity.PaymentAttempt;
 import com.tikit.payment.entity.PaymentAttemptStatus;
@@ -14,6 +17,8 @@ import com.tikit.payment.repository.PaymentAttemptDetailView;
 import com.tikit.payment.repository.PaymentAttemptRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,8 +26,11 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -34,6 +42,7 @@ public class PaymentService {
     private static final String ORDER_ID_PREFIX = "TIKIT_";
     private static final List<PaymentAttemptStatus> IN_PROGRESS_STATUSES =
             List.of(PaymentAttemptStatus.PROCESSING, PaymentAttemptStatus.RECONCILING);
+    private static final int ADMIN_MAX_PAGE_SIZE = 100;
 
     private final PaymentAttemptRepository paymentAttemptRepository;
 
@@ -115,6 +124,82 @@ public class PaymentService {
                 .failureCode(view.getFailureCode())
                 .serverTime(now)
                 .build();
+    }
+
+    // 관리자 결제 내역 (최신순, 예매 ID·상태는 선택). 항목은 회원 결제 결과 조회와 같은 형식
+    @Transactional(readOnly = true)
+    public AdminPageResponseDTO<PaymentAttemptResponseDTO> listAdminPaymentAttempts(
+            int page, int size, Long bookingId, String status) {
+        validateAdminPage(page, size);
+        PaymentAttemptStatus statusFilter = parseAdminStatus(status);
+
+        Page<PaymentAttempt> attempts = paymentAttemptRepository.searchForAdmin(
+                bookingId, statusFilter, PageRequest.of(page, size));
+
+        // 이 페이지의 예매·회원을 한 번에 조회 (결제 시도마다 조회하지 않음)
+        Map<Long, Booking> bookings = attempts.isEmpty()
+                ? Map.of()
+                : paymentAttemptRepository.findBookingsByIds(
+                        attempts.stream().map(PaymentAttempt::getBookingId).distinct().toList())
+                .stream()
+                .collect(Collectors.toMap(Booking::getId, Function.identity()));
+        Map<Long, Member> members = bookings.isEmpty()
+                ? Map.of()
+                : paymentAttemptRepository.findMembersByIds(
+                        bookings.values().stream().map(Booking::getMemberId).distinct().toList())
+                .stream()
+                .collect(Collectors.toMap(Member::getId, Function.identity()));
+
+        OffsetDateTime now = OffsetDateTime.now(SEOUL);
+        List<PaymentAttemptResponseDTO> items = attempts.getContent().stream()
+                .map(attempt -> {
+                    Booking booking = bookings.get(attempt.getBookingId());
+                    return toAdminResponse(attempt, booking, members.get(booking.getMemberId()), now);
+                })
+                .toList();
+
+        return new AdminPageResponseDTO<>(items, page, size, attempts.getTotalElements(), attempts.getTotalPages());
+    }
+
+    // 회원 결제 결과 조회(getPaymentAttempt)와 같은 필드·같은 계산
+    private PaymentAttemptResponseDTO toAdminResponse(PaymentAttempt attempt, Booking booking, Member member,
+                                                      OffsetDateTime now) {
+        OffsetDateTime expiresAt = booking.getExpiresAt().atZone(SEOUL).toOffsetDateTime();
+
+        return PaymentAttemptResponseDTO.builder()
+                .paymentAttemptId(attempt.getId())
+                .bookingId(attempt.getBookingId())
+                .orderId(attempt.getOrderId())
+                .orderName(buildOrderName(booking.getPerformanceTitleSnapshot(), booking.getSeatCount().intValue()))
+                .customerKey(member.getCustomerKey())
+                .amount(attempt.getAmount())
+                .currency(attempt.getCurrency())
+                .status(attempt.getStatus())
+                .bookingStatus(booking.getStatus())
+                .expiresAt(expiresAt)
+                .retryAllowed(isRetryAllowed(attempt.getStatus(), booking.getStatus(), expiresAt, now))
+                .failureCode(attempt.getFailureCode())
+                .serverTime(now)
+                .build();
+    }
+
+    // page 0 이상, size 1~100 (공연 목록 API와 같은 규칙)
+    private void validateAdminPage(int page, int size) {
+        if (page < 0 || size < 1 || size > ADMIN_MAX_PAGE_SIZE) {
+            throw new PaymentException(ErrorCode.VALIDATION_ERROR, "page=" + page + ", size=" + size);
+        }
+    }
+
+    // 상태 문자열 -> enum (없으면 조건 없음, 모르는 값은 400)
+    private PaymentAttemptStatus parseAdminStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return null;
+        }
+        try {
+            return PaymentAttemptStatus.valueOf(status.trim());
+        } catch (IllegalArgumentException e) {
+            throw new PaymentException(ErrorCode.VALIDATION_ERROR, "status=" + status);
+        }
     }
 
     // 최종 실패이고, 예매가 결제 대기 중이며, 결제 기한 안일 때만 새 결제 시도 가능

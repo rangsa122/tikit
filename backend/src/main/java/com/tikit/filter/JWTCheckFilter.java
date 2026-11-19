@@ -3,6 +3,8 @@ package com.tikit.filter;
 import com.tikit.common.ErrorCode;
 import com.tikit.common.dto.ResponseDTO;
 import com.tikit.util.JWTProvider;
+import com.tikit.auth.entity.MemberStatus;
+import com.tikit.auth.repository.MemberRepository;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
@@ -31,6 +33,7 @@ public class JWTCheckFilter extends OncePerRequestFilter {
 
     private final JWTProvider jWTProvider;
     private final ObjectMapper objectMapper;
+    private final MemberRepository memberRepository;
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
@@ -71,6 +74,18 @@ public class JWTCheckFilter extends OncePerRequestFilter {
             // 토큰에서 정보 추출
             String accountId = claims.getSubject();
             String roleName = claims.get("roleName", String.class);
+
+            // DB에서 현재 회원 상태 확인
+            boolean isActiveMember = memberRepository.findById(Long.parseLong(accountId))
+                    .map(member -> member.getStatus() == MemberStatus.ACTIVE)
+                    .orElse(false);
+
+            // 탈퇴 또는 이용 제한 회원의 접근 차단
+            if (!isActiveMember) {
+                sendErrorResponse(response, "이용할 수 없는 계정입니다.");
+                return;
+            }
+
 
             log.info("JWT 검증 성공");
             log.info("JWT 사용자 정보: {}", claims);

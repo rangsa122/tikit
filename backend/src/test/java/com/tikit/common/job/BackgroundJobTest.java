@@ -231,4 +231,98 @@ class BackgroundJobTest {
         assertThat(job.getLeaseOwner()).isNull();
         assertThat(job.isLeasable(NOW.plus(Duration.ofDays(1)))).isFalse();
     }
+
+    @Test
+    @DisplayName("재확인 요청: 포기한 작업은 대기로 돌아가고 시도 횟수가 초기화되며 바로 점유할 수 있다")
+    void requestRecheck_failed() {
+        // given
+        job.lease(OWNER, NOW, LEASE_DURATION);
+        job.giveUp(OWNER, "RETRY_LIMIT_EXCEEDED");
+        Instant requestedAt = NOW.plus(Duration.ofDays(1));
+
+        // when
+        job.requestRecheck(requestedAt);
+        System.out.println("테스트: " + job.getStatus() + ", attemptCount=" + job.getAttemptCount());
+
+        // then
+        assertThat(job.getStatus()).isEqualTo(BackgroundJobStatus.QUEUED);
+        assertThat(job.getAttemptCount()).isZero();
+        assertThat(job.getNextRunAt()).isEqualTo(requestedAt);
+        assertThat(job.getLastErrorCode()).isEqualTo("RETRY_LIMIT_EXCEEDED");
+        assertThat(job.getLeaseOwner()).isNull();
+        assertThat(job.isLeasable(requestedAt)).isTrue();
+    }
+
+    @Test
+    @DisplayName("재확인 요청: 완료된 작업도 대기로 돌아가 다시 확인한다")
+    void requestRecheck_succeeded() {
+        // given
+        job.lease(OWNER, NOW, LEASE_DURATION);
+        job.succeed(OWNER);
+        Instant requestedAt = NOW.plus(Duration.ofHours(1));
+
+        // when
+        job.requestRecheck(requestedAt);
+        System.out.println("테스트: " + job.getStatus() + ", nextRunAt=" + job.getNextRunAt());
+
+        // then
+        assertThat(job.getStatus()).isEqualTo(BackgroundJobStatus.QUEUED);
+        assertThat(job.getAttemptCount()).isZero();
+        assertThat(job.getNextRunAt()).isEqualTo(requestedAt);
+        assertThat(job.isLeasable(requestedAt)).isTrue();
+    }
+
+    @Test
+    @DisplayName("재확인 요청: 나중으로 미뤄진 대기 작업은 실행 시각만 지금으로 당겨지고 시도 횟수는 유지된다")
+    void requestRecheck_queuedLater() {
+        // given
+        job.lease(OWNER, NOW, LEASE_DURATION);
+        job.retryLater(OWNER, "TOSS_UNAVAILABLE", NOW.plus(Duration.ofMinutes(16)));
+        Instant requestedAt = NOW.plus(Duration.ofMinutes(1));
+
+        // when
+        job.requestRecheck(requestedAt);
+        System.out.println("테스트: " + job.getStatus() + ", nextRunAt=" + job.getNextRunAt());
+
+        // then
+        assertThat(job.getStatus()).isEqualTo(BackgroundJobStatus.QUEUED);
+        assertThat(job.getNextRunAt()).isEqualTo(requestedAt);
+        assertThat(job.getAttemptCount()).isEqualTo(1);
+        assertThat(job.getLastErrorCode()).isEqualTo("TOSS_UNAVAILABLE");
+    }
+
+    @Test
+    @DisplayName("재확인 요청: 이미 실행 시각이 지난 대기 작업은 실행 시각을 늦추지 않는다")
+    void requestRecheck_queuedAlreadyDue() {
+        // given
+        // setup에서 이미 셋팅 (실행 시각 NOW)
+        Instant requestedAt = NOW.plus(Duration.ofMinutes(1));
+
+        // when
+        job.requestRecheck(requestedAt);
+        System.out.println("테스트: " + job.getNextRunAt());
+
+        // then
+        assertThat(job.getStatus()).isEqualTo(BackgroundJobStatus.QUEUED);
+        assertThat(job.getNextRunAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    @DisplayName("재확인 요청: 실행 중인 작업은 건드리지 않는다")
+    void requestRecheck_running() {
+        // given
+        job.lease(OWNER, NOW, LEASE_DURATION);
+        Instant requestedAt = NOW.plus(Duration.ofMinutes(1));
+
+        // when
+        job.requestRecheck(requestedAt);
+        System.out.println("테스트: " + job.getStatus() + ", leaseOwner=" + job.getLeaseOwner());
+
+        // then
+        assertThat(job.getStatus()).isEqualTo(BackgroundJobStatus.RUNNING);
+        assertThat(job.getLeaseOwner()).isEqualTo(OWNER);
+        assertThat(job.getLeaseUntil()).isEqualTo(NOW.plus(LEASE_DURATION));
+        assertThat(job.getAttemptCount()).isEqualTo(1);
+        assertThat(job.isLeasedBy(OWNER, requestedAt)).isTrue();
+    }
 }

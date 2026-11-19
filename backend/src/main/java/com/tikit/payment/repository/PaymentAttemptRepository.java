@@ -5,6 +5,8 @@ import com.tikit.booking.entity.Booking;
 import com.tikit.payment.entity.PaymentAttempt;
 import com.tikit.payment.entity.PaymentAttemptStatus;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -65,11 +67,50 @@ public interface PaymentAttemptRepository extends JpaRepository<PaymentAttempt, 
     // 같은 예매에 해당 상태의 결제 시도가 있는지 확인 (진행 중 결제 확인용)
     boolean existsByBookingIdAndStatusIn(Long bookingId, Collection<PaymentAttemptStatus> statuses);
 
+    // 회원의 처리 중이거나 확인 중인 결제 존재 여부
+    @Query("""
+        select (count(pa) > 0)
+        from PaymentAttempt pa, Booking b
+        where pa.bookingId = b.id
+          and b.memberId = :memberId
+          and pa.status in :statuses
+        """)
+    boolean existsByMemberIdAndStatusIn(
+            @Param("memberId") Long memberId,
+            @Param("statuses") Collection<PaymentAttemptStatus> statuses
+    );
+
     // 같은 예매의 해당 상태 결제 시도 조회 (READY 재사용용)
     Optional<PaymentAttempt> findFirstByBookingIdAndStatus(Long bookingId, PaymentAttemptStatus status);
 
     // 여러 예매의 결제 시도를 최신순으로 조회 (예매 조회의 최신 결제 상태용)
     List<PaymentAttempt> findByBookingIdInOrderByIdDesc(Collection<Long> bookingIds);
+
+    // 관리자 결제 내역: 예매 ID·상태는 선택 (null이면 조건 없음), 최신순
+    @Query(value = """
+            SELECT pa FROM PaymentAttempt pa
+            WHERE (:bookingId IS NULL OR pa.bookingId = :bookingId)
+              AND (:status IS NULL OR pa.status = :status)
+            ORDER BY pa.id DESC
+            """,
+            countQuery = """
+            SELECT COUNT(pa) FROM PaymentAttempt pa
+            WHERE (:bookingId IS NULL OR pa.bookingId = :bookingId)
+              AND (:status IS NULL OR pa.status = :status)
+            """)
+    Page<PaymentAttempt> searchForAdmin(
+            @Param("bookingId") Long bookingId,
+            @Param("status") PaymentAttemptStatus status,
+            Pageable pageable
+    );
+
+    // 관리자 목록: 한 페이지의 예매를 한 번에 조회 (N+1 방지)
+    @Query("SELECT b FROM Booking b WHERE b.id IN :ids")
+    List<Booking> findBookingsByIds(@Param("ids") Collection<Long> ids);
+
+    // 관리자 목록: 한 페이지의 예매 회원을 한 번에 조회 (결제 고객 키용)
+    @Query("SELECT m FROM Member m WHERE m.id IN :ids")
+    List<Member> findMembersByIds(@Param("ids") Collection<Long> ids);
 
     // 승인 1. 결제 시도의 예매 ID만 조회 (잠금 순서를 지키려고 잠금 없이 먼저 읽음)
     @Query("SELECT pa.bookingId FROM PaymentAttempt pa WHERE pa.id = :paymentAttemptId")
@@ -107,3 +148,4 @@ public interface PaymentAttemptRepository extends JpaRepository<PaymentAttempt, 
     @Query("SELECT b FROM Booking b WHERE b.id = :bookingId")
     Optional<Booking> findBookingByIdForUpdate(@Param("bookingId") Long bookingId);
 }
+
