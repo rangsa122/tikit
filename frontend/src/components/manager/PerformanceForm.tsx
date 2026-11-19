@@ -1,7 +1,8 @@
-
 import {useState} from 'react'
 import type {ChangeEvent, FocusEvent, FormEvent, ReactNode} from 'react'
 import {useGenres} from '../../hooks/useGenres.ts'
+import {uploadPoster} from '../../api/managerPerformanceApi.ts'
+import {toMessage} from '../../api/apiError.ts'
 
 export interface FormState {
     title: string
@@ -59,8 +60,14 @@ function validate(form: FormState): FormErrors {
         errors.description = '공연 설명은 10000자 이하로 입력해 주세요.'
     }
 
-    if (form.posterUrl && !form.posterUrl.startsWith('https://')) {
-        errors.posterUrl = '포스터 주소는 https:// 로 시작해야 합니다.'
+    // 포스터 주소는 두 종류다.
+    // KOPIS에서 받아온 외부 주소(https://)와 우리 서버에 업로드한 주소(/uploads/)
+    if (
+        form.posterUrl &&
+        !form.posterUrl.startsWith('https://') &&
+        !form.posterUrl.startsWith('/uploads/')
+    ) {
+        errors.posterUrl = '포스터 이미지를 다시 업로드해 주세요.'
     }
 
     if (!form.startDate) {
@@ -83,11 +90,11 @@ function validate(form: FormState): FormErrors {
 }
 
 function Field({
-    label,
-    required,
-    error,
-    children,
-}: {
+                   label,
+                   required,
+                   error,
+                   children,
+               }: {
     label: string
     required?: boolean
     error?: string
@@ -116,13 +123,13 @@ function Field({
 // 등록 화면과 수정 화면이 함께 사용하는 입력 폼.
 // 입력값과 유효성 검증을 담당하고, 서버 호출은 부모 컴포넌트에서 처리한다.
 export default function PerformanceForm({
-    initial,
-    submitLabel,
-    submitting,
-    onSubmit,
-    onCancel,
-    children,
-}: {
+                                            initial,
+                                            submitLabel,
+                                            submitting,
+                                            onSubmit,
+                                            onCancel,
+                                            children,
+                                        }: {
     initial: FormState
     submitLabel: string
     submitting: boolean
@@ -132,6 +139,8 @@ export default function PerformanceForm({
 }) {
     const [form, setForm] = useState<FormState>(initial)
     const [touched, setTouched] = useState<Touched>({})
+    const [uploading, setUploading] = useState(false)
+    const [uploadError, setUploadError] = useState('')
 
     // 서버에서 장르 목록 조회
     const {
@@ -159,11 +168,13 @@ export default function PerformanceForm({
     }
 
     // 장르 API가 정상적으로 로딩되고 유효한 장르를 선택해야 제출 가능
+    // 포스터 업로드가 끝나기 전에는 제출을 막는다
     const isValid =
         Object.keys(errors).length === 0 &&
         !genresLoading &&
         !genresError &&
-        genreValid
+        genreValid &&
+        !uploading
 
     // 사용자가 한 번 건드린 입력칸에만 오류 표시
     const shownError = (name: keyof FormState) =>
@@ -199,6 +210,35 @@ export default function PerformanceForm({
             ...prev,
             [name]: true,
         }))
+    }
+
+    // 파일을 고르는 즉시 업로드하고, 돌려받은 주소를 폼에 담는다.
+    const handlePosterChange = async (e: ChangeEvent<HTMLInputElement>) => {
+        const input = e.target
+        const file = input.files?.[0]
+
+        if (!file) return
+
+        setUploadError('')
+        setUploading(true)
+
+        try {
+            const posterUrl = await uploadPoster(file)
+
+            setForm((prev) => ({...prev, posterUrl}))
+            setTouched((prev) => ({...prev, posterUrl: true}))
+        } catch (error: unknown) {
+            setUploadError(toMessage(error, '포스터를 업로드하지 못했습니다'))
+        } finally {
+            setUploading(false)
+            // 같은 파일을 다시 고를 수 있도록 비워 둔다
+            input.value = ''
+        }
+    }
+
+    const handlePosterRemove = () => {
+        setUploadError('')
+        setForm((prev) => ({...prev, posterUrl: ''}))
     }
 
     const handleSubmit = (e: FormEvent) => {
@@ -330,15 +370,52 @@ export default function PerformanceForm({
             </Field>
 
             <Field
-                label="포스터 주소 (https://)"
-                error={shownError('posterUrl')}
+                label="포스터 이미지"
+                error={uploadError || shownError('posterUrl')}
             >
-                <input
-                    name="posterUrl"
-                    value={form.posterUrl}
-                    {...common}
-                    className={inputClass('posterUrl')}
-                />
+                <div className="flex items-start gap-4">
+                    {form.posterUrl ? (
+                        <img
+                            src={form.posterUrl}
+                            alt="포스터 미리보기"
+                            className="h-[160px] w-[120px] shrink-0 rounded-lg border border-gray-200 object-cover"
+                        />
+                    ) : (
+                        <div className="flex h-[160px] w-[120px] shrink-0 items-center justify-center rounded-lg border border-dashed border-gray-300 text-xs text-gray-400">
+                            미리보기
+                        </div>
+                    )}
+
+                    <div className="flex min-w-0 flex-col gap-2">
+                        <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            disabled={uploading || submitting}
+                            onChange={(e) => void handlePosterChange(e)}
+                            className="text-sm text-gray-700 file:mr-3 file:rounded-lg file:border file:border-gray-300 file:bg-white file:px-4 file:py-2 file:text-sm file:font-semibold file:text-gray-700 disabled:opacity-50"
+                        />
+
+                        <p className="text-xs text-gray-500">
+                            JPG, PNG, WEBP · 5MB 이하
+                        </p>
+
+                        {uploading && (
+                            <p className="text-xs text-gray-500">
+                                업로드 중...
+                            </p>
+                        )}
+
+                        {form.posterUrl && !uploading && (
+                            <button
+                                type="button"
+                                onClick={handlePosterRemove}
+                                className="self-start text-xs font-semibold text-gray-500 underline"
+                            >
+                                포스터 삭제
+                            </button>
+                        )}
+                    </div>
+                </div>
             </Field>
 
             <div className="grid grid-cols-2 gap-4">

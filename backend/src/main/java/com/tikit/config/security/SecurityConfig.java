@@ -110,6 +110,9 @@ public class SecurityConfig {
                                 // 공개 AI 안내 질문
                                 .requestMatchers(HttpMethod.POST, "/api/v1/rag/questions").permitAll()
 
+                                // 업로드된 포스터 이미지
+                                .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
+
                                 // 관리자 전용 API
                                 .requestMatchers(
                                         "/api/v1/admin/**"

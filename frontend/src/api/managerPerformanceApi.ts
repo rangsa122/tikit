@@ -181,3 +181,26 @@ export async function updatePerformance(
     }
     return response.data.data
 }
+
+export interface PosterUploadResult {
+    posterUrl: string
+}
+
+/**
+ * 포스터 이미지 업로드.
+ * 반환된 주소를 공연 등록/수정 요청의 posterUrl에 그대로 넣는다.
+ */
+export async function uploadPoster(file: File): Promise<string> {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    // Content-Type은 지정하지 않는다. axios가 FormData 경계값을 포함해 직접 설정한다.
+    // 기본 타임아웃(10초)은 이미지 업로드에 짧을 수 있어 늘려 준다.
+    const response = await apiClient.post<ApiResponse<PosterUploadResult>>(
+        '/api/v1/manager/posters', formData, {timeout: 30000},
+    )
+    if (response.data.code !== 'SUCCESS' || !response.data.data) {
+        throw new Error(response.data.message || '포스터를 업로드하지 못했습니다')
+    }
+    return response.data.data.posterUrl
+}
