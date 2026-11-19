@@ -1,6 +1,6 @@
 
 import {useEffect, useState} from 'react'
-import {Link, useParams} from 'react-router'
+import {Link, useNavigate, useParams} from 'react-router'
 import {categories} from '../constants/categories'
 import SessionSelector from '../components/performance/SessionSelector'
 import type {PerformanceSession as SelectorSession} from '../components/performance/SessionSelector'
@@ -9,6 +9,7 @@ import {
   usePerformanceSessions,
 } from '../hooks/usePerformanceDetail'
 import {useAuthStore} from '../stores/authStore'
+import type {QueuePageState} from './queue/QueuePage'
 import {
   addFavoritePerformance,
   getFavoritePerformances,
@@ -83,6 +84,7 @@ function toSelectorSessions(
 
 export default function PerformanceDetailPage() {
   const {performanceId} = useParams()
+  const navigate = useNavigate()
 
   const accessToken = useAuthStore(
     state => state.tokens?.accessToken,
@@ -317,8 +319,35 @@ export default function PerformanceDetailPage() {
   )
 
   const hasPoster =
-    Boolean(performance.posterUrl) &&
-    performance.posterUrl !== failedPosterUrl
+      Boolean(performance.posterUrl) &&
+      performance.posterUrl !== failedPosterUrl
+
+  // 예매하기: 로그인 확인 -> 선택한 회차의 대기열로 이동
+  // (판매 시작 전이면 대기열 화면이 카운트다운을 보여 주고, 입장 순서가 되면 좌석 선택으로 넘어감)
+  const handleBookingClick = () => {
+    if (!selectedSession) return
+
+    // 대기열 등록은 회원만 가능 -> 비로그인은 안내만 하고 이동하지 않음
+    if (!accessToken) {
+      setBookingNotice(true)
+      return
+    }
+
+    // 대기열 화면 상단에 보여 줄 공연 정보 (회차 시작 시각은 원래 ISO 값을 그대로 넘김)
+    const session = sessionsQuery.data?.items.find(
+        item => item.sessionId === selectedSession.id,
+    )
+
+    const queueState: QueuePageState = {
+      performanceId: performance.performanceId,
+      performanceTitle: performance.title,
+      sessionStartsAt: session?.startsAt,
+      venue: performance.venueName,
+      posterUrl: performance.posterUrl ?? undefined,
+    }
+
+    navigate(`/sessions/${selectedSession.id}/queue`, {state: queueState})
+  }
 
   return (
     <main className="mx-auto max-w-[1320px] px-5 py-10">
@@ -617,10 +646,7 @@ export default function PerformanceDetailPage() {
                 sessionsQuery.isError ||
                 performance.salesStatus !== 'ENABLED'
               }
-              onClick={() => {
-                // 실제 대기열 연결은 별도 검증 후 활성화
-                setBookingNotice(true)
-              }}
+              onClick={handleBookingClick}
               className="mt-5 w-full rounded-xl bg-blue-600 px-5 py-4 font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
             >
               예매하기
@@ -631,8 +657,10 @@ export default function PerformanceDetailPage() {
                 role="status"
                 className="mt-3 text-sm text-gray-600"
               >
-                현재는 예매 화면을 준비 중입니다.
-                실제 예약은 진행되지 않습니다.
+                로그인 후 예매할 수 있습니다.{' '}
+                <Link to="/login" className="font-semibold text-blue-600 underline">
+                  로그인하기
+                </Link>
               </p>
             )}
           </div>
