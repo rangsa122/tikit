@@ -114,6 +114,7 @@ function HomeContent() {
         title="오픈 예정"
         performances={openingPerformances}
         variant="opening"
+        moreLink="/openings"
         isLoading={openingQuery.isPending}
         isError={openingQuery.isError}
         onRetry={() => void openingQuery.refetch()}
