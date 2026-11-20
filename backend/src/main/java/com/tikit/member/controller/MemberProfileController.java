@@ -1,6 +1,7 @@
 package com.tikit.member.controller;
 
 import com.tikit.common.dto.ResponseDTO;
+import com.tikit.member.dto.MemberPasswordChangeRequestDTO;
 import com.tikit.member.dto.MemberProfileResponseDTO;
 import com.tikit.member.dto.MemberProfileUpdateRequestDTO;
 import com.tikit.member.dto.MemberWithdrawalRequestDTO;
@@ -73,5 +74,22 @@ public class MemberProfileController {
         MemberWithdrawalEligibilityResponseDTO eligibility = memberProfileService.getWithdrawalEligibility(Long.parseLong(memberId));
 
         return ResponseDTO.success("회원 탈퇴 가능 여부 조회 성공", eligibility);
+    }
+
+    // 회원 비밀번호 변경 API
+    @PreAuthorize("hasAnyRole('MEMBER', 'MANAGER')")
+    @PatchMapping("/password")
+    public ResponseEntity<Void> changePassword(
+            @AuthenticationPrincipal String memberId,
+            @Valid @RequestBody MemberPasswordChangeRequestDTO request
+    ) {
+        // 현재 비밀번호 확인 및 새 비밀번호 변경
+        memberProfileService.changePassword(
+                Long.parseLong(memberId),
+                request.currentPassword(),
+                request.newPassword()
+        );
+
+        return ResponseEntity.noContent().build();
     }
 }
