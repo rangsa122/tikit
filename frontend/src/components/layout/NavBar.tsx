@@ -31,7 +31,7 @@ function PerformanceSearch({initialKeyword}: {initialKeyword: string}) {
         aria-label="공연 검색"
         value={searchKeyword}
         onChange={event => setSearchKeyword(event.target.value)}
-        placeholder="최현우 30주년 기념 마술쇼"
+        placeholder="어떤 공연을 찾으시나요?"
         className="h-full min-w-0 flex-1 bg-transparent text-sm leading-[normal] placeholder:text-[#8e8e8e] focus:outline-none!"
       />
       <button
