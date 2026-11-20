@@ -13,18 +13,48 @@ export function formatDate(date: string): string {
 
 /** 티켓 오픈 일시 표시 형식 변환 */
 export function formatOpeningDate(date: string | null): string {
-  if (!date) {
-    return ''
-  }
+  if (!date) return ''
 
-  return new Date(date).toLocaleString('ko-KR', {
+  const openingDate = new Date(date)
+  if (Number.isNaN(openingDate.getTime())) return ''
+
+  // 날짜(YYYY-MM-DD)
+  const dateFormatter = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+
+  const today = dateFormatter.format(new Date())
+  const openingDay = dateFormatter.format(openingDate)
+
+  // 날짜 차이 계산
+  const diffDays = Math.round(
+      (Date.parse(`${openingDay}T00:00:00Z`) -
+          Date.parse(`${today}T00:00:00Z`)) / 86_400_000
+  )
+
+  // 예매 오픈 시간
+  const openingTime = new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(openingDate)
+
+  if (diffDays === 0) return `오늘 ${openingTime}`
+  if (diffDays === 1) return `내일 ${openingTime}`
+
+  // 이틀 이상 남은 공연은 기존 날짜 형식 유지
+  return new Intl.DateTimeFormat('ko-KR', {
     timeZone: 'Asia/Seoul',
     month: 'long',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-    hour12: false,
-  })
+    hourCycle: 'h23',
+  }).format(openingDate)
 }
 
 /** API 응답을 공연 카드 데이터로 변환 */

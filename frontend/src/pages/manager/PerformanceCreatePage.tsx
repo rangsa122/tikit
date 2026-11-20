@@ -13,7 +13,7 @@ function fromKopis(detail: KopisPerformanceDetail): FormState {
         venueName: detail.venueName ?? '',
         organizerName: detail.organizerName ?? '',
         description: detail.description ?? '',
-        posterUrl: detail.posterUrl ?? '',
+        posterUrl: detail.posterUrl?.replace(/^http:\/\//, 'https://') ?? '',
         bannerUrl: '',
         startDate: detail.startDate ?? '',
         endDate: detail.endDate ?? '',
