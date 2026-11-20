@@ -13,7 +13,16 @@ import AuthRoute from '../components/auth/AuthRoute'
 // 마이페이지 관련 경로 관리
 const mypageRoutes: RouteObject[] = [
   { path: '/mypage', element: <MyPage /> },
+
   { path: '/mypage/profile', element: <MemberProfilePage /> },
+
+  // 알림 설정
+  {
+    path: '/mypage/notifications',
+    element: <NotificationSettingsPage />,
+  },
+
+  // 관심 공연 - 로그인 필요
   {
     path: '/mypage/favorites',
     element: (
@@ -22,10 +31,23 @@ const mypageRoutes: RouteObject[] = [
       </AuthRoute>
     ),
   },
+
   { path: '/mypage/bookings', element: <BookingHistoryPage /> },
-  { path: '/mypage/bookings/:bookingId', element: <BookingDetailPage /> },
-  { path: '/mypage/cancellations', element: <CancellationHistoryPage /> },
-  { path: '/mypage/withdrawal', element: <MemberWithdrawalPage /> },
+
+  {
+    path: '/mypage/bookings/:bookingId',
+    element: <BookingDetailPage />,
+  },
+
+  {
+    path: '/mypage/cancellations',
+    element: <CancellationHistoryPage />,
+  },
+
+  {
+    path: '/mypage/withdrawal',
+    element: <MemberWithdrawalPage />,
+  },
 ]
 
 export default mypageRoutes
