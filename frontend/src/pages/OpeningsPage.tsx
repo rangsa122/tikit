@@ -75,6 +75,12 @@ export default function OpeningsPage() {
 
     return (
         <div className="mx-auto max-w-[1320px] px-5 pt-8 pb-20">
+            <Link
+                to="/"
+                className="text-sm text-gray-500 hover:text-blue-600"
+            >
+                ← 공연 목록으로
+            </Link>
             <h1 className="py-5 text-2xl leading-[normal] font-bold">
                 오픈 예정
             </h1>
