@@ -8,11 +8,9 @@ import {
   getOpeningPerformances,
   toPerformance,
 } from '../utils/performanceUtils'
-import PerformanceBanner from '../components/performance/PerformanceBanner'
 import PerformanceSection from '../components/performance/PerformanceSection'
 import PerformanceListState from '../components/performance/PerformanceListState'
 import Pagination from '../components/performance/Pagination'
-import PromotionBanner from '../components/performance/PromotionBanner'
 
 const PAGE_SIZE = 5
 
@@ -64,11 +62,9 @@ function CategoryContent({categoryId}: {categoryId: string}) {
 
   return (
     <div className="pb-20">
-      <h1 className="sr-only">{category.label} 공연</h1>
+        <div className="mx-auto max-w-[1320px]">
+            <h1 className="px-5 pt-10 text-3xl font-bold">{category.label} 공연</h1>
 
-      <PerformanceBanner variant="category" />
-
-      <div className="mx-auto max-w-[1320px]">
         {openingQuery.isPending || openingQuery.isError ? (
           <section className="px-5 pt-8">
             <h2 className="py-5 text-2xl font-bold">
@@ -121,8 +117,6 @@ function CategoryContent({categoryId}: {categoryId: string}) {
           totalPages={totalPages}
           onPageChange={setCurrentPage}
         />
-
-        <PromotionBanner />
       </div>
     </div>
   )
