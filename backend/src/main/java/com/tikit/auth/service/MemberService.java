@@ -137,6 +137,18 @@ public class MemberService {
             validateActive(member);
         }
 
+        // Refresh Token의 인증 버전 확인
+        Number tokenVersion = claims.get("credentialsVersion", Number.class);
+
+        // 비밀번호 변경 전 발급된 토큰의 재발급 차단
+        if (tokenVersion == null
+                || member.getCredentialsVersion() == null
+                || tokenVersion.longValue() != member.getCredentialsVersion().longValue()) {
+            throw new RefreshTokenException(
+                    "비밀번호가 변경되었습니다. 다시 로그인해 주세요."
+            );
+        }
+
         String newAccessToken = jwtProvider.generateAccessToken(member);
         String newRefreshToken = jwtProvider.generateRefreshToken(member);
 

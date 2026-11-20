@@ -224,7 +224,7 @@ public class MemberProfileService {
             String newPassword
     ) {
         // 회원 조회
-        Member member = memberRepository.findById(memberId)
+        Member member = memberRepository.findByIdForUpdate(memberId)
                 .orElseThrow(() ->
                         new IllegalArgumentException("회원을 찾을 수 없습니다.")
                 );
@@ -238,6 +238,14 @@ public class MemberProfileService {
         if (currentPassword == null ||
                 !passwordEncoder.matches(currentPassword, member.getPasswordHash())) {
             throw new MemberStatusChangeException(ErrorCode.ACCESS_DENIED);
+        }
+
+        // 새 비밀번호 검증
+        if (newPassword == null ||
+                newPassword.isBlank() ||
+                newPassword.length() < 10 ||
+                newPassword.length() > 128) {
+            throw new MemberStatusChangeException(ErrorCode.VALIDATION_ERROR);
         }
 
         // 기존 비밀번호 재사용 방지
@@ -256,15 +264,10 @@ public class MemberProfileService {
                         try {
                             refreshTokenRepository.delete(memberId.toString());
                         } catch (RuntimeException e) {
-                            log.warn(
-                                    "비밀번호 변경 후 Refresh Token 삭제 실패: memberId={}",
-                                    memberId,
-                                    e
-                            );
+                            log.warn("비밀번호 변경 후 Refresh Token 삭제 실패: memberId={}", memberId, e);
                         }
                     }
                 }
         );
     }
-
 }

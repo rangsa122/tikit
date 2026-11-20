@@ -1,5 +1,6 @@
 package com.tikit.member.controller;
 
+import com.tikit.auth.cookie.RefreshTokenCookie;
 import com.tikit.common.dto.ResponseDTO;
 import com.tikit.member.dto.MemberPasswordChangeRequestDTO;
 import com.tikit.member.dto.MemberProfileResponseDTO;
@@ -13,6 +14,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 
 // 회원 정보 API 컨트롤러
 
@@ -22,6 +24,7 @@ import jakarta.validation.Valid;
 public class MemberProfileController {
 
     private final MemberProfileService memberProfileService;
+    private final RefreshTokenCookie refreshTokenCookie;
 
     @PreAuthorize("hasAnyRole('MEMBER', 'MANAGER', 'ADMIN')")
     @GetMapping
@@ -77,8 +80,8 @@ public class MemberProfileController {
     }
 
     // 회원 비밀번호 변경 API
-    @PreAuthorize("hasAnyRole('MEMBER', 'MANAGER')")
-    @PatchMapping("/password")
+    @PreAuthorize("hasAnyRole('MEMBER', 'MANAGER', 'ADMIN')")
+    @PutMapping("/password")
     public ResponseEntity<Void> changePassword(
             @AuthenticationPrincipal String memberId,
             @Valid @RequestBody MemberPasswordChangeRequestDTO request
@@ -90,6 +93,12 @@ public class MemberProfileController {
                 request.newPassword()
         );
 
-        return ResponseEntity.noContent().build();
+        // Refresh Token 쿠키 삭제
+        return ResponseEntity.noContent()
+                .header(
+                        HttpHeaders.SET_COOKIE,
+                        refreshTokenCookie.clear().toString()
+                )
+                .build();
     }
 }

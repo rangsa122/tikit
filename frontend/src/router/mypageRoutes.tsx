@@ -7,6 +7,7 @@ import BookingHistoryPage from '../pages/mypage/BookingHistoryPage'
 import BookingDetailPage from '../pages/mypage/BookingDetailPage'
 import CancellationHistoryPage from '../pages/mypage/CancellationHistoryPage'
 import MemberWithdrawalPage from '../pages/mypage/MemberWithdrawalPage'
+import ChangePasswordPage from '../pages/mypage/ChangePasswordPage'
 
 // 마이페이지 관련 경로 관리
 const mypageRoutes: RouteObject[] = [
@@ -18,6 +19,7 @@ const mypageRoutes: RouteObject[] = [
   { path: '/mypage/bookings/:bookingId', element: <BookingDetailPage /> },
   { path: '/mypage/cancellations', element: <CancellationHistoryPage /> },
   { path: '/mypage/withdrawal', element: <MemberWithdrawalPage /> },
+  { path: '/mypage/password', element: <ChangePasswordPage /> },
 ]
 
 export default mypageRoutes
