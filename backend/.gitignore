@@ -66,3 +66,6 @@ replay_pid*
 
 # Local helper scripts
 /scripts/
+
+# 업로드된 파일 (서버 디스크 저장)
+uploads/

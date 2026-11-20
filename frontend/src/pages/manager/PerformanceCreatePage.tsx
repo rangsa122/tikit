@@ -14,6 +14,7 @@ function fromKopis(detail: KopisPerformanceDetail): FormState {
         organizerName: detail.organizerName ?? '',
         description: detail.description ?? '',
         posterUrl: detail.posterUrl?.replace(/^http:\/\//, 'https://') ?? '',
+        bannerUrl: '',
         startDate: detail.startDate ?? '',
         endDate: detail.endDate ?? '',
         bookingLimitPerMember: '4',
@@ -43,6 +44,8 @@ export default function PerformanceCreatePage() {
                 organizerName: form.organizerName.trim() || undefined,
                 description: form.description.trim(),
                 posterUrl: form.posterUrl.trim() || undefined,
+                // 빈 문자열을 보내 배너에서 내릴 수 있도록 undefined로 바꾸지 않는다
+                bannerUrl: form.bannerUrl.trim(),
                 startDate: form.startDate,
                 endDate: form.endDate,
                 bookingLimitPerMember: Number(form.bookingLimitPerMember),

@@ -15,6 +15,7 @@ function toFormState(performance: ManagerPerformance): FormState {
         organizerName: performance.organizerName ?? '',
         description: performance.description,
         posterUrl: performance.posterUrl ?? '',
+        bannerUrl: performance.bannerUrl ?? '',
         startDate: performance.startDate,
         endDate: performance.endDate,
         bookingLimitPerMember: String(performance.bookingLimitPerMember),
@@ -70,6 +71,8 @@ export default function PerformanceEditPage() {
                 organizerName: form.organizerName.trim() || undefined,
                 description: form.description.trim(),
                 posterUrl: form.posterUrl.trim() || undefined,
+                // 빈 문자열을 보내 배너에서 내릴 수 있도록 undefined로 바꾸지 않는다
+                bannerUrl: form.bannerUrl.trim(),
                 startDate: form.startDate,
                 endDate: form.endDate,
                 bookingLimitPerMember: Number(form.bookingLimitPerMember),

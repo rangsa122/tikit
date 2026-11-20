@@ -32,6 +32,9 @@ public class PerformanceUpdateRequestDTO {
     private String description;
 
     private String posterUrl;
+
+    // 홈 배너용 이미지. 빈 문자열을 보내면 배너에서 내린다.
+    private String bannerUrl;
     private LocalDate startDate;
     private LocalDate endDate;
 
