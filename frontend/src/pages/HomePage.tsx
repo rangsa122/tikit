@@ -14,7 +14,6 @@ import PerformanceCard from '../components/performance/PerformanceCard'
 import PerformanceSection from '../components/performance/PerformanceSection'
 import PerformanceListState from '../components/performance/PerformanceListState'
 import Pagination from '../components/performance/Pagination'
-import PromotionBanner from '../components/performance/PromotionBanner'
 
 const SEARCH_PAGE_SIZE = 12
 const CATEGORY_PAGE_SIZE = 10
@@ -157,8 +156,6 @@ function HomeContent() {
           ))}
         </div>
       </PerformanceSection>
-
-      <PromotionBanner />
     </>
   )
 }
