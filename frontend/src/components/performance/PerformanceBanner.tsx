@@ -7,6 +7,7 @@ import {usePerformances} from '../../hooks/usePerformances'
 
 interface PerformanceBannerProps {
   variant?: 'home' | 'category'
+  genreCode?: string
 }
 
 interface BannerSlide {
@@ -14,6 +15,7 @@ interface BannerSlide {
   label: string
   performanceId?: string
   imageUrl?: string
+  isPoster?: boolean
 }
 
 // 카테고리 배너와 홈 배너 로딩 중에 쓰는 빈 슬라이드
@@ -24,7 +26,7 @@ const placeholderSlides: BannerSlide[] = Array.from({length: 5}, (_, index) => (
 
 const transitionDuration = 450
 
-export default function PerformanceBanner({variant = 'home'}: PerformanceBannerProps) {
+export default function PerformanceBanner({variant = 'home', genreCode,}: PerformanceBannerProps) {
     const isCategory = variant === 'category'
 
     const today = new Intl.DateTimeFormat('sv-SE', {
@@ -35,23 +37,69 @@ export default function PerformanceBanner({variant = 'home'}: PerformanceBannerP
     }).format(new Date())
 
     // 관리자가 지정한 메인 배너 조회
-    const bannersQuery = useBanners(!isCategory)
+    const bannersQuery = useBanners(true)
 
-    // 지정된 배너가 없을 때 표시할 공연 조회
-    const performancesQuery = usePerformances({
-        page: 0,
-        size: 100,
-        fromDate: today,
-        sort: 'startDate',
-    })
+    // 메인은 오늘 이후, 장르별 페이지는 해당 장르 공연 조회
+    const performancesQuery = usePerformances(
+        {
+            page: 0,
+            size: 100,
+            genreCode: isCategory ? genreCode : undefined,
+            fromDate: isCategory ? undefined : today,
+            sort: 'startDate',
+        },
+        !isCategory || Boolean(genreCode),
+    )
 
     let banners: BannerSlide[] = placeholderSlides
 
-    if (!isCategory && !bannersQuery.isLoading) {
-        const managedBanners = (bannersQuery.data ?? []).filter(banner => Boolean(banner.bannerUrl))
+    if (isCategory) {
+        // 장르별 공연 조회가 끝나기 전에는 배너를 표시하지 않음
+        if (!genreCode || performancesQuery.isPending) {
+            return null
+        }
+
+        const items = performancesQuery.data?.items ?? []
+
+        // 현재 장르에 해당하는 공연 ID 수집
+        const performanceIds = new Set(
+            items.map(item => String(item.performanceId)),
+        )
+
+        // 관리자 배너 중 현재 장르 공연만 선택
+        const categoryBanners = (bannersQuery.data ?? [])
+            .filter(banner =>
+                performanceIds.has(String(banner.performanceId)) &&
+                Boolean(banner.bannerUrl),
+            )
+
+        if (categoryBanners.length > 0) {
+            // 관리자 배너 이미지 우선 사용
+            banners = categoryBanners.map(banner => ({
+                key: banner.performanceId,
+                label: banner.title,
+                performanceId: banner.performanceId,
+                imageUrl: banner.bannerUrl,
+            }))
+        } else {
+            // 지정된 배너가 없으면 해당 장르 공연 포스터 사용
+            banners = items
+                .filter(item => Boolean(item.posterUrl))
+                .slice(0, 5)
+                .map(item => ({
+                    key: item.performanceId,
+                    label: item.title,
+                    performanceId: item.performanceId,
+                    imageUrl: item.posterUrl ?? undefined,
+                    isPoster: true,
+                }))
+        }
+    } else if (!bannersQuery.isLoading) {
+        // 메인 페이지의 기존 관리자 지정 배너 유지
+        const managedBanners = (bannersQuery.data ?? [])
+            .filter(banner => Boolean(banner.bannerUrl))
 
         if (managedBanners.length > 0) {
-            // 관리자 지정 배너 우선 표시
             banners = managedBanners.map((banner: Banner) => ({
                 key: banner.performanceId,
                 label: banner.title,
@@ -59,9 +107,11 @@ export default function PerformanceBanner({variant = 'home'}: PerformanceBannerP
                 imageUrl: banner.bannerUrl,
             }))
         } else if (!performancesQuery.isPending) {
-            // 지정된 배너가 없으면 실제 공연 포스터 표시
+            // 관리자 배너가 없으면 공연 포스터 사용
             banners = (performancesQuery.data?.items ?? [])
-                .filter(item => item.salesStatus === 'ENABLED' && item.posterUrl)
+                .filter(item =>
+                    item.salesStatus === 'ENABLED' && Boolean(item.posterUrl),
+                )
                 .slice(0, 5)
                 .map(item => ({
                     key: item.performanceId,
@@ -72,20 +122,18 @@ export default function PerformanceBanner({variant = 'home'}: PerformanceBannerP
         }
     }
 
-    // 표시할 공연이 없으면 배너 영역 숨김
+    // 추천할 이미지가 없으면 배너 영역 숨김
     if (banners.length === 0) {
         return null
     }
 
-  // 배너 개수가 바뀌면(로딩 완료) 캐러셀을 새로 그려 위치를 초기화한다.
-  // useEffect로 위치를 맞추면 렌더가 연쇄적으로 일어나므로 key로 처리한다.
-  return (
-      <BannerCarousel
-          key={banners.length}
-          banners={banners}
-          isCategory={isCategory}
-      />
-  )
+    return (
+        <BannerCarousel
+            key={`${genreCode ?? 'home'}-${banners.map(banner => banner.key).join('-')}`}
+            banners={banners}
+            isCategory={isCategory}
+        />
+    )
 }
 
 function BannerCarousel({
@@ -107,7 +155,7 @@ function BannerCarousel({
   const movingRef = useRef(false)
   const playbackButton = useRef<HTMLButtonElement>(null)
   const pointerStart = useRef<{id: number; x: number; y: number; step: number} | null>(null)
-  const gap = isCategory ? 18 : 20
+  const gap = 20
   const visualPosition = position - dragOffset / dragStep
   const centeredPosition = Math.round(visualPosition)
   const activeIndex = ((centeredPosition % count) + count) % count
@@ -181,8 +229,7 @@ function BannerCarousel({
     }
   }
 
-  let frameClass = 'aspect-[1321/415] min-h-[160px] max-w-[1321px]'
-  if (isCategory) frameClass = 'aspect-[500/460] max-w-[500px]'
+  const frameClass = 'aspect-[1321/415] min-h-[160px] max-w-[1321px]'
 
   return (
       <section
@@ -228,11 +275,6 @@ function BannerCarousel({
                       aria-label={`${(index % count) + 1} / ${count}: ${slide.label}`}
                       aria-hidden={index !== centeredPosition}
                       className={`h-full w-full shrink-0 overflow-hidden rounded-xl bg-[#999] ease-out motion-reduce:transition-none ${moving ? 'transition-transform duration-[450ms]' : ''}`}
-                      style={{
-                        transform: isCategory
-                            ? `scale(${1 - 0.08 * Math.min(Math.abs(index - visualPosition), 1)})`
-                            : undefined,
-                      }}
                   >
                       {slide.performanceId && slide.imageUrl && (
                           <Link
@@ -246,24 +288,20 @@ function BannerCarousel({
                               className="relative block h-full w-full overflow-hidden"
                           >
                               {/* 흐린 배경 이미지 */}
-                              {!isCategory && (
-                                  <img
-                                      src={slide.imageUrl}
-                                      alt=""
-                                      aria-hidden="true"
-                                      draggable={false}
-                                      className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover blur-2xl brightness-75"
-                                  />
-                              )}
+                              <img
+                                  src={slide.imageUrl}
+                                  alt=""
+                                  aria-hidden="true"
+                                  draggable={false}
+                                  className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover blur-2xl brightness-75"
+                              />
 
                               {/* 전체 이미지 표시 / 카테고리는 기존 방식 유지 */}
                               <img
                                   src={slide.imageUrl}
                                   alt={slide.label}
                                   draggable={false}
-                                  className={`relative z-10 h-full w-full ${
-                                      isCategory ? 'object-cover' : 'object-contain'
-                                  }`}
+                                  className="relative z-10 h-full w-full object-contain"
                               />
                           </Link>
                       )}
@@ -272,23 +310,23 @@ function BannerCarousel({
               ))}
             </div>
           </div>
-          {!isCategory && <button
-              type="button"
-              aria-label="이전 배너"
-              onClick={() => move(-1)}
-              className="absolute top-1/2 left-4 flex size-12 -translate-y-1/2 items-center justify-center rounded-2xl bg-white/95 text-3xl text-[#111] shadow-sm max-sm:left-2 max-sm:size-9 max-sm:text-2xl"
-          >
-            <span aria-hidden="true">‹</span>
-          </button>}
-          {!isCategory && <button
-              type="button"
-              aria-label="다음 배너"
-              onClick={() => move(1)}
-              className="absolute top-1/2 right-4 flex size-12 -translate-y-1/2 items-center justify-center rounded-2xl bg-white/95 text-3xl text-[#111] shadow-sm max-sm:right-2 max-sm:size-9 max-sm:text-2xl"
-          >
-            <span aria-hidden="true">›</span>
-          </button>}
-          <div className="absolute right-5 bottom-5 flex items-center gap-2 max-sm:right-3 max-sm:bottom-3">
+            <button
+                type="button"
+                aria-label="이전 배너"
+                onClick={() => move(-1)}
+                className="absolute top-1/2 left-4 flex size-12 -translate-y-1/2 items-center justify-center rounded-2xl bg-white/95 text-3xl text-[#111] shadow-sm max-sm:left-2 max-sm:size-9 max-sm:text-2xl"
+            >
+                <span aria-hidden="true">‹</span>
+            </button>
+            <button
+                type="button"
+                aria-label="다음 배너"
+                onClick={() => move(1)}
+                className="absolute top-1/2 right-4 flex size-12 -translate-y-1/2 items-center justify-center rounded-2xl bg-white/95 text-3xl text-[#111] shadow-sm max-sm:right-2 max-sm:size-9 max-sm:text-2xl"
+            >
+                <span aria-hidden="true">›</span>
+            </button>
+            <div className="absolute right-5 bottom-5 flex items-center gap-2 max-sm:right-3 max-sm:bottom-3">
             <button
                 ref={playbackButton}
                 type="button"
