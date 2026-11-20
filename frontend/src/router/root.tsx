@@ -5,6 +5,7 @@ import LoginPage from '../pages/auth/LoginPage'
 import SignupPage from '../pages/auth/SignupPage'
 import SeatSelectionPage from '../pages/SeatSelectionPage'
 import CategoryPage from '../pages/CategoryPage'
+import OpeningsPage from '../pages/OpeningsPage'
 import PerformanceDetailPage from '../pages/PerformanceDetailPage'
 import RagQuestionPage from '../pages/RagQuestionPage'
 import PaymentPage from '../pages/payment/PaymentPage'
@@ -35,6 +36,7 @@ const router = createBrowserRouter([
             {path: '/', element: <HomePage />},
             {path: '/rag/questions', element: <RagQuestionPage />},
             {path: '/categories/:categoryId', element: <CategoryPage />},
+            {path: '/openings', element: <OpeningsPage />},
             {path: '/performances/:performanceId', element: <PerformanceDetailPage />},
             {path: '/login', element: <LoginPage />},
             {path: '/signup', element: <SignupPage />},
