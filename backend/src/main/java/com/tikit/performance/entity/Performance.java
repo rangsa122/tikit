@@ -55,6 +55,10 @@ public class Performance {
     @Column(name = "poster_url", columnDefinition = "TEXT")
     private String posterUrl;
 
+    // 홈 배너용 이미지. 포스터와 비율이 달라 따로 받는다. 값이 있는 공연만 배너에 노출한다.
+    @Column(name = "banner_url", columnDefinition = "TEXT")
+    private String bannerUrl;
+
     @Column(name = "start_date", nullable = false)
     private LocalDate startDate;
 
@@ -130,6 +134,15 @@ public class Performance {
         p.bookingLimitPerMember =
                 (bookingLimitPerMember == null) ? DEFAULT_BOOKING_LIMIT : bookingLimitPerMember;
         return p;
+    }
+
+    /**
+     * 배너 이미지 주소를 설정한다.
+     * 생성 메서드의 인자를 늘리지 않기 위해 별도 메서드로 둔다.
+     * null을 넣으면 배너에서 내린다.
+     */
+    public void changeBannerUrl(String bannerUrl) {
+        this.bannerUrl = bannerUrl;
     }
 
     public void update(Genre genre, String title, String venueName, String organizerName,

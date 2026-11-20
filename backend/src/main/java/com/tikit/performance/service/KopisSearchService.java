@@ -74,7 +74,7 @@ public class KopisSearchService {
                         r.venueName(),
                         r.startDate(),
                         r.endDate(),
-                        r.posterUrl(),
+                        toHttps(r.posterUrl()),
                         r.area(),
                         r.genreName(),
                         r.state(),
