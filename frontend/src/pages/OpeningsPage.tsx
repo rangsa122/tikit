@@ -10,11 +10,15 @@ import {
 } from '../utils/performanceUtils'
 import {useFavoritePerformanceIds} from '../hooks/useFavoritePerformanceIds'
 import OpeningPerformanceCard from '../components/performance/OpeningPerformanceCard'
+import OpeningHighlightSlider from '../components/performance/OpeningHighlightSlider'
+import OpeningAlarmBanner from '../components/performance/OpeningAlarmBanner'
 import PerformanceListState from '../components/performance/PerformanceListState'
 
 const ALL_GENRES = 'all'
 
 type GenreFilter = CategoryId | typeof ALL_GENRES
+
+const HIGHLIGHT_COUNT = 10
 
 const genreOptions = [
     {id: ALL_GENRES, label: '전체'} as const,
@@ -29,6 +33,11 @@ export default function OpeningsPage() {
 
     const favorite = useFavoritePerformanceIds()
 
+    const highlightQuery = useQuery({
+        queryKey: ['opening-performances', ALL_GENRES],
+        queryFn: () => getOpeningPerformances(),
+    })
+
     const openingQuery = useQuery({
         queryKey: ['opening-performances', selectedGenre],
         queryFn: () =>
@@ -41,6 +50,13 @@ export default function OpeningsPage() {
         ...toPerformance(item),
         openingLabel: formatOpeningLabel(item.nextSalesOpenAt),
     }))
+
+    const highlights = (highlightQuery.data ?? [])
+        .slice(0, HIGHLIGHT_COUNT)
+        .map(item => ({
+            ...toPerformance(item),
+            openingLabel: formatOpeningLabel(item.nextSalesOpenAt),
+        }))
 
     async function handleToggleFavorite(performanceId: string) {
         setFavoriteNotice(null)
@@ -79,6 +95,12 @@ export default function OpeningsPage() {
                     )}
                 </p>
             )}
+
+            <OpeningHighlightSlider performances={highlights} />
+
+            <div className="pt-10 pb-12">
+                <OpeningAlarmBanner />
+            </div>
 
             <div
                 role="group"
