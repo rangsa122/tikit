@@ -1,6 +1,7 @@
 
 import {useId, useState} from 'react'
 import type {ReactNode} from 'react'
+import {Link} from 'react-router'
 import type {Performance} from '../../types/performance'
 import PerformanceCard from './PerformanceCard'
 import PerformanceListState from './PerformanceListState'
@@ -13,6 +14,7 @@ interface PerformanceSectionProps {
   isLoading?: boolean
   isError?: boolean
   onRetry?: () => void
+  moreLink?: string
 }
 
 export default function PerformanceSection({
@@ -23,6 +25,7 @@ export default function PerformanceSection({
   isLoading = false,
   isError = false,
   onRetry,
+  moreLink,
 }: PerformanceSectionProps) {
   const [expanded, setExpanded] = useState(false)
 
@@ -46,7 +49,16 @@ export default function PerformanceSection({
           {title}
         </h2>
 
-        {!isLoading && !isError && performances.length > 5 && (
+        {moreLink && !isLoading && !isError && performances.length > 0 && (
+            <Link
+                to={moreLink}
+                className="shrink-0 text-base leading-[normal]"
+            >
+              {'전체 보기 >'}
+            </Link>
+        )}
+
+        {!moreLink && !isLoading && !isError && performances.length > 5 && (
           <button
             type="button"
             aria-expanded={expanded}

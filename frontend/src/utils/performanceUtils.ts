@@ -78,3 +78,56 @@ export async function getOpeningPerformances(
       Date.parse(b.nextSalesOpenAt!),
     )
 }
+
+
+const SEOUL_TIME_ZONE = 'Asia/Seoul'
+
+/** 한국 시간 기준 날짜 키 (YYYY-MM-DD) */
+function toSeoulDateKey(date: Date): string {
+  return date.toLocaleDateString('en-CA', {timeZone: SEOUL_TIME_ZONE})
+}
+
+/** 오픈 예정 페이지 오픈 시각 표시 (오늘 18:00 / 내일 09:00 / 11.25(수) 18:00) */
+export function formatOpeningLabel(
+    date: string | null,
+    now: Date = new Date(),
+): string {
+  if (!date) {
+    return ''
+  }
+
+  const openingAt = new Date(date)
+
+  if (Number.isNaN(openingAt.getTime())) {
+    return ''
+  }
+
+  const time = openingAt.toLocaleTimeString('en-GB', {
+    timeZone: SEOUL_TIME_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  })
+
+  const openingDay = toSeoulDateKey(openingAt)
+  const today = toSeoulDateKey(now)
+  const tomorrow = toSeoulDateKey(
+      new Date(now.getTime() + 24 * 60 * 60 * 1000),
+  )
+
+  if (openingDay === today) {
+    return `오늘 ${time}`
+  }
+
+  if (openingDay === tomorrow) {
+    return `내일 ${time}`
+  }
+
+  const weekday = openingAt.toLocaleDateString('ko-KR', {
+    timeZone: SEOUL_TIME_ZONE,
+    weekday: 'short',
+  })
+  const [, month, day] = openingDay.split('-')
+
+  return `${month}.${day}(${weekday}) ${time}`
+}
