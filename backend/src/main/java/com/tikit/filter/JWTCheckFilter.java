@@ -3,6 +3,7 @@ package com.tikit.filter;
 import com.tikit.common.ErrorCode;
 import com.tikit.common.dto.ResponseDTO;
 import com.tikit.util.JWTProvider;
+import com.tikit.auth.entity.Member;
 import com.tikit.auth.entity.MemberStatus;
 import com.tikit.auth.repository.MemberRepository;
 import io.jsonwebtoken.Claims;
@@ -76,15 +77,26 @@ public class JWTCheckFilter extends OncePerRequestFilter {
             String roleName = claims.get("roleName", String.class);
 
             // DB에서 현재 회원 상태 확인
-            boolean isActiveMember = memberRepository.findById(Long.parseLong(accountId))
-                    .map(member -> member.getStatus() == MemberStatus.ACTIVE)
-                    .orElse(false);
+            Member member = memberRepository.findById(Long.parseLong(accountId))
+                    .orElse(null);
 
             // 탈퇴 또는 이용 제한 회원의 접근 차단
-            if (!isActiveMember) {
+            if (member == null || member.getStatus() != MemberStatus.ACTIVE) {
                 sendErrorResponse(response, "이용할 수 없는 계정입니다.");
                 return;
             }
+
+            // JWT에서 인증 정보 버전 추출
+            Number tokenVersion = claims.get("credentialsVersion", Number.class);
+
+            // 비밀번호 변경 전 발급된 토큰 차단
+            if (tokenVersion == null
+                    || member.getCredentialsVersion() == null
+                    || tokenVersion.longValue() != member.getCredentialsVersion().longValue()) {
+                sendErrorResponse(response, "인증 정보가 변경되었습니다. 다시 로그인해 주세요.");
+                return;
+            }
+
 
 
             log.info("JWT 검증 성공");

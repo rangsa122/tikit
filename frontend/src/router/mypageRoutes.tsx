@@ -1,4 +1,3 @@
-
 import type { RouteObject } from 'react-router'
 import MyPage from '../pages/mypage/MyPage'
 import MemberProfilePage from '../pages/mypage/MemberProfilePage'
@@ -8,46 +7,19 @@ import BookingHistoryPage from '../pages/mypage/BookingHistoryPage'
 import BookingDetailPage from '../pages/mypage/BookingDetailPage'
 import CancellationHistoryPage from '../pages/mypage/CancellationHistoryPage'
 import MemberWithdrawalPage from '../pages/mypage/MemberWithdrawalPage'
-import AuthRoute from '../components/auth/AuthRoute'
+import ChangePasswordPage from '../pages/mypage/ChangePasswordPage'
 
 // 마이페이지 관련 경로 관리
 const mypageRoutes: RouteObject[] = [
   { path: '/mypage', element: <MyPage /> },
-
   { path: '/mypage/profile', element: <MemberProfilePage /> },
-
-  // 알림 설정
-  {
-    path: '/mypage/notifications',
-    element: <NotificationSettingsPage />,
-  },
-
-  // 관심 공연 - 로그인 필요
-  {
-    path: '/mypage/favorites',
-    element: (
-      <AuthRoute>
-        <FavoritePerformancesPage />
-      </AuthRoute>
-    ),
-  },
-
+  { path: '/mypage/notifications', element: <NotificationSettingsPage /> },
+  { path: '/mypage/favorites', element: <FavoritePerformancesPage /> },
   { path: '/mypage/bookings', element: <BookingHistoryPage /> },
-
-  {
-    path: '/mypage/bookings/:bookingId',
-    element: <BookingDetailPage />,
-  },
-
-  {
-    path: '/mypage/cancellations',
-    element: <CancellationHistoryPage />,
-  },
-
-  {
-    path: '/mypage/withdrawal',
-    element: <MemberWithdrawalPage />,
-  },
+  { path: '/mypage/bookings/:bookingId', element: <BookingDetailPage /> },
+  { path: '/mypage/cancellations', element: <CancellationHistoryPage /> },
+  { path: '/mypage/withdrawal', element: <MemberWithdrawalPage /> },
+  { path: '/mypage/password', element: <ChangePasswordPage /> },
 ]
 
 export default mypageRoutes

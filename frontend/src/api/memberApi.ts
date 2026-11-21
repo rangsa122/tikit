@@ -53,3 +53,14 @@ export async function getWithdrawalEligibility(): Promise<MemberWithdrawalEligib
 export async function withdrawMyAccount(password: string): Promise<void> {
     await apiClient.post('/api/v1/me/withdrawal', { password })
 }
+
+// 회원 비밀번호 변경
+export async function changeMyPassword(
+    currentPassword: string,
+    newPassword: string
+): Promise<void> {
+    await apiClient.put('/api/v1/me/password', {
+        currentPassword,
+        newPassword,
+    })
+}

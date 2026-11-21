@@ -1,6 +1,7 @@
 package com.tikit.member.service;
 
 import com.tikit.auth.entity.Member;
+import com.tikit.auth.entity.MemberStatus;
 import com.tikit.auth.exception.MemberStatusChangeException;
 import com.tikit.auth.redis.RefreshTokenRepository;
 import com.tikit.auth.repository.MemberRepository;
@@ -209,6 +210,61 @@ public class MemberProfileService {
                             refreshTokenRepository.delete(memberId.toString());
                         } catch (RuntimeException e) {
                             log.warn("탈퇴 회원 Refresh Token 삭제 실패: memberId={}", memberId, e);
+                        }
+                    }
+                }
+        );
+    }
+
+    // 회원 비밀번호 변경
+    @Transactional
+    public void changePassword(
+            Long memberId,
+            String currentPassword,
+            String newPassword
+    ) {
+        // 회원 조회
+        Member member = memberRepository.findByIdForUpdate(memberId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("회원을 찾을 수 없습니다.")
+                );
+
+        // 활성 회원 확인
+        if (member.getStatus() != MemberStatus.ACTIVE) {
+            throw new MemberStatusChangeException(ErrorCode.STATE_CONFLICT);
+        }
+
+        // 현재 비밀번호 검증
+        if (currentPassword == null ||
+                !passwordEncoder.matches(currentPassword, member.getPasswordHash())) {
+            throw new MemberStatusChangeException(ErrorCode.ACCESS_DENIED);
+        }
+
+        // 새 비밀번호 검증
+        if (newPassword == null ||
+                newPassword.isBlank() ||
+                newPassword.length() < 10 ||
+                newPassword.length() > 128) {
+            throw new MemberStatusChangeException(ErrorCode.VALIDATION_ERROR);
+        }
+
+        // 기존 비밀번호 재사용 방지
+        if (passwordEncoder.matches(newPassword, member.getPasswordHash())) {
+            throw new MemberStatusChangeException(ErrorCode.VALIDATION_ERROR);
+        }
+
+        // 새 비밀번호 암호화 및 변경
+        member.changePasswordHash(passwordEncoder.encode(newPassword));
+
+        // DB 반영 후 기존 Refresh Token 삭제
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        try {
+                            refreshTokenRepository.delete(memberId.toString());
+                        } catch (RuntimeException e) {
+                            log.warn("비밀번호 변경 후 Refresh Token 삭제 실패: memberId={}", memberId, e);
                         }
                     }
                 }
