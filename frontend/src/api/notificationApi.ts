@@ -7,7 +7,7 @@ interface ApiResponse<T> {
 }
 
 export interface OpeningSubscriptionPage {
-    content: number[]
+    content: OpeningSubscriptionItem[]
     empty: boolean
     number: number
     size: number
@@ -33,6 +33,16 @@ export async function updateNotificationPreference(
         '/api/v1/me/notification-preference',
         { enabled }
     )
+}
+
+// 공연별 알림 설정 항목
+export interface OpeningSubscriptionItem {
+    performanceId: number
+    title: string
+    venueName: string
+    startDate: string
+    endDate: string
+    opensAt: string
 }
 
 // 공연별 알림 신청 목록 조회
