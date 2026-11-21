@@ -5,12 +5,15 @@ import axios from 'axios'
 import MyPageSidebar from './MyPageSidebar'
 import {changeMyPassword} from '../../api/memberApi'
 import {useAuthStore} from '../../stores/authStore.ts'
+import eyeIcon from '../../assets/auth/eye.svg'
 
 // 비밀번호 변경 오류 메시지
 function getPasswordErrorMessage(error: unknown): string {
-    if (axios.isAxiosError(error)) {
-        if (error.response?.status === 401) {
-            return '로그인 정보가 유효하지 않습니다. 다시 로그인해 주세요.'
+    if (axios.isAxiosError<{code?: string}>(error)) {
+        console.log('비밀번호 변경 오류 상태:', error.response?.status)
+        console.log('비밀번호 변경 오류 응답:', error.response?.data)
+        if (error.response?.data?.code === 'PASSWORD_MISMATCH') {
+            return '현재 비밀번호가 일치하지 않습니다.'
         }
 
         if (error.response?.status === 403) {
@@ -43,6 +46,10 @@ export default function ChangePasswordPage() {
     const [isSaving, setIsSaving] = useState(false)
     const [error, setError] = useState('')
     const [message, setMessage] = useState('')
+
+    const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+    const [showNewPassword, setShowNewPassword] = useState(false)
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
     // 비밀번호 변경 요청
     async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -170,18 +177,29 @@ export default function ChangePasswordPage() {
                                             현재 비밀번호
                                         </label>
 
-                                        <input
-                                            id="current-password"
-                                            type="password"
-                                            autoComplete="current-password"
-                                            value={currentPassword}
-                                            onChange={event =>
-                                                setCurrentPassword(event.target.value)
-                                            }
-                                            placeholder="현재 비밀번호 입력"
-                                            disabled={isSaving}
-                                            className="min-w-0 flex-1 rounded border border-[#bbb] bg-white px-3 py-2 text-[15px]"
-                                        />
+                                        <div className="flex min-w-0 flex-1 items-center rounded border border-[#bbb] bg-white pr-1 pl-3">
+                                            <input
+                                                id="current-password"
+                                                type={showCurrentPassword ? 'text' : 'password'}
+                                                autoComplete="current-password"
+                                                value={currentPassword}
+                                                onChange={event => setCurrentPassword(event.target.value)}
+                                                placeholder="현재 비밀번호 입력"
+                                                disabled={isSaving}
+                                                className="min-w-0 flex-1 bg-transparent py-2 text-[15px] focus:outline-none!"
+                                            />
+
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowCurrentPassword(prev => !prev)}
+                                                aria-label={showCurrentPassword ? '현재 비밀번호 숨기기' : '현재 비밀번호 보기'}
+                                                aria-pressed={showCurrentPassword}
+                                                className="flex size-9 shrink-0 items-center justify-center rounded"
+                                            >
+                                                <img src={eyeIcon} alt="" width={20} height={20}/>
+                                            </button>
+                                        </div>
+
                                     </div>
 
                                     {/* 새 비밀번호 */}
@@ -194,20 +212,31 @@ export default function ChangePasswordPage() {
                                         </label>
 
                                         <div className="min-w-0 flex-1">
-                                            <input
-                                                id="new-password"
-                                                type="password"
-                                                autoComplete="new-password"
-                                                value={newPassword}
-                                                onChange={event =>
-                                                    setNewPassword(event.target.value)
-                                                }
-                                                placeholder="새 비밀번호 입력"
-                                                minLength={10}
-                                                maxLength={128}
-                                                disabled={isSaving}
-                                                className="w-full rounded border border-[#bbb] bg-white px-3 py-2 text-[15px]"
-                                            />
+                                            <div className="flex w-full items-center rounded border border-[#bbb] bg-white pr-1 pl-3">
+                                                <input
+                                                    id="new-password"
+                                                    type={showNewPassword ? 'text' : 'password'}
+                                                    autoComplete="new-password"
+                                                    value={newPassword}
+                                                    onChange={event => setNewPassword(event.target.value)}
+                                                    placeholder="새 비밀번호 입력"
+                                                    minLength={10}
+                                                    maxLength={128}
+                                                    disabled={isSaving}
+                                                    className="min-w-0 flex-1 bg-transparent py-2 text-[15px] focus:outline-none!"
+                                                />
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowNewPassword(prev => !prev)}
+                                                    aria-label={showNewPassword ? '새 비밀번호 숨기기' : '새 비밀번호 보기'}
+                                                    aria-pressed={showNewPassword}
+                                                    className="flex size-9 shrink-0 items-center justify-center rounded"
+                                                >
+                                                    <img src={eyeIcon} alt="" width={20} height={20}/>
+                                                </button>
+                                            </div>
+
 
                                             <p className="mt-2 text-[13px] text-[#777]">
                                                 10자 이상 128자 이하로 입력해 주세요.
@@ -224,18 +253,29 @@ export default function ChangePasswordPage() {
                                             새 비밀번호 확인
                                         </label>
 
-                                        <input
-                                            id="confirm-password"
-                                            type="password"
-                                            autoComplete="new-password"
-                                            value={confirmPassword}
-                                            onChange={event =>
-                                                setConfirmPassword(event.target.value)
-                                            }
-                                            placeholder="새 비밀번호 다시 입력"
-                                            disabled={isSaving}
-                                            className="min-w-0 flex-1 rounded border border-[#bbb] bg-white px-3 py-2 text-[15px]"
-                                        />
+                                        <div className="flex min-w-0 flex-1 items-center rounded border border-[#bbb] bg-white pr-1 pl-3">
+                                            <input
+                                                id="confirm-password"
+                                                type={showConfirmPassword ? 'text' : 'password'}
+                                                autoComplete="new-password"
+                                                value={confirmPassword}
+                                                onChange={event => setConfirmPassword(event.target.value)}
+                                                placeholder="새 비밀번호 다시 입력"
+                                                disabled={isSaving}
+                                                className="min-w-0 flex-1 bg-transparent py-2 text-[15px] focus:outline-none!"
+                                            />
+
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowConfirmPassword(prev => !prev)}
+                                                aria-label={showConfirmPassword ? '새 비밀번호 확인 숨기기' : '새 비밀번호 확인 보기'}
+                                                aria-pressed={showConfirmPassword}
+                                                className="flex size-9 shrink-0 items-center justify-center rounded"
+                                            >
+                                                <img src={eyeIcon} alt="" width={20} height={20}/>
+                                            </button>
+                                        </div>
+
                                     </div>
                                 </div>
 
