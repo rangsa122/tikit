@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -24,6 +25,8 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class AdminBootstrapRunnerTest {
+    private static final String TEST_ADMIN_EMAIL = "bootstrap-admin@example.test";
+
     @Mock MemberRepository members;
     @Mock PasswordEncoder encoder;
     AdminBootstrapRunner runner;
@@ -32,7 +35,7 @@ class AdminBootstrapRunnerTest {
     @BeforeEach
     void setUp() {
         properties = new AdminBootstrapProperties();
-        properties.setEmail("Test1234@naver.com");
+        properties.setEmail("Bootstrap-admin@example.test");
         properties.setPassword("bootstrap-test-password");
         runner = new AdminBootstrapRunner(members, encoder, properties);
     }
@@ -43,7 +46,7 @@ class AdminBootstrapRunnerTest {
         runner.run();
         ArgumentCaptor<Member> inserted = ArgumentCaptor.forClass(Member.class);
         verify(members).saveAndFlush(inserted.capture());
-        assertThat(inserted.getValue().getEmail()).isEqualTo("test1234@naver.com");
+        assertThat(inserted.getValue().getEmail()).isEqualTo(TEST_ADMIN_EMAIL);
         assertThat(inserted.getValue().getRole()).isEqualTo(Role.ADMIN);
         assertThat(inserted.getValue().getStatus()).isEqualTo(MemberStatus.ACTIVE);
         assertThat(inserted.getValue().getPasswordHash()).isEqualTo("encoded");
@@ -52,8 +55,8 @@ class AdminBootstrapRunnerTest {
 
     @Test
     void restartingDoesNotRewriteMatchingSharedPassword() {
-        Member admin = Member.create("test1234@naver.com", "original-hash", "관리자", Role.ADMIN);
-        when(members.findByEmail("test1234@naver.com")).thenReturn(Optional.of(admin));
+        Member admin = Member.create(TEST_ADMIN_EMAIL, "original-hash", "관리자", Role.ADMIN);
+        when(members.findByEmail(TEST_ADMIN_EMAIL)).thenReturn(Optional.of(admin));
         when(encoder.matches("bootstrap-test-password", "original-hash")).thenReturn(true);
         runner.run();
         runner.run();
@@ -65,9 +68,9 @@ class AdminBootstrapRunnerTest {
     @ParameterizedTest
     @CsvSource({"MEMBER,ACTIVE", "MANAGER,ACTIVE", "ADMIN,SUSPENDED", "ADMIN,WITHDRAWN"})
     void refusesExistingNonAdminOrRestrictedAccount(Role role, MemberStatus status) {
-        Member existing = Member.create("test1234@naver.com", "original", "회원", role);
+        Member existing = Member.create(TEST_ADMIN_EMAIL, "original", "회원", role);
         ReflectionTestUtils.setField(existing, "status", status);
-        when(members.findByEmail("test1234@naver.com")).thenReturn(Optional.of(existing));
+        when(members.findByEmail(TEST_ADMIN_EMAIL)).thenReturn(Optional.of(existing));
         assertThatThrownBy(() -> runner.run()).isInstanceOf(IllegalStateException.class);
         assertThat(existing.getRole()).isEqualTo(role);
         assertThat(existing.getStatus()).isEqualTo(status);
@@ -79,8 +82,8 @@ class AdminBootstrapRunnerTest {
     void toleratesConcurrentCreationOfSameActiveAdmin() {
         when(encoder.encode(anyString())).thenReturn("encoded");
         when(encoder.matches("bootstrap-test-password", "other-hash")).thenReturn(true);
-        when(members.findByEmail("test1234@naver.com")).thenReturn(Optional.empty(), Optional.of(
-                Member.create("test1234@naver.com", "other-hash", "관리자", Role.ADMIN)));
+        when(members.findByEmail(TEST_ADMIN_EMAIL)).thenReturn(Optional.empty(), Optional.of(
+                Member.create(TEST_ADMIN_EMAIL, "other-hash", "관리자", Role.ADMIN)));
         var violation = new ConstraintViolationException("duplicate", new SQLException("duplicate", "23505"), "uq_members_email");
         when(members.saveAndFlush(any())).thenThrow(new DataIntegrityViolationException("duplicate", violation));
         assertThatCode(() -> runner.run()).doesNotThrowAnyException();
@@ -114,19 +117,43 @@ class AdminBootstrapRunnerTest {
                 .run(context -> assertThat(context).doesNotHaveBean(AdminBootstrapRunner.class));
     }
 
-    @Test
-    void enabledWithSharedCredentialsWithoutExtraSettings() {
-        context("local")
+    @ParameterizedTest
+    @ValueSource(strings = {"local", "dev"})
+    void startsWithoutCredentialsAndLeavesExistingAccountsUntouched(String profile) {
+        context(profile)
                 .run(context -> {
                     assertThat(context).hasNotFailed().hasSingleBean(AdminBootstrapRunner.class);
-                    assertThat(context.getBean(AdminBootstrapProperties.class).getEmail()).isEqualTo("test1234@naver.com");
-                    assertThat(context.getBean(AdminBootstrapProperties.class).getPassword()).isEqualTo("123456789a");
+                    context.getBean(AdminBootstrapRunner.class).run();
                 });
+        verifyNoInteractions(members, encoder);
+    }
+
+    @Test
+    void usesCredentialsFromConfiguration() {
+        when(encoder.encode("configured-test-password")).thenReturn("encoded");
+        context("local").withPropertyValues("bootstrap.admin.email=" + TEST_ADMIN_EMAIL,
+                        "bootstrap.admin.password=configured-test-password")
+                .run(context -> {
+                    assertThat(context).hasNotFailed().hasSingleBean(AdminBootstrapRunner.class);
+                    context.getBean(AdminBootstrapRunner.class).run();
+                });
+        verify(members).findByEmail(TEST_ADMIN_EMAIL);
+        verify(members).saveAndFlush(any(Member.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "bootstrap.admin.email=" + TEST_ADMIN_EMAIL, "bootstrap.admin.password=configured-test-password"
+    })
+    void refusesIncompleteCredentials(String property) {
+        context("local").withPropertyValues(property)
+                .run(context -> assertThat(context).hasFailed());
+        verifyNoInteractions(members, encoder);
     }
 
     @Test
     void refusesEmptyPasswordWithoutCreatingAccount() {
-        context("local").withPropertyValues("bootstrap.admin.password=")
+        context("local").withPropertyValues("bootstrap.admin.email=" + TEST_ADMIN_EMAIL, "bootstrap.admin.password=")
                 .run(context -> assertThat(context).hasFailed());
         verifyNoInteractions(members, encoder);
     }
@@ -134,7 +161,8 @@ class AdminBootstrapRunnerTest {
     @Test
     void rejectsLongMultibytePasswordWithoutIncludingPasswordInError() {
         String password = "가".repeat(25);
-        context("local").withPropertyValues("bootstrap.admin.enabled=true", "bootstrap.admin.password=" + password)
+        context("local").withPropertyValues("bootstrap.admin.enabled=true",
+                        "bootstrap.admin.email=" + TEST_ADMIN_EMAIL, "bootstrap.admin.password=" + password)
                 .run(context -> {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure()).hasStackTraceContaining("passwordValid")
@@ -146,8 +174,8 @@ class AdminBootstrapRunnerTest {
 
     @Test
     void updatesExistingAdminToSharedPassword() {
-        Member admin = Member.create("test1234@naver.com", "old-hash", "관리자", Role.ADMIN);
-        when(members.findByEmail("test1234@naver.com")).thenReturn(Optional.of(admin));
+        Member admin = Member.create(TEST_ADMIN_EMAIL, "old-hash", "관리자", Role.ADMIN);
+        when(members.findByEmail(TEST_ADMIN_EMAIL)).thenReturn(Optional.of(admin));
         when(encoder.encode("bootstrap-test-password")).thenReturn("shared-hash");
         runner.run();
         assertThat(admin.getPasswordHash()).isEqualTo("shared-hash");
