@@ -163,14 +163,19 @@ export default function BookingHistoryPage() {
                                     {/* 공연 정보 */}
                                     <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-start">
 
-                                        {/* 포스터 임시 영역 */}
-                                        <div className="flex aspect-[3/4] w-[100px] shrink-0 flex-col items-center justify-center gap-2 rounded-md bg-[#29264e] text-center sm:w-[112px]">
-                                            <span className="text-[17px] font-bold tracking-wider text-[#c5bfff]">
-                                                TIKIT
-                                            </span>
-                                            <span className="text-[11px] text-white">
-                                                공연 이미지
-                                            </span>
+                                        {/* 공연 포스터 */}
+                                        <div className="aspect-[3/4] w-[100px] shrink-0 overflow-hidden rounded-md bg-[#f5f5f5] sm:w-[112px]">
+                                            {booking.posterUrl ? (
+                                                <img
+                                                    src={booking.posterUrl}
+                                                    alt={`${booking.performanceTitle} 포스터`}
+                                                    className="h-full w-full object-cover"
+                                                />
+                                            ) : (
+                                                <div className="flex h-full items-center justify-center text-center text-[12px] text-[#999]">
+                                                    포스터 없음
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* 공연 상세 정보 */}
