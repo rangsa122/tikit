@@ -1,15 +1,10 @@
 import {Link} from 'react-router'
 import {useEffect, useState} from 'react'
 import {getMyProfile, type MemberProfile} from '../../api/memberApi'
+import {getFavoritePerformances, type FavoritePerformance} from '../../api/favoritePerformanceApi'
 import { getMyBookings, type Booking } from '../../api/bookingApi'
 import MyPageSidebar from './MyPageSidebar'
 import axios from 'axios'
-
-const favorites = [
-  {id: 1, title: '관심 공연 1'},
-  {id: 2, title: '관심 공연 2'},
-  {id: 3, title: '관심 공연 3'},
-]
 
 // 마이페이지 메인 화면
 export default function MyPage() {
@@ -22,6 +17,11 @@ export default function MyPage() {
   const [bookingCount, setBookingCount] = useState<number | null>(null)
   const [isBookingsLoading, setIsBookingsLoading] = useState(true)
   const [bookingError, setBookingError] = useState('')
+
+  const [favorites, setFavorites] = useState<FavoritePerformance[]>([])
+  const [favoriteCount, setFavoriteCount] = useState<number | null>(null)
+  const [isFavoritesLoading, setIsFavoritesLoading] = useState(true)
+  const [favoriteError, setFavoriteError] = useState('')
 
   // 회원정보 조회
   useEffect(() => {
@@ -95,6 +95,37 @@ export default function MyPage() {
     }
   }, [])
 
+  // 마이페이지 관심 공연 조회
+  useEffect(() => {
+    let active = true
+
+    async function loadFavorites() {
+      try {
+        const data = await getFavoritePerformances(0, 3)
+
+        if (!active) return
+
+        // 최근 조회된 관심 공연 최대 3개
+        setFavorites(data.items)
+
+        // 전체 관심 공연 개수
+        setFavoriteCount(data.totalElements)
+        setFavoriteError('')
+      } catch {
+        if (!active) return
+
+        setFavoriteError('관심 공연을 불러오지 못했습니다.')
+      } finally {
+        if (active) setIsFavoritesLoading(false)
+      }
+    }
+
+    void loadFavorites()
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   return (
     <div className="mx-auto w-full max-w-[1320px] px-5 py-10">
@@ -153,7 +184,8 @@ export default function MyPage() {
               <div className="text-center">
                 <p className="text-[13px] text-[#666]">관심 공연</p>
                 <p className="mt-2 text-[20px] font-semibold">
-                  3 <span className="text-[13px] font-normal">건</span>
+                  {favoriteCount ?? '—'}{' '}
+                  <span className="text-[13px] font-normal">건</span>
                 </p>
               </div>
             </div>
@@ -264,15 +296,21 @@ export default function MyPage() {
                 <span>›</span>
               </Link>
 
-              <div className="flex items-center justify-between border-b border-[#ddd] px-5 py-6 text-[14px] sm:border-r sm:border-b-0">
+              <Link
+                  to="/mypage/password"
+                  className="flex items-center justify-between border-b border-[#ddd] px-5 py-6 text-[14px] hover:bg-[#fafafa] sm:border-r sm:border-b-0"
+              >
                 비밀번호 변경
                 <span>›</span>
-              </div>
+              </Link>
 
-              <div className="flex items-center justify-between px-5 py-6 text-[14px]">
+              <Link
+                  to="/mypage/notifications"
+                  className="flex items-center justify-between px-5 py-6 text-[14px] hover:bg-[#fafafa]"
+              >
                 알림 설정
                 <span>›</span>
-              </div>
+              </Link>
             </div>
           </section>
         </div>
