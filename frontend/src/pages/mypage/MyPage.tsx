@@ -266,19 +266,62 @@ export default function MyPage() {
               </Link>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              {favorites.map((favorite) => (
-                <div key={favorite.id}>
-                  {/* TODO: 추후 실제 공연 포스터로 교체 */}
-                  <div className="flex aspect-[3/4] items-center justify-center rounded-md bg-[#f1f1f1] text-[13px] text-[#999]">
-                    공연 이미지
-                  </div>
-                  <p className="mt-3 text-[14px] font-medium">
-                    {favorite.title}
+            {isFavoritesLoading ? (
+                <p className="py-8 text-center text-[14px] text-[#777]">
+                  관심 공연을 불러오는 중...
+                </p>
+            ) : favoriteError ? (
+                <p role="alert" className="py-8 text-center text-[14px] text-red-600">
+                  {favoriteError}
+                </p>
+            ) : favorites.length === 0 ? (
+                <div className="py-10 text-center">
+                  <p className="text-[14px] text-[#777]">
+                    아직 등록한 관심 공연이 없습니다.
                   </p>
+                  <Link
+                      to="/"
+                      className="mt-4 inline-block text-[14px] text-[#4338CA] hover:underline"
+                  >
+                    공연 둘러보기
+                  </Link>
                 </div>
-              ))}
-            </div>
+            ) : (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  {favorites.map((favorite) => (
+                      <Link
+                          key={favorite.performanceId}
+                          to={`/performances/${favorite.performanceId}`}
+                          className="block group"
+                      >
+                        {/* 공연 포스터 */}
+                        <div className="aspect-[3/4] overflow-hidden rounded-md bg-[#f1f1f1]">
+                          {favorite.posterUrl ? (
+                              <img
+                                  src={favorite.posterUrl}
+                                  alt={`${favorite.title} 포스터`}
+                                  className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                              />
+                          ) : (
+                              <div className="flex h-full items-center justify-center text-[13px] text-[#999]">
+                                포스터 없음
+                              </div>
+                          )}
+                        </div>
+
+                        {/* 공연 제목 및 장소 */}
+                        <p className="mt-3 line-clamp-2 text-[14px] font-medium text-[#222] group-hover:text-[#4338CA]">
+                          {favorite.title}
+                        </p>
+
+                        <p className="mt-1 text-[13px] text-[#777]">
+                          {favorite.venueName}
+                        </p>
+                      </Link>
+                  ))}
+                </div>
+            )}
+
           </section>
 
           {/* 계정 관리 */}
