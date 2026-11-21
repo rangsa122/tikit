@@ -28,6 +28,10 @@ public class AdminBootstrapRunner implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
+        if (!properties.hasCredentialSettings()) {
+            return;
+        }
+
         String email = properties.getEmail().trim().toLowerCase(Locale.ROOT);
         var existing = memberRepository.findByEmail(email);
         if (existing.isPresent()) {
