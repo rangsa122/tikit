@@ -235,9 +235,8 @@ public class MemberProfileService {
         }
 
         // 현재 비밀번호 검증
-        if (currentPassword == null ||
-                !passwordEncoder.matches(currentPassword, member.getPasswordHash())) {
-            throw new MemberStatusChangeException(ErrorCode.ACCESS_DENIED);
+        if (currentPassword == null || !passwordEncoder.matches(currentPassword, member.getPasswordHash())) {
+            throw new MemberStatusChangeException(ErrorCode.PASSWORD_MISMATCH);
         }
 
         // 새 비밀번호 검증
