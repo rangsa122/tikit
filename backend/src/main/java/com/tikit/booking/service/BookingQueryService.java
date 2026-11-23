@@ -100,8 +100,8 @@ public class BookingQueryService {
         Map<Long, List<BookingSeat>> seatsByBookingId = bookingSeatRepository.findByBookingIdInOrderById(bookingIds)
                 .stream()
                 .collect(Collectors.groupingBy(BookingSeat::getBookingId));
-        Map<Long, Long> performanceIdBySessionId = seatHoldRepository.findSessionsWithPerformance(sessionIds).stream()
-                .collect(Collectors.toMap(PerformanceSession::getId, session -> session.getPerformance().getId()));
+        Map<Long, PerformanceSession> sessionById = seatHoldRepository.findSessionsWithPerformance(sessionIds).stream()
+                .collect(Collectors.toMap(PerformanceSession::getId, Function.identity()));
 
         // 최신순으로 받으므로 먼저 나온 항목이 최신
         Map<Long, PaymentAttempt> attemptByBookingId = paymentAttemptRepository.findByBookingIdInOrderByIdDesc(bookingIds)
@@ -115,11 +115,26 @@ public class BookingQueryService {
 
         return bookings.stream()
                 .map(booking -> {
+                    // 예매에 연결된 공연 세션 조회
+                    PerformanceSession session = sessionById.get(booking.getSessionId());
+
+                    // 공연 ID 및 포스터 조회
+                    Long performanceId = session == null
+                            ? null
+                            : session.getPerformance().getId();
+
+                    String posterUrl = session == null
+                            ? null
+                            : session.getPerformance().getPosterUrl();
+
+                    // 최신 결제 정보 조회
                     PaymentAttempt attempt = attemptByBookingId.get(booking.getId());
+
                     return BookingResponseDTO.of(
                             booking,
-                            performanceIdBySessionId.get(booking.getSessionId()),
+                            performanceId,
                             seatsByBookingId.getOrDefault(booking.getId(), List.of()),
+                            posterUrl,
                             attempt,
                             attempt == null ? null : cancellationByAttemptId.get(attempt.getId()),
                             now);

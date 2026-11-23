@@ -31,6 +31,7 @@ export interface Booking {
     sessionId: number
     performanceId: number
     performanceTitle: string
+    posterUrl: string | null
     startsAt: string
     status: BookingStatus
     seats: BookedSeat[]

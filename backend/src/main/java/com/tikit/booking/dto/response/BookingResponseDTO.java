@@ -16,6 +16,7 @@ public record BookingResponseDTO(
         Long sessionId,
         Long performanceId,
         String performanceTitle,
+        String posterUrl,
         OffsetDateTime startsAt,
         BookingStatus status,
         List<BookedSeat> seats,
@@ -48,11 +49,25 @@ public record BookingResponseDTO(
     // 예매 조회 응답 (최신 결제 시도와 취소 포함, 없으면 null)
     public static BookingResponseDTO of(Booking booking, Long performanceId, List<BookingSeat> seats,
                                         PaymentAttempt paymentAttempt, Cancellation cancellation, Instant now) {
+        return of(booking, performanceId, seats, null, paymentAttempt, cancellation, now);
+    }
+
+    // 예매 조회 응답에 공연 포스터 포함
+    public static BookingResponseDTO of(
+            Booking booking,
+            Long performanceId,
+            List<BookingSeat> seats,
+            String posterUrl,
+            PaymentAttempt paymentAttempt,
+            Cancellation cancellation,
+            Instant now
+    ) {
         return new BookingResponseDTO(
                 booking.getId(),
                 booking.getSessionId(),
                 performanceId,
                 booking.getPerformanceTitleSnapshot(),
+                posterUrl,
                 toSeoul(booking.getStartsAtSnapshot()),
                 booking.getStatus(),
                 seats.stream().map(BookedSeat::from).toList(),
