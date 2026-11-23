@@ -1,5 +1,6 @@
 import {useState} from 'react'
 import {useQuery} from '@tanstack/react-query'
+import {isAxiosError} from 'axios'
 import {Link} from 'react-router'
 import {categories} from '../constants/categories'
 import type {CategoryId} from '../constants/categories'
@@ -13,6 +14,8 @@ import OpeningPerformanceCard from '../components/performance/OpeningPerformance
 import OpeningHighlightSlider from '../components/performance/OpeningHighlightSlider'
 import OpeningAlarmBanner from '../components/performance/OpeningAlarmBanner'
 import PerformanceListState from '../components/performance/PerformanceListState'
+import OpeningNotificationModal from '../components/performance/OpeningNotificationModal'
+import {subscribeOpeningSubscription} from '../api/notificationApi'
 
 const ALL_GENRES = 'all'
 
@@ -30,6 +33,11 @@ export default function OpeningsPage() {
     const [selectedGenre, setSelectedGenre] =
         useState<GenreFilter>(ALL_GENRES)
     const [favoriteNotice, setFavoriteNotice] = useState<string | null>(null)
+
+    // 찜 등록 직후 예매 시작 알림 신청을 물어볼 공연 ID (null이면 모달 닫힘)
+    const [openingTargetId, setOpeningTargetId] = useState<string | null>(null)
+    const [openingSubmitting, setOpeningSubmitting] = useState(false)
+    const [openingError, setOpeningError] = useState<string | null>(null)
 
     const favorite = useFavoritePerformanceIds()
 
@@ -66,15 +74,61 @@ export default function OpeningsPage() {
             return
         }
 
+        // 누르기 전 상태로 등록인지 해제인지 판단
+        const wasFavorite = favorite.favoriteIds.has(performanceId)
+
         try {
             await favorite.toggleFavorite(performanceId)
         } catch {
             setFavoriteNotice('찜 처리에 실패했습니다. 잠시 후 다시 시도해 주세요.')
+            return
+        }
+
+        // 새로 찜한 경우에만 알림 신청 모달 표시 (해제는 묻지 않음)
+        if (!wasFavorite) {
+            setOpeningError(null)
+            setOpeningTargetId(performanceId)
+        }
+    }
+
+    // 알림 신청 모달 닫기 (신청 중에는 닫지 않음)
+    function handleOpeningClose() {
+        if (openingSubmitting) return
+
+        setOpeningTargetId(null)
+        setOpeningError(null)
+    }
+
+    // 예매 시작 알림 신청
+    async function handleOpeningConfirm() {
+        if (openingTargetId === null || openingSubmitting) return
+
+        setOpeningSubmitting(true)
+        setOpeningError(null)
+
+        try {
+            await subscribeOpeningSubscription(Number(openingTargetId))
+            setFavoriteNotice('관심 공연 등록 및 예매 시작 알림 신청이 완료되었습니다.')
+            setOpeningTargetId(null)
+        } catch (error) {
+            const message = isAxiosError<{message?: string}>(error)
+                ? error.response?.data?.message
+                : undefined
+            setOpeningError(message || '알림 신청에 실패했습니다. 다시 시도해 주세요.')
+        } finally {
+            setOpeningSubmitting(false)
         }
     }
 
     return (
         <div className="mx-auto max-w-[1320px] px-5 pt-8 pb-20">
+            <OpeningNotificationModal
+                isOpen={openingTargetId !== null}
+                isSubmitting={openingSubmitting}
+                error={openingError}
+                onClose={handleOpeningClose}
+                onConfirm={() => void handleOpeningConfirm()}
+            />
             <Link
                 to="/"
                 className="text-sm text-gray-500 hover:text-blue-600"
