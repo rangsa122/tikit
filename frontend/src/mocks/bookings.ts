@@ -21,6 +21,7 @@ const baseBooking: Booking = {
     sessionId: 1,
     performanceId: 1,
     performanceTitle: '디즈니 인 콘서트 〈Beyond the Magic〉',
+    posterUrl: null,
     startsAt: '2026-11-20T19:30:00+09:00',
     status: 'PENDING_PAYMENT',
     seats: mockSeats,
