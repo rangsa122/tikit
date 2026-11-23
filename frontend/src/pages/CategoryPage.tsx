@@ -3,16 +3,19 @@ import {useEffect, useRef} from 'react'
 import {useQuery} from '@tanstack/react-query'
 import {Link, useParams} from 'react-router'
 import {categories} from '../constants/categories'
-import {useInfinitePerformances} from '../hooks/usePerformances'
+import {useInfinitePerformances, usePerformances} from '../hooks/usePerformances'
 import {
-  getOpeningPerformances,
-  toPerformance,
+    getOpeningPerformances,
+    toPerformance,
 } from '../utils/performanceUtils'
 import PerformanceSection from '../components/performance/PerformanceSection'
 import PerformanceListState from '../components/performance/PerformanceListState'
-import PerformanceBanner from '../components/performance/PerformanceBanner'
+import OpeningHighlightSlider from '../components/performance/OpeningHighlightSlider'
 
 const PAGE_SIZE = 10
+
+// 상단 슬라이드에 보여 줄 최대 공연 수
+const SLIDER_COUNT = 10
 
 function CategoryContent({categoryId}: {categoryId: string}) {
     const category = categories.find(
@@ -30,11 +33,22 @@ function CategoryContent({categoryId}: {categoryId: string}) {
         Boolean(category),
     )
 
+    // 상단 슬라이드용 장르 공연
+    const sliderQuery = usePerformances(
+        {
+            page: 0,
+            size: 100,
+            genreCode: category?.id,
+            sort: 'startDate',
+        },
+        Boolean(category),
+    )
+
     const openingQuery = useQuery({
         queryKey: ['opening-performances', categoryId],
         queryFn: () => getOpeningPerformances(categoryId),
         enabled: Boolean(category),
-      })
+    })
 
     // 다음 페이지가 존재하면 자동 조회
     const {
@@ -72,74 +86,91 @@ function CategoryContent({categoryId}: {categoryId: string}) {
     ])
 
     if (!category) {
-    return (
-      <div className="px-5 py-20 text-center">
-        <h1 className="text-2xl font-bold">
-          존재하지 않는 카테고리입니다.
-        </h1>
-        <Link to="/" className="mt-6 inline-block underline">
-          메인으로 이동
-        </Link>
-      </div>
-    )
-  }
+        return (
+            <div className="px-5 py-20 text-center">
+                <h1 className="text-2xl font-bold">
+                    존재하지 않는 카테고리입니다.
+                </h1>
+                <Link to="/" className="mt-6 inline-block underline">
+                    메인으로 이동
+                </Link>
+            </div>
+        )
+    }
 
-  const openingPerformances = (openingQuery.data ?? []).map(
-    item => toPerformance(item, category.id),
-  )
+    const openingPerformances = (openingQuery.data ?? []).map(
+        item => toPerformance(item, category.id),
+    )
 
     const performances = (performanceQuery.data?.pages ?? [])
         .flatMap(page => page.items)
         .map(item => toPerformance(item, category.id))
 
+    // 포스터가 있는 공연만, 파란 글씨 자리에 공연 기간 표시
+    const sliderPerformances = (sliderQuery.data?.items ?? [])
+        .filter(item => Boolean(item.posterUrl))
+        .slice(0, SLIDER_COUNT)
+        .map(item => {
+            const performance = toPerformance(item, category.id)
+            return {...performance, openingLabel: performance.period}
+        })
+
     return (
         <div className="pb-20">
-            <div className="mx-auto max-w-[1320px]">
-                <h1 className="px-5 pt-10 text-3xl font-bold">
+            <div className="mx-auto max-w-[1320px] px-5 pt-8">
+                <Link
+                    to="/"
+                    className="text-sm text-gray-500 hover:text-blue-600"
+                >
+                    ← 공연 목록으로
+                </Link>
+                <h1 className="pt-5 text-3xl font-bold">
                     {category.label} 공연
                 </h1>
             </div>
 
-            <PerformanceBanner variant="category" genreCode={category.id}/>
+            <div className="mx-auto max-w-[1320px] px-5 pt-8">
+                <OpeningHighlightSlider performances={sliderPerformances} />
+            </div>
 
             <div className="mx-auto max-w-[1320px]">
                 {openingQuery.isPending || openingQuery.isError ? (
 
-                <section className="px-5 pt-8">
-                <h2 className="py-5 text-2xl font-bold">
-                  오픈 예정
-                </h2>
+                    <section className="px-5 pt-8">
+                        <h2 className="py-5 text-2xl font-bold">
+                            오픈 예정
+                        </h2>
 
-                <PerformanceListState state={openingQuery.isError ? 'error' : 'loading'} onRetry={() => void openingQuery.refetch()}/>
-                </section>
+                        <PerformanceListState state={openingQuery.isError ? 'error' : 'loading'} onRetry={() => void openingQuery.refetch()}/>
+                    </section>
                 ) : (
-                  <PerformanceSection
-                    key={`${category.id}-opening`}
-                    title="오픈 예정"
-                    performances={openingPerformances}
-                    variant="opening"
-                  />
+                    <PerformanceSection
+                        key={`${category.id}-opening`}
+                        title="오픈 예정"
+                        performances={openingPerformances}
+                        variant="opening"
+                    />
                 )}
 
                 {performanceQuery.isPending || performances.length === 0 ? (
-                  <section className="px-5 pt-8">
-                    <h2 className="py-5 text-2xl font-bold">
-                      전체 공연
-                    </h2>
+                    <section className="px-5 pt-8">
+                        <h2 className="py-5 text-2xl font-bold">
+                            전체 공연
+                        </h2>
 
-                    <PerformanceListState
-                      state={
-                        performanceQuery.isError
-                          ? 'error'
-                          : performanceQuery.isPending
-                            ? 'loading'
-                            : 'empty'
-                      }
-                      onRetry={() => void performanceQuery.refetch()}
-                    />
-                  </section>
+                        <PerformanceListState
+                            state={
+                                performanceQuery.isError
+                                    ? 'error'
+                                    : performanceQuery.isPending
+                                        ? 'loading'
+                                        : 'empty'
+                            }
+                            onRetry={() => void performanceQuery.refetch()}
+                        />
+                    </section>
                 ) : (
-                  <PerformanceSection key={`${category.id}-list`} title="전체 공연" performances={performances} showAll/>
+                    <PerformanceSection key={`${category.id}-list`} title="전체 공연" performances={performances} showAll/>
                 )}
 
                 {isFetchingNextPage && (
@@ -170,17 +201,17 @@ function CategoryContent({categoryId}: {categoryId: string}) {
                 {/* 스크롤 하단 감지 */}
                 <div ref={loadMoreRef} className="h-1" aria-hidden="true" />
             </div>
-    </div>
-  )
+        </div>
+    )
 }
 
 export default function CategoryPage() {
-  const {categoryId} = useParams()
+    const {categoryId} = useParams()
 
-  return (
-    <CategoryContent
-      key={categoryId}
-      categoryId={categoryId ?? ''}
-    />
-  )
+    return (
+        <CategoryContent
+            key={categoryId}
+            categoryId={categoryId ?? ''}
+        />
+    )
 }
