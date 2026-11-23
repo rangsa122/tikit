@@ -287,14 +287,15 @@ export default function PerformanceListPage() {
                                         판매 설정
                                     </ActionButton>
 
+                                    {/* 게시 후에도 설명·이미지는 수정할 수 있다 */}
+                                    <ActionButton
+                                        onClick={() => navigate(`/manager/performances/${performance.performanceId}/edit`)}
+                                    >
+                                        수정
+                                    </ActionButton>
+
                                     {performance.publicationStatus === 'DRAFT' ? (
                                         <>
-                                            <ActionButton
-                                                onClick={() => navigate(`/manager/performances/${performance.performanceId}/edit`)}
-                                            >
-                                                수정
-                                            </ActionButton>
-
                                             <ActionButton
                                                 primary
                                                 disabled={actingId !== null}

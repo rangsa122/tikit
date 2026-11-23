@@ -91,22 +91,26 @@ export default function PerformanceEditPage() {
     if (loadError) return <div className="p-8 text-red-600">{loadError}</div>
     if (!performance) return null
 
-    // 게시된 공연은 서버가 PERFORMANCE_EDIT_LOCKED로 거절한다
-    if (performance.publicationStatus !== 'DRAFT') {
-        return (
-            <div className="mx-auto max-w-[720px] px-6 py-10">
-                <h1 className="text-2xl font-bold text-gray-900">공연 수정</h1>
-                <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-10 text-center">
-                    <p className="text-sm text-gray-600">
-                        이미 게시된 공연은 수정할 수 없습니다.
-                    </p>
-                    <button onClick={() => navigate('/manager/performances')}
-                            className="mt-4 h-10 rounded-lg border border-gray-300 px-5 text-sm font-semibold text-gray-700">
-                        목록으로
-                    </button>
-                </div>
-            </div>
-        )
+    // 게시 후에는 표시 정보(설명·이미지)만 수정할 수 있다.
+    // 제목은 판매를 중단한 상태에서만 수정할 수 있다. 서버 규칙과 같은 기준이다.
+    const isPublished = performance.publicationStatus !== 'DRAFT'
+    const isSelling = performance.salesStatus === 'ENABLED'
+
+    const afterPublish = '게시 후에는 변경할 수 없습니다'
+
+    const lockedFields: Partial<Record<keyof FormState, string>> = {}
+
+    if (isPublished) {
+        lockedFields.genreCode = afterPublish
+        lockedFields.venueName = afterPublish
+        lockedFields.organizerName = afterPublish
+        lockedFields.startDate = afterPublish
+        lockedFields.endDate = afterPublish
+        lockedFields.bookingLimitPerMember = afterPublish
+
+        if (isSelling) {
+            lockedFields.title = '판매를 중단하면 수정할 수 있습니다'
+        }
     }
 
     return (
@@ -117,12 +121,20 @@ export default function PerformanceEditPage() {
                 <span className="ml-2 text-gray-400">version {performance.version}</span>
             </p>
 
+            {isPublished && (
+                <div className="mt-6 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                    게시된 공연입니다. 공연 설명과 이미지만 수정할 수 있습니다.
+                    {isSelling && ' 공연명은 판매를 중단한 뒤 수정할 수 있습니다.'}
+                </div>
+            )}
+
             <PerformanceForm
                 initial={toFormState(performance)}
                 submitLabel="수정 저장"
                 submitting={submitting}
                 onSubmit={handleSubmit}
                 onCancel={() => navigate('/manager/performances')}
+                lockedFields={lockedFields}
             >
                 {serverError && (
                     <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
