@@ -49,6 +49,21 @@ export function PosterPlaceholder({className}: {className: string}) {
     )
 }
 
+// 포스터 주소가 있으면 이미지, 없으면 회색 자리
+export function Poster({url, title, className}: {url: string | null | undefined; title: string; className: string}) {
+    if (!url) {
+        return <PosterPlaceholder className={className} />
+    }
+
+    return (
+        <img
+            src={url}
+            alt={`${title} 포스터`}
+            className={`shrink-0 rounded-lg bg-gray-100 object-cover ${className}`}
+        />
+    )
+}
+
 export function SpinnerIcon() {
     return (
         <svg aria-hidden="true" width="56" height="56" viewBox="0 0 56 56" fill="none" className="animate-spin">

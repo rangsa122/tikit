@@ -16,7 +16,7 @@ import {
     CheckIcon,
     ClockIcon,
     Notice,
-    PosterPlaceholder,
+    Poster,
     SpinnerIcon,
     StatusCard,
 } from '../../components/payment/PaymentUi'
@@ -296,7 +296,7 @@ function BookingSummaryCard({booking}: {booking: Booking}) {
     return (
         <Card>
             <div className="flex items-center gap-4">
-                <PosterPlaceholder className="h-[74px] w-14" />
+                <Poster url={booking.posterUrl} title={booking.performanceTitle} className="h-[74px] w-14" />
                 <div className="min-w-0">
                     <p className="truncate text-[15px] font-bold text-gray-900">{booking.performanceTitle}</p>
                     <p className="text-[13px] text-gray-500">{formatDateTime(booking.startsAt)}</p>
