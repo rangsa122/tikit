@@ -1,15 +1,10 @@
 import {Link} from 'react-router'
 import {useEffect, useState} from 'react'
 import {getMyProfile, type MemberProfile} from '../../api/memberApi'
+import {getFavoritePerformances, type FavoritePerformance} from '../../api/favoritePerformanceApi'
 import { getMyBookings, type Booking } from '../../api/bookingApi'
 import MyPageSidebar from './MyPageSidebar'
 import axios from 'axios'
-
-const favorites = [
-  {id: 1, title: '관심 공연 1'},
-  {id: 2, title: '관심 공연 2'},
-  {id: 3, title: '관심 공연 3'},
-]
 
 // 마이페이지 메인 화면
 export default function MyPage() {
@@ -22,6 +17,11 @@ export default function MyPage() {
   const [bookingCount, setBookingCount] = useState<number | null>(null)
   const [isBookingsLoading, setIsBookingsLoading] = useState(true)
   const [bookingError, setBookingError] = useState('')
+
+  const [favorites, setFavorites] = useState<FavoritePerformance[]>([])
+  const [favoriteCount, setFavoriteCount] = useState<number | null>(null)
+  const [isFavoritesLoading, setIsFavoritesLoading] = useState(true)
+  const [favoriteError, setFavoriteError] = useState('')
 
   // 회원정보 조회
   useEffect(() => {
@@ -95,6 +95,37 @@ export default function MyPage() {
     }
   }, [])
 
+  // 마이페이지 관심 공연 조회
+  useEffect(() => {
+    let active = true
+
+    async function loadFavorites() {
+      try {
+        const data = await getFavoritePerformances(0, 3)
+
+        if (!active) return
+
+        // 최근 조회된 관심 공연 최대 3개
+        setFavorites(data.items)
+
+        // 전체 관심 공연 개수
+        setFavoriteCount(data.totalElements)
+        setFavoriteError('')
+      } catch {
+        if (!active) return
+
+        setFavoriteError('관심 공연을 불러오지 못했습니다.')
+      } finally {
+        if (active) setIsFavoritesLoading(false)
+      }
+    }
+
+    void loadFavorites()
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   return (
     <div className="mx-auto w-full max-w-[1320px] px-5 py-10">
@@ -153,7 +184,8 @@ export default function MyPage() {
               <div className="text-center">
                 <p className="text-[13px] text-[#666]">관심 공연</p>
                 <p className="mt-2 text-[20px] font-semibold">
-                  3 <span className="text-[13px] font-normal">건</span>
+                  {favoriteCount ?? '—'}{' '}
+                  <span className="text-[13px] font-normal">건</span>
                 </p>
               </div>
             </div>
@@ -234,19 +266,62 @@ export default function MyPage() {
               </Link>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              {favorites.map((favorite) => (
-                <div key={favorite.id}>
-                  {/* TODO: 추후 실제 공연 포스터로 교체 */}
-                  <div className="flex aspect-[3/4] items-center justify-center rounded-md bg-[#f1f1f1] text-[13px] text-[#999]">
-                    공연 이미지
-                  </div>
-                  <p className="mt-3 text-[14px] font-medium">
-                    {favorite.title}
+            {isFavoritesLoading ? (
+                <p className="py-8 text-center text-[14px] text-[#777]">
+                  관심 공연을 불러오는 중...
+                </p>
+            ) : favoriteError ? (
+                <p role="alert" className="py-8 text-center text-[14px] text-red-600">
+                  {favoriteError}
+                </p>
+            ) : favorites.length === 0 ? (
+                <div className="py-10 text-center">
+                  <p className="text-[14px] text-[#777]">
+                    아직 등록한 관심 공연이 없습니다.
                   </p>
+                  <Link
+                      to="/"
+                      className="mt-4 inline-block text-[14px] text-[#4338CA] hover:underline"
+                  >
+                    공연 둘러보기
+                  </Link>
                 </div>
-              ))}
-            </div>
+            ) : (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  {favorites.map((favorite) => (
+                      <Link
+                          key={favorite.performanceId}
+                          to={`/performances/${favorite.performanceId}`}
+                          className="block group"
+                      >
+                        {/* 공연 포스터 */}
+                        <div className="aspect-[3/4] overflow-hidden rounded-md bg-[#f1f1f1]">
+                          {favorite.posterUrl ? (
+                              <img
+                                  src={favorite.posterUrl}
+                                  alt={`${favorite.title} 포스터`}
+                                  className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                              />
+                          ) : (
+                              <div className="flex h-full items-center justify-center text-[13px] text-[#999]">
+                                포스터 없음
+                              </div>
+                          )}
+                        </div>
+
+                        {/* 공연 제목 및 장소 */}
+                        <p className="mt-3 line-clamp-2 text-[14px] font-medium text-[#222] group-hover:text-[#4338CA]">
+                          {favorite.title}
+                        </p>
+
+                        <p className="mt-1 text-[13px] text-[#777]">
+                          {favorite.venueName}
+                        </p>
+                      </Link>
+                  ))}
+                </div>
+            )}
+
           </section>
 
           {/* 계정 관리 */}
@@ -264,15 +339,21 @@ export default function MyPage() {
                 <span>›</span>
               </Link>
 
-              <div className="flex items-center justify-between border-b border-[#ddd] px-5 py-6 text-[14px] sm:border-r sm:border-b-0">
+              <Link
+                  to="/mypage/password"
+                  className="flex items-center justify-between border-b border-[#ddd] px-5 py-6 text-[14px] hover:bg-[#fafafa] sm:border-r sm:border-b-0"
+              >
                 비밀번호 변경
                 <span>›</span>
-              </div>
+              </Link>
 
-              <div className="flex items-center justify-between px-5 py-6 text-[14px]">
+              <Link
+                  to="/mypage/notifications"
+                  className="flex items-center justify-between px-5 py-6 text-[14px] hover:bg-[#fafafa]"
+              >
                 알림 설정
                 <span>›</span>
-              </div>
+              </Link>
             </div>
           </section>
         </div>
