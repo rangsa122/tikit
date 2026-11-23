@@ -280,17 +280,20 @@ public class PerformanceServiceTest {
                 ErrorCode.KOPIS_ALREADY_REGISTERED);
     }
 
+
     @Test
-    @DisplayName("게시된 공연은 수정되지 않는다")
-    void update_published_locked() {
+    @DisplayName("게시된 공연은 공연 기간을 수정할 수 없다")
+    void update_published_periodDenied() {
         Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
-        Performance p = draftPerformance(manager);
-        ReflectionTestUtils.setField(p, "publicationStatus", PublicationStatus.PUBLISHED);
+        Performance p = publicPerformance();
 
         when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
         when(performanceRepository.findDetail(PERFORMANCE_ID)).thenReturn(Optional.of(p));
 
-        assertFails(() -> service.update(MEMBER_ID, PERFORMANCE_ID, updateRequest(0L)),
+        PerformanceUpdateRequestDTO dto = updateRequest(0L);
+        ReflectionTestUtils.setField(dto, "startDate", LocalDate.of(2027, 1, 1));
+
+        assertFails(() -> service.update(MEMBER_ID, PERFORMANCE_ID, dto),
                 ErrorCode.PERFORMANCE_EDIT_LOCKED);
     }
 
@@ -995,5 +998,85 @@ public class PerformanceServiceTest {
 
         assertFails(() -> service.update(MEMBER_ID, PERFORMANCE_ID, updateRequest(0L)),
                 ErrorCode.ACCESS_DENIED);
+    }
+
+    @Test
+    @DisplayName("게시된 공연도 설명과 이미지는 수정할 수 있다")
+    void update_published_displayFieldsAllowed() {
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
+        Performance p = publicPerformance();
+
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findDetail(PERFORMANCE_ID)).thenReturn(Optional.of(p));
+
+        PerformanceUpdateRequestDTO dto = updateRequest(0L);
+        ReflectionTestUtils.setField(dto, "description", "수정된 소개");
+        ReflectionTestUtils.setField(dto, "posterUrl", "/uploads/images/2026/11/poster.jpg");
+        ReflectionTestUtils.setField(dto, "bannerUrl", "/uploads/images/2026/11/banner.jpg");
+
+        service.update(MEMBER_ID, PERFORMANCE_ID, dto);
+
+        assertThat(p.getDescription()).isEqualTo("수정된 소개");
+        assertThat(p.getPosterUrl()).isEqualTo("/uploads/images/2026/11/poster.jpg");
+        assertThat(p.getBannerUrl()).isEqualTo("/uploads/images/2026/11/banner.jpg");
+        verify(performanceRepository).flush();
+    }
+
+    @Test
+    @DisplayName("판매 중인 공연은 제목을 수정할 수 없다")
+    void update_published_titleDeniedWhileSelling() {
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
+        Performance p = publicPerformance();
+        ReflectionTestUtils.setField(p, "salesStatus", SalesStatus.ENABLED);
+
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findDetail(PERFORMANCE_ID)).thenReturn(Optional.of(p));
+
+        PerformanceUpdateRequestDTO dto = updateRequest(0L);
+        ReflectionTestUtils.setField(dto, "title", "변경된 제목");
+
+        assertFails(() -> service.update(MEMBER_ID, PERFORMANCE_ID, dto),
+                ErrorCode.PERFORMANCE_EDIT_LOCKED);
+    }
+
+    @Test
+    @DisplayName("판매를 중단한 공연은 제목을 수정할 수 있다")
+    void update_published_titleAllowedWhenStopped() {
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
+        Performance p = publicPerformance();   // 판매 상태는 STOPPED
+
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findDetail(PERFORMANCE_ID)).thenReturn(Optional.of(p));
+
+        PerformanceUpdateRequestDTO dto = updateRequest(0L);
+        ReflectionTestUtils.setField(dto, "title", "변경된 제목");
+
+        service.update(MEMBER_ID, PERFORMANCE_ID, dto);
+
+        assertThat(p.getTitle()).isEqualTo("변경된 제목");
+    }
+
+    @Test
+    @DisplayName("수정 화면이 모든 값을 보내도 바뀐 값이 없으면 통과한다")
+    void update_published_unchangedValuesPass() {
+        Member manager = member(Role.MANAGER, MemberStatus.ACTIVE);
+        Performance p = publicPerformance();
+
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(manager));
+        when(performanceRepository.findDetail(PERFORMANCE_ID)).thenReturn(Optional.of(p));
+        when(genreRepository.findActive("THEATER")).thenReturn(Optional.of(genre()));
+
+        // 화면은 바꾸지 않은 항목까지 현재 값 그대로 담아 보낸다
+        PerformanceUpdateRequestDTO dto = updateRequest(0L);
+        ReflectionTestUtils.setField(dto, "title", "제목");
+        ReflectionTestUtils.setField(dto, "genreCode", "THEATER");
+        ReflectionTestUtils.setField(dto, "venueName", "장소");
+        ReflectionTestUtils.setField(dto, "startDate", LocalDate.of(2026, 12, 1));
+        ReflectionTestUtils.setField(dto, "endDate", LocalDate.of(2026, 12, 31));
+        ReflectionTestUtils.setField(dto, "description", "새 소개");
+
+        service.update(MEMBER_ID, PERFORMANCE_ID, dto);
+
+        assertThat(p.getDescription()).isEqualTo("새 소개");
     }
 }
