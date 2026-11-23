@@ -6,10 +6,41 @@ import {
     updateNotificationPreference,
     getOpeningSubscriptions,
     deleteOpeningSubscription,
+    subscribeOpeningSubscription,
     type OpeningSubscriptionPage,
 } from '../../api/notificationApi'
 
 const PAGE_SIZE = 10
+
+// 공연 일정 표시 - YY.MM.DD
+function formatPerformanceDate(value: string): string {
+    const [year, month, day] = value.split('-')
+    return `${year.slice(-2)}.${month}.${day}`
+}
+
+// 예매 오픈일 표시 - YY.MM.DD HH:MM
+function formatOpeningDate(value: string): string {
+    const date = new Date(value)
+
+    if (Number.isNaN(date.getTime())) {
+        return '일정 확인 불가'
+    }
+
+    const parts = new Intl.DateTimeFormat('ko-KR', {
+        timeZone: 'Asia/Seoul',
+        year: '2-digit',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+    }).formatToParts(date)
+
+    const part = (type: string) =>
+        parts.find(item => item.type === type)?.value ?? ''
+
+    return `${part('year')}.${part('month')}.${part('day')} ${part('hour')}:${part('minute')}`
+}
 
 // 알림 설정 화면
 export default function NotificationSettingsPage() {
@@ -26,9 +57,9 @@ export default function NotificationSettingsPage() {
     // 현재 조회 중인 페이지
     const [currentPage, setCurrentPage] = useState(0)
 
-    // 공연별 알림 해제 처리 상태
-    const [deletingPerformanceId, setDeletingPerformanceId] = useState<number | null>(null)
-    const [unsubscribeError, setUnsubscribeError] = useState('')
+    // 공연별 알림 토글 처리 상태
+    const [updatingPerformanceId, setUpdatingPerformanceId] = useState<number | null>(null)
+    const [toggleError, setToggleError] = useState('')
 
     // 전체 알림 수신 설정 조회
     useEffect(() => {
@@ -60,14 +91,18 @@ export default function NotificationSettingsPage() {
     useEffect(() => {
         let active = true
 
-        async function loadSubscriptions() {
-            setIsSubscriptionsLoading(true)
-            setSubscriptionsError('')
+        async function loadSubscriptions(showLoading = true) {
+            if (showLoading) {
+                setIsSubscriptionsLoading(true)
+                setSubscriptionsError('')
+            }
 
             try {
                 const data = await getOpeningSubscriptions(currentPage, PAGE_SIZE)
 
-                if (active) {
+                if (data.content.length === 0 && currentPage > 0) {
+                    setCurrentPage(currentPage - 1)
+                } else {
                     setSubscriptions(data)
                 }
             } catch {
@@ -75,7 +110,7 @@ export default function NotificationSettingsPage() {
                     setSubscriptionsError('알림 신청 목록을 불러오지 못했습니다.')
                 }
             } finally {
-                if (active) {
+                if (active && showLoading) {
                     setIsSubscriptionsLoading(false)
                 }
             }
@@ -83,14 +118,20 @@ export default function NotificationSettingsPage() {
 
         void loadSubscriptions()
 
+        // 예매 오픈일 경과 여부를 주기적으로 갱신
+        const intervalId = window.setInterval(() => {
+            void loadSubscriptions(false)
+        }, 30_000)
+
         return () => {
             active = false
+            window.clearInterval(intervalId)
         }
     }, [currentPage])
 
     // 전체 알림 수신 설정 <<변경>>
     async function handleToggle() {
-        if (enabled === null || isSaving) return
+        if (enabled === null || isSaving || updatingPerformanceId !== null) return
 
         const nextEnabled = !enabled
 
@@ -107,34 +148,40 @@ export default function NotificationSettingsPage() {
         }
     }
 
-    // 공연별 알림 신청 <<해제>>
-    async function handleUnsubscribe(performanceId: number) {
-        if (deletingPerformanceId !== null) return
+    // 공연별 알림 ON/OFF 변경
+    async function handleToggleSubscription(performanceId: number) {
+        if (enabled === null || isSaving || updatingPerformanceId !== null) return
 
-        setDeletingPerformanceId(performanceId)
-        setUnsubscribeError('')
+        setUpdatingPerformanceId(performanceId)
+        setToggleError('')
 
         try {
-            await deleteOpeningSubscription(performanceId)
+            if (enabled) {
+                // 개별 OFF: 해당 공연의 신청 기록 삭제
+                await deleteOpeningSubscription(performanceId)
+            } else {
+                // 개별 ON: 신청 및 전체 알림 자동 ON
+                await subscribeOpeningSubscription(performanceId)
+            }
 
-            // 현재 페이지의 신청 목록 다시 조회
-            const updatedSubscriptions =
-                await getOpeningSubscriptions(currentPage, PAGE_SIZE)
+            // 변경된 전체 알림 상태와 신청 목록 조회
+            const [updatedEnabled, updatedSubscriptions] = await Promise.all([
+                getNotificationPreference(),
+                getOpeningSubscriptions(currentPage, PAGE_SIZE),
+            ])
 
-            if (
-                updatedSubscriptions.content.length === 0 &&
-                currentPage > 0
-            ) {
+            setEnabled(updatedEnabled)
+
+            // 마지막 항목을 해제했다면 이전 페이지 조회
+            if (updatedSubscriptions.content.length === 0 && currentPage > 0) {
                 setCurrentPage(currentPage - 1)
             } else {
                 setSubscriptions(updatedSubscriptions)
             }
         } catch {
-            setUnsubscribeError(
-                '알림 해제 또는 목록 갱신에 실패했습니다. 새로고침 후 상태를 확인해 주세요.'
-            )
+            setToggleError( '알림 설정 변경 또는 목록 갱신에 실패했습니다. 새로고침 후 상태를 확인해 주세요.')
         } finally {
-            setDeletingPerformanceId(null)
+            setUpdatingPerformanceId(null)
         }
     }
 
@@ -190,7 +237,7 @@ export default function NotificationSettingsPage() {
                                 onClick={() => void handleToggle()}
                                 disabled={enabled === null || isSaving}
                                 className={`flex h-7 w-12 shrink-0 items-center rounded-full px-1 transition-colors disabled:opacity-60 ${
-                                    enabled ? 'bg-[#333]' : 'bg-[#ccc]'
+                                    enabled ? 'bg-[#4338CA]' : 'bg-[#ccc]'
                                 }`}
                             >
                                 <span className={`h-5 w-5 rounded-full bg-white transition-transform ${enabled ? 'translate-x-5' : ''}`}/>
@@ -221,9 +268,9 @@ export default function NotificationSettingsPage() {
                         </p>
 
                         <div className="rounded-md border border-[#ddd]">
-                            {unsubscribeError && (
+                            {toggleError && (
                                 <p role="alert" className="px-6 pt-4 text-[13px] text-red-600">
-                                    {unsubscribeError}
+                                    {toggleError}
                                 </p>
                             )}
 
@@ -247,27 +294,72 @@ export default function NotificationSettingsPage() {
                                     </p>
 
                                     {/* 현재 페이지의 공연 목록 */}
-                                    {subscriptions.content.map(
-                                        (performanceId) => (
-                                            <div
-                                                key={performanceId}
-                                                className="flex items-center justify-between gap-4 px-6 py-5"
-                                            >
-                                                <span className="text-[14px] font-medium">
-                                                    공연 ID: {performanceId}
-                                                </span>
+                                    {subscriptions.content.map((subscription) => {
+                                        // 전체 알림이 OFF면 공연별 토글도 OFF로 표시
+                                        const isOn = enabled === true
 
-                                                <button
-                                                    type="button"
-                                                    onClick={() => void handleUnsubscribe(performanceId)}
-                                                    disabled={deletingPerformanceId !== null}
-                                                    className="shrink-0 rounded border border-[#ccc] px-4 py-2 text-[13px] text-[#555] hover:bg-[#f7f7f7] disabled:opacity-50"
-                                                >
-                                                    {deletingPerformanceId === performanceId ? '해제 중...' : '알림 해제'}
-                                                </button>
+                                        return (
+                                            <div
+                                                key={subscription.performanceId}
+                                                className="px-6 py-5"
+                                            >
+                                                {/* 공연 제목 및 알림 상태 */}
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <span className="text-[15px] font-semibold text-[#222]">{subscription.title}</span>
+
+                                                    <span
+                                                        className={`rounded px-2 py-1 text-[12px] font-medium ${
+                                                            isOn
+                                                                ? 'bg-green-100 text-green-700'
+                                                                : 'bg-[#eee] text-[#777]'
+                                                        }`}
+                                                    >
+                                                        {isOn ? '알림 신청' : '알림 해제'}
+                                                    </span>
+                                                </div>
+
+                                                {/* 공연장, 공연 일정 및 토글 */}
+                                                <div className="mt-3 flex items-center justify-between gap-4">
+                                                    <p className="min-w-0 text-[13px] text-[#777]">
+                                                        {subscription.venueName} ·{' '}
+                                                        {formatPerformanceDate(subscription.startDate)}
+                                                        {' ~ '}
+                                                        {formatPerformanceDate(subscription.endDate)}
+                                                    </p>
+
+                                                    <button
+                                                        type="button"
+                                                        role="switch"
+                                                        aria-checked={isOn}
+                                                        aria-label={`${subscription.title} 알림 수신`}
+                                                        onClick={() =>
+                                                            void handleToggleSubscription(subscription.performanceId)
+                                                        }
+                                                        disabled={
+                                                            enabled === null ||
+                                                            isSaving ||
+                                                            updatingPerformanceId !== null
+                                                        }
+                                                        className={`flex h-7 w-12 shrink-0 items-center rounded-full px-1 transition-colors disabled:opacity-60 ${
+                                                            isOn ? 'bg-[#4338CA]' : 'bg-[#ccc]'
+                                                        }`}
+                                                    >
+                                                        <span
+                                                            className={`h-5 w-5 rounded-full bg-white transition-transform ${
+                                                                isOn ? 'translate-x-5' : ''
+                                                            }`}
+                                                        />
+                                                    </button>
+                                                </div>
+
+                                                {/* 예매 오픈일 */}
+                                                <p className="mt-2 text-[13px] text-[#777]">
+                                                    예매 오픈일 {formatOpeningDate(subscription.opensAt)}
+                                                </p>
                                             </div>
                                         )
-                                    )}
+                                    })}
+
                                 </div>
                             )}
                         </div>
@@ -283,7 +375,7 @@ export default function NotificationSettingsPage() {
                                         onClick={handlePreviousPage}
                                         disabled={
                                             currentPage === 0 ||
-                                            deletingPerformanceId !== null
+                                            updatingPerformanceId  !== null
                                         }
                                         className="rounded border border-[#ddd] px-4 py-2 text-[13px] text-[#555] hover:bg-[#f7f7f7] disabled:cursor-not-allowed disabled:opacity-40"
                                     >
@@ -299,7 +391,7 @@ export default function NotificationSettingsPage() {
                                         onClick={handleNextPage}
                                         disabled={
                                             subscriptions.last ||
-                                            deletingPerformanceId !== null
+                                            updatingPerformanceId  !== null
                                         }
                                         className="rounded border border-[#ddd] px-4 py-2 text-[13px] text-[#555] hover:bg-[#f7f7f7] disabled:cursor-not-allowed disabled:opacity-40"
                                     >
@@ -315,11 +407,24 @@ export default function NotificationSettingsPage() {
                             알림 안내
                         </h3>
 
-                        <p className="text-[13px] leading-7 text-[#666]">
-                            신청한 공연의 예매 시작 알림을 받을 수 있습니다.
-                            <br />
-                            전체 알림 수신을 OFF로 변경해도 공연별 알림 신청 기록은 유지됩니다.
-                        </p>
+                        <ul className="list-disc space-y-2 pl-5 text-[13px] leading-6 text-[#666]">
+                            <li>
+                                예매 시작 알림은 사이트 내에서 제공됩니다.
+                            </li>
+                            <li>
+                                전체 알림을 OFF로 변경하면 공연별 알림도 OFF로 표시되지만 신청 기록은 유지됩니다.
+                            </li>
+                            <li>
+                                전체 알림이 OFF인 상태에서 공연별 알림을 ON으로 변경하면
+                                전체 알림도 ON으로 전환되며 기존에 신청한 공연의 알림도 다시 활성화됩니다.
+                            </li>
+                            <li>
+                                공연별 알림을 OFF로 변경하면 해당 공연의 알림 신청이 해제되어 목록에서 사라집니다.
+                            </li>
+                            <li>
+                                예매 오픈일이 지난 공연은 목록에서 자동으로 제외됩니다.
+                            </li>
+                        </ul>
                     </section>
                 </main>
             </div>

@@ -1,5 +1,6 @@
 package com.tikit.notification.service;
 
+import com.tikit.notification.dto.OpeningSubscriptionItemResponseDTO;
 import com.tikit.notification.entity.OpeningSubscription;
 import com.tikit.notification.entity.OpeningSubscriptionId;
 import com.tikit.notification.repository.OpeningSubscriptionRepository;
@@ -14,7 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 
 import java.util.NoSuchElementException;
 
@@ -35,6 +35,17 @@ public class OpeningSubscriptionService {
 
         if (!performanceLookupRepository.existsById(performanceId)) {
             throw new NoSuchElementException("존재하지 않는 공연입니다.");
+        }
+
+        // 회원 조회
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() ->
+                        new NoSuchElementException("회원을 찾을 수 없습니다.")
+                );
+
+        // 개별 알림 ON 시 전체 알림도 자동 ON
+        if (!member.isNotificationEnabled()) {
+            member.changeNotificationEnabled(true);
         }
 
         OpeningSubscriptionId id =
@@ -62,7 +73,7 @@ public class OpeningSubscriptionService {
     }
 
     // 회원별 알림 신청 목록 페이지네이션 조회
-    public Page<OpeningSubscription> getSubscriptions(Long memberId, int page, int size) {
+    public Page<OpeningSubscriptionItemResponseDTO> getSubscriptions(Long memberId, int page, int size) {
 
         if (page < 0 || size < 1 || size > 100) {
             throw new IllegalArgumentException(
@@ -70,15 +81,11 @@ public class OpeningSubscriptionService {
             );
         }
 
-        // 공연 ID 정렬
-        Pageable pageable = PageRequest.of(
-                page,
-                size,
-                Sort.by("performanceId").ascending()
-        );
+        // 페이지네이션 설정
+        Pageable pageable = PageRequest.of(page, size);
 
-        // DB에서 필요한 페이지만 조회
-        return subscriptionRepository.findByMemberId(memberId, pageable);
+        // 예매 오픈 전 공연 정보 조회
+        return performanceLookupRepository.findUpcomingSubscriptions(memberId, pageable);
     }
 
     // 특정 공연 알림 신청 여부 조회

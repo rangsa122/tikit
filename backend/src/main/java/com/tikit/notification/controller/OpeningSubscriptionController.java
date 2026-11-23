@@ -3,7 +3,7 @@ package com.tikit.notification.controller;
 import com.tikit.common.ErrorCode;
 import com.tikit.common.dto.ResponseDTO;
 import com.tikit.notification.dto.NotificationSettingUpdateRequestDTO;
-import com.tikit.notification.entity.OpeningSubscription;
+import com.tikit.notification.dto.OpeningSubscriptionItemResponseDTO;
 import com.tikit.notification.service.OpeningSubscriptionService;
 
 import lombok.RequiredArgsConstructor;
@@ -64,26 +64,17 @@ public class OpeningSubscriptionController {
 
     // 공연별 알림 신청 목록 조회
     @GetMapping("/opening-subscriptions")
-    public ResponseEntity<ResponseDTO<Page<Long>>> getSubscriptions(
+    public ResponseEntity<ResponseDTO<Page<OpeningSubscriptionItemResponseDTO>>> getSubscriptions(
             @AuthenticationPrincipal String accountId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
         Long memberId = getMemberId(accountId);
 
-        Page<OpeningSubscription> subscriptions =
-                subscriptionService.getSubscriptions(
-                        memberId, page, size
-                );
+        // 공연 정보가 포함된 알림 신청 목록 조회
+        Page<OpeningSubscriptionItemResponseDTO> result = subscriptionService.getSubscriptions(memberId, page, size);
 
-        // 엔티티를 공연 ID 목록으로 변환
-        Page<Long> result = subscriptions.map(
-                OpeningSubscription::getPerformanceId
-        );
-
-        return ResponseEntity.ok(
-                ResponseDTO.success("알림 신청 목록 조회 성공", result)
-        );
+        return ResponseEntity.ok(ResponseDTO.success("알림 신청 목록 조회 성공", result));
     }
 
 
