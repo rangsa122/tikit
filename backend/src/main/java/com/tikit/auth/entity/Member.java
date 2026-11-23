@@ -65,6 +65,9 @@ public class Member {
     @Column(name = "withdrawn_at")
     private Instant withdrawnAt;
 
+    @Column(name = "credentials_version", nullable = false)
+    private Long credentialsVersion = 0L;
+
     public static Member create(String email, String encodedPw, String realName, Role role) {
         Member member = new Member();
         member.email = email.trim().toLowerCase(Locale.ROOT);
@@ -80,6 +83,7 @@ public class Member {
             throw new IllegalArgumentException("비밀번호 해시는 필수입니다.");
         }
         this.passwordHash = encodedPassword;
+        this.credentialsVersion++;
     }
 
     // 회원 이름 변경
