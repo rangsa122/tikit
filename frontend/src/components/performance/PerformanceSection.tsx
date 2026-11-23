@@ -6,6 +6,13 @@ import type {Performance} from '../../types/performance'
 import PerformanceCard from './PerformanceCard'
 import PerformanceListState from './PerformanceListState'
 
+// 카드에 찜 하트를 붙일 때 넘기는 값 (공연 ID로 상태 조회)
+export interface SectionFavorite {
+  isFavorite: (performanceId: string) => boolean
+  isDisabled: (performanceId: string) => boolean
+  onToggle: (performanceId: string) => void
+}
+
 interface PerformanceSectionProps {
   title: string
   performances: Performance[]
@@ -16,6 +23,7 @@ interface PerformanceSectionProps {
   onRetry?: () => void
   moreLink?: string
   showAll?: boolean
+  favorite?: SectionFavorite
 }
 
 export default function PerformanceSection({
@@ -27,8 +35,9 @@ export default function PerformanceSection({
   isError = false,
   onRetry,
   moreLink,
-  showAll = false,
-}: PerformanceSectionProps) {
+                                             showAll = false,
+                                             favorite,
+                                           }: PerformanceSectionProps) {
   const [expanded, setExpanded] = useState(false)
 
   const headingId = useId()
@@ -95,6 +104,11 @@ export default function PerformanceSection({
                 key={performance.id}
                 performance={performance}
                 variant={variant}
+                favorite={favorite && {
+                  isFavorite: favorite.isFavorite(performance.id),
+                  disabled: favorite.isDisabled(performance.id),
+                  onToggle: favorite.onToggle,
+                }}
               />
             ))}
           </div>

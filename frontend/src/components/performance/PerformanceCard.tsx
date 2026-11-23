@@ -2,16 +2,24 @@
 import {useState} from 'react'
 import {Link} from 'react-router'
 import type {Performance} from '../../types/performance'
+import FavoriteHeartButton from './FavoriteHeartButton'
 
 interface PerformanceCardProps {
   performance: Performance
   variant?: 'opening' | 'standard'
+  // 넘기면 포스터 오른쪽 위에 찜 하트 표시 (안 넘기면 기존 카드 그대로)
+  favorite?: {
+    isFavorite: boolean
+    disabled: boolean
+    onToggle: (performanceId: string) => void
+  }
 }
 
 export default function PerformanceCard({
   performance,
-  variant = 'standard',
-}: PerformanceCardProps) {
+                                          variant = 'standard',
+                                          favorite,
+                                        }: PerformanceCardProps) {
   const [failedPosterUrl, setFailedPosterUrl] = useState<string | null>(null)
 
   const hasPoster =
@@ -19,7 +27,7 @@ export default function PerformanceCard({
     performance.posterUrl !== failedPosterUrl
 
   return (
-    <article className="min-w-0 text-[#111]">
+      <article className="relative min-w-0 text-[#111]">
       <Link
         to={`/performances/${performance.id}`}
         aria-label={`${performance.title} 공연 상세 보기`}
@@ -60,6 +68,16 @@ export default function PerformanceCard({
           )}
         </div>
       </Link>
-    </article>
+
+        {favorite && (
+            <FavoriteHeartButton
+                performanceId={performance.id}
+                title={performance.title}
+                isFavorite={favorite.isFavorite}
+                disabled={favorite.disabled}
+                onToggle={favorite.onToggle}
+            />
+        )}
+      </article>
   )
 }
