@@ -1,7 +1,7 @@
 import {useState} from 'react'
 import type {BookedSeat, Booking} from '../../api/bookingApi'
 import Button from '../common/Button'
-import {Card, PosterPlaceholder} from './PaymentUi'
+import {Card, Poster} from './PaymentUi'
 import {formatDateTime, formatSeat, formatWon} from '../../utils/bookingFormat'
 
 interface PaymentFormProps {
@@ -23,7 +23,7 @@ export default function PaymentForm({booking, onPay}: PaymentFormProps) {
             <div className="flex flex-col gap-4">
                 <Card>
                     <div className="flex items-center gap-5">
-                        <PosterPlaceholder className="h-28 w-[84px]" />
+                        <Poster url={booking.posterUrl} title={booking.performanceTitle} className="h-28 w-[84px]" />
                         <div className="min-w-0">
                             <p className="text-lg font-bold text-gray-900">{booking.performanceTitle}</p>
                             <p className="mt-1 text-sm text-gray-700">{formatDateTime(booking.startsAt)}</p>
@@ -42,7 +42,7 @@ export default function PaymentForm({booking, onPay}: PaymentFormProps) {
                                 key={seat.seatId}
                                 className="flex items-center gap-2.5 rounded-[10px] border border-gray-200 px-3.5 py-3 text-sm font-medium text-gray-900"
                             >
-                                <span aria-hidden="true" className="size-2 rounded-full bg-blue-600" />
+                                <span aria-hidden="true" className="size-2 rounded-full bg-indigo-700" />
                                 <span className="flex-1">{formatSeat(seat)}</span>
                                 <span>{formatWon(seat.price)}</span>
                             </li>
