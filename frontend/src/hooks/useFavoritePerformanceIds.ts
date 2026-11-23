@@ -37,10 +37,12 @@ export function useFavoritePerformanceIds() {
         state => Boolean(state.tokens?.accessToken),
     )
 
+    // 상세·마이페이지에서 찜을 바꿔도 반영되도록 화면에 들어올 때마다 다시 조회
     const favoriteQuery = useQuery({
         queryKey: FAVORITE_IDS_QUERY_KEY,
         queryFn: getAllFavoritePerformanceIds,
         enabled: isLoggedIn,
+        staleTime: 0,
     })
 
     const toggleMutation = useMutation({
