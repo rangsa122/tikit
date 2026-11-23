@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useState} from 'react'
-import type {ReactNode} from 'react'
-import {useLocation, useNavigate, useParams} from 'react-router'
+import type {MouseEvent, ReactNode} from 'react'
+import {Link, useLocation, useNavigate, useParams} from 'react-router'
 import {subscribeOpening} from '../../api/queueApi'
 import type {QueueApiError, QueueEntry} from '../../api/queueApi'
 import timerIcon from '../../assets/queue/timer.svg'
@@ -47,7 +47,7 @@ export default function QueuePage() {
 
     return (
         <div className="flex min-h-svh flex-col bg-[#f6f7f9]">
-            <HeaderMinimal />
+            <HeaderMinimal confirmLeave={!showCountdown} />
             <main className="flex flex-1 items-center justify-center px-4 py-10">
                 <section className="flex w-full max-w-[520px] flex-col items-center gap-7 rounded-[20px] border border-[#e4e6eb] bg-white p-6 sm:p-10">
                     {showCountdown
@@ -415,11 +415,20 @@ function formatEta(seconds: number | null): string {
 }
 
 // 피그마 Header/Minimal (대기열과 카운트다운 화면 상단의 간소화 헤더)
-function HeaderMinimal() {
+function HeaderMinimal({confirmLeave}: {confirmLeave: boolean}) {
+    // 대기 중이면 순서가 사라진다는 확인 후 이동
+    function handleLogoClick(event: MouseEvent<HTMLAnchorElement>) {
+        if (confirmLeave && !window.confirm('메인으로 이동하면 대기 순서가 사라져요. 이동할까요?')) {
+            event.preventDefault()
+        }
+    }
+
     return (
         <header className="h-16 shrink-0 border-b border-[#e4e6eb] bg-white">
             <div className="mx-auto flex h-full max-w-[1280px] items-center justify-between gap-4 px-4">
-                <img src={tikitLogo} alt="TIKIT" className="block h-8 w-auto object-contain" />
+                <Link to="/" onClick={handleLogoClick} aria-label="TIKIT 메인으로 이동" className="shrink-0">
+                    <img src={tikitLogo} alt="TIKIT" className="block h-8 w-auto object-contain" />
+                </Link>
                 <p className="truncate text-[13px] text-[#5b616e]">공정한 예매를 위해 대기열을 운영하고 있어요</p>
             </div>
         </header>
