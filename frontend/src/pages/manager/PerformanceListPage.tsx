@@ -1,6 +1,6 @@
 import {useEffect, useState} from 'react'
 import type {ReactNode} from 'react'
-import {useNavigate} from 'react-router'
+import {Link, useNavigate} from 'react-router'
 import axios from 'axios'
 import {
     changeSalesStatus,
@@ -60,6 +60,19 @@ function ActionButton({children, onClick, disabled, title, primary}: {
             {children}
         </button>
     )
+}
+
+// 공연명,포스터를 눌렀을 때 이동할 화면.
+// 사용자용 상세는 게시됨(PUBLISHED)이면서 공개(PUBLIC)인 공연만 조회된다.
+// 작성 중이거나 숨긴 공연은 그 화면이 404가 나므로 매니저 수정 화면으로 보낸다.
+function detailPath(performance: ManagerPerformance) {
+    const isPublic =
+        performance.publicationStatus === 'PUBLISHED' &&
+        performance.visibility === 'PUBLIC'
+
+    return isPublic
+        ? `/performances/${performance.performanceId}`
+        : `/manager/performances/${performance.performanceId}/edit`
 }
 
 // "2026-12-01" → "2026.12.01"
@@ -250,23 +263,28 @@ export default function PerformanceListPage() {
                         {data.items.map((performance) => (
                             <li key={performance.performanceId}
                                 className="flex items-center gap-4 px-6 py-4">
-                                {performance.posterUrl ? (
-                                    <img src={performance.posterUrl} alt=""
-                                         className="h-16 w-11 shrink-0 rounded object-cover"/>
-                                ) : (
-                                    <div className="flex h-16 w-11 shrink-0 items-center justify-center rounded bg-gray-100 text-[10px] text-gray-400">
-                                        없음
+                                <Link
+                                    to={detailPath(performance)}
+                                    className="group flex min-w-0 flex-1 items-center gap-4"
+                                >
+                                    {performance.posterUrl ? (
+                                        <img src={performance.posterUrl} alt=""
+                                             className="h-16 w-11 shrink-0 rounded object-cover"/>
+                                    ) : (
+                                        <div className="flex h-16 w-11 shrink-0 items-center justify-center rounded bg-gray-100 text-[10px] text-gray-400">
+                                            없음
+                                        </div>
+                                    )}
+                                    <div className="min-w-0 flex-1">
+                                        <p className="truncate font-semibold text-gray-900 group-hover:underline">
+                                            {performance.title}
+                                        </p>
+                                        <p className="mt-1 truncate text-sm text-gray-500">
+                                            {performance.genreName} · {performance.venueName} ·{' '}
+                                            {formatDate(performance.startDate)} ~ {formatDate(performance.endDate)}
+                                        </p>
                                     </div>
-                                )}
-                                <div className="min-w-0 flex-1">
-                                    <p className="truncate font-semibold text-gray-900">
-                                        {performance.title}
-                                    </p>
-                                    <p className="mt-1 truncate text-sm text-gray-500">
-                                        {performance.genreName} · {performance.venueName} ·{' '}
-                                        {formatDate(performance.startDate)} ~ {formatDate(performance.endDate)}
-                                    </p>
-                                </div>
+                                </Link>
 
                                 <div className="flex shrink-0 gap-1.5">
                                     {performance.publicationStatus === 'PUBLISHED'
@@ -287,7 +305,7 @@ export default function PerformanceListPage() {
                                         판매 설정
                                     </ActionButton>
 
-                                    {/* 게시 후에도 설명·이미지는 수정할 수 있다 */}
+                                    {/* 게시 후에도 설명,이미지는 수정할 수 있다 */}
                                     <ActionButton
                                         onClick={() => navigate(`/manager/performances/${performance.performanceId}/edit`)}
                                     >
