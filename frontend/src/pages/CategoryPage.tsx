@@ -1,33 +1,31 @@
 
-import {useState} from 'react'
+import {useEffect, useRef} from 'react'
 import {useQuery} from '@tanstack/react-query'
 import {Link, useParams} from 'react-router'
 import {categories} from '../constants/categories'
-import {usePerformances} from '../hooks/usePerformances'
+import {useInfinitePerformances, usePerformances} from '../hooks/usePerformances'
 import {
     getOpeningPerformances,
     toPerformance,
 } from '../utils/performanceUtils'
 import PerformanceSection from '../components/performance/PerformanceSection'
 import PerformanceListState from '../components/performance/PerformanceListState'
-import Pagination from '../components/performance/Pagination'
 import OpeningHighlightSlider from '../components/performance/OpeningHighlightSlider'
 
-const PAGE_SIZE = 5
+const PAGE_SIZE = 10
 
 // 상단 슬라이드에 보여 줄 최대 공연 수
 const SLIDER_COUNT = 10
 
 function CategoryContent({categoryId}: {categoryId: string}) {
-    const [currentPage, setCurrentPage] = useState(1)
-
     const category = categories.find(
         item => item.id === categoryId,
     )
 
-    const performanceQuery = usePerformances(
+    const loadMoreRef = useRef<HTMLDivElement | null>(null)
+
+    const performanceQuery = useInfinitePerformances(
         {
-            page: currentPage - 1,
             size: PAGE_SIZE,
             genreCode: category?.id,
             sort: 'startDate',
@@ -52,6 +50,41 @@ function CategoryContent({categoryId}: {categoryId: string}) {
         enabled: Boolean(category),
     })
 
+    // 다음 페이지가 존재하면 자동 조회
+    const {
+        hasNextPage,
+        isFetchingNextPage,
+        isFetchNextPageError,
+        fetchNextPage,
+    } = performanceQuery
+
+    useEffect(() => {
+        const target = loadMoreRef.current
+
+        if (!target || !hasNextPage || isFetchNextPageError) return
+
+        // 목록 하단 접근 감지
+        const observer = new IntersectionObserver(
+            entries => {
+                if (entries[0]?.isIntersecting && !isFetchingNextPage) {
+                    void fetchNextPage()
+                }
+            },
+            {
+                rootMargin: '300px 0px',
+            },
+        )
+
+        observer.observe(target)
+
+        return () => observer.disconnect()
+    }, [
+        hasNextPage,
+        isFetchingNextPage,
+        isFetchNextPageError,
+        fetchNextPage,
+    ])
+
     if (!category) {
         return (
             <div className="px-5 py-20 text-center">
@@ -69,11 +102,9 @@ function CategoryContent({categoryId}: {categoryId: string}) {
         item => toPerformance(item, category.id),
     )
 
-    const performances = (performanceQuery.data?.items ?? []).map(
-        item => toPerformance(item, category.id),
-    )
-
-    const totalPages = performanceQuery.data?.totalPages ?? 0
+    const performances = (performanceQuery.data?.pages ?? [])
+        .flatMap(page => page.items)
+        .map(item => toPerformance(item, category.id))
 
     // 포스터가 있는 공연만, 파란 글씨 자리에 공연 기간 표시
     const sliderPerformances = (sliderQuery.data?.items ?? [])
@@ -110,10 +141,7 @@ function CategoryContent({categoryId}: {categoryId: string}) {
                             오픈 예정
                         </h2>
 
-                        <PerformanceListState
-                            state={openingQuery.isError ? 'error' : 'loading'}
-                            onRetry={() => void openingQuery.refetch()}
-                        />
+                        <PerformanceListState state={openingQuery.isError ? 'error' : 'loading'} onRetry={() => void openingQuery.refetch()}/>
                     </section>
                 ) : (
                     <PerformanceSection
@@ -124,7 +152,7 @@ function CategoryContent({categoryId}: {categoryId: string}) {
                     />
                 )}
 
-                {performanceQuery.isPending || performanceQuery.isError || performances.length === 0 ? (
+                {performanceQuery.isPending || performances.length === 0 ? (
                     <section className="px-5 pt-8">
                         <h2 className="py-5 text-2xl font-bold">
                             전체 공연
@@ -142,10 +170,36 @@ function CategoryContent({categoryId}: {categoryId: string}) {
                         />
                     </section>
                 ) : (
-                    <PerformanceSection key={`${category.id}-list`} title="전체 공연" performances={performances}/>
+                    <PerformanceSection key={`${category.id}-list`} title="전체 공연" performances={performances} showAll/>
                 )}
 
-                <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage}/>
+                {isFetchingNextPage && (
+                    <p
+                        role="status"
+                        className="px-5 py-8 text-center text-sm text-[#777]"
+                    >
+                        공연을 더 불러오는 중...
+                    </p>
+                )}
+
+                {/* 추가 공연 조회 실패 시 재시도 */}
+                {isFetchNextPageError && (
+                    <div className="px-5 py-8 text-center">
+                        <p role="alert" className="text-sm text-red-600">
+                            추가 공연을 불러오지 못했습니다.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => void fetchNextPage()}
+                            disabled={isFetchingNextPage}
+                            className="mt-3 rounded-md border border-[#ddd] px-5 py-2 text-sm disabled:opacity-50"
+                        >
+                            다시 시도
+                        </button>
+                    </div>
+                )}
+                {/* 스크롤 하단 감지 */}
+                <div ref={loadMoreRef} className="h-1" aria-hidden="true" />
             </div>
         </div>
     )

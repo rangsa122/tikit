@@ -517,11 +517,7 @@ public class PerformanceService {
         Performance performance = findPerformance(performanceId);
         accessChecker.requireOwner(manager, performance);
 
-        if (performance.getPublicationStatus() != PublicationStatus.DRAFT) {
-            throw new PerformanceException(
-                    ErrorCode.PERFORMANCE_EDIT_LOCKED
-            );
-        }
+        validateEditableFields(performance, request);
 
         if (!performance.getVersion().equals(request.getExpectedVersion())) {
             throw new PerformanceException(
@@ -614,6 +610,47 @@ public class PerformanceService {
                 .stream()
                 .map(BannerResponseDTO::from)
                 .toList();
+    }
+
+    /**
+     * 게시 후 수정 가능 범위를 검사한다.
+     *
+     * - 설명, 포스터, 배너 : 표시 정보라 언제든 수정할 수 있다.
+     * - 제목               : 관심 공연·알림에 노출되므로 판매를 중단한 상태에서만 수정한다.
+     * - 그 밖의 항목        : 예매자와의 약속에 해당하므로 게시 후에는 바꿀 수 없다.
+     *
+     * 수정 화면이 바뀌지 않은 값까지 모두 담아 보내므로,
+     * 값이 들어왔는지가 아니라 현재 값과 달라졌는지를 기준으로 판단한다.
+     */
+    private void validateEditableFields(Performance performance,
+                                        PerformanceUpdateRequestDTO request) {
+
+        if (performance.getPublicationStatus() == PublicationStatus.DRAFT) {
+            return;
+        }
+
+        boolean lockedFieldChanged =
+                changed(request.getGenreCode(), performance.getGenre().getCode())
+                        || changed(request.getVenueName(), performance.getVenueName())
+                        || changed(request.getOrganizerName(), performance.getOrganizerName())
+                        || changed(request.getStartDate(), performance.getStartDate())
+                        || changed(request.getEndDate(), performance.getEndDate())
+                        || changed(request.getBookingLimitPerMember(),
+                        performance.getBookingLimitPerMember());
+
+        if (lockedFieldChanged) {
+            throw new PerformanceException(ErrorCode.PERFORMANCE_EDIT_LOCKED);
+        }
+
+        if (changed(request.getTitle(), performance.getTitle())
+                && performance.getSalesStatus() != SalesStatus.STOPPED) {
+            throw new PerformanceException(ErrorCode.PERFORMANCE_EDIT_LOCKED);
+        }
+    }
+
+    // 요청에 값이 없으면(null) 바꿀 의사가 없는 것으로 본다.
+    private <T> boolean changed(T requested, T current) {
+        return requested != null && !requested.equals(current);
     }
 
     // 빈 문자열은 "값 없음"으로 저장한다. 화면에서 이미지를 지웠을 때 들어온다.
