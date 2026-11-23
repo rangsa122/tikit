@@ -98,11 +98,13 @@ function Field({
                    label,
                    required,
                    error,
+                   lockReason,
                    children,
                }: {
     label: string
     required?: boolean
     error?: string
+    lockReason?: string
     children: ReactNode
 }) {
     return (
@@ -115,6 +117,12 @@ function Field({
             </label>
 
             {children}
+
+            {lockReason && !error && (
+                <p className="mt-1.5 text-xs text-gray-500">
+                    {lockReason}
+                </p>
+            )}
 
             {error && (
                 <p className="mt-1.5 text-xs text-red-600">
@@ -208,6 +216,7 @@ export default function PerformanceForm({
                                             submitting,
                                             onSubmit,
                                             onCancel,
+                                            lockedFields,
                                             children,
                                         }: {
     initial: FormState
@@ -215,6 +224,8 @@ export default function PerformanceForm({
     submitting: boolean
     onSubmit: (form: FormState) => void
     onCancel: () => void
+    // 수정할 수 없는 항목과 그 이유. 비워 두면 모두 수정할 수 있다.
+    lockedFields?: Partial<Record<keyof FormState, string>>
     children?: ReactNode
 }) {
     const [form, setForm] = useState<FormState>(initial)
@@ -266,6 +277,10 @@ export default function PerformanceForm({
         (shownError(name)
             ? 'border-red-600 focus:border-red-600'
             : 'border-gray-300 focus:border-indigo-700')
+
+    // 잠긴 항목은 입력을 막고 이유를 함께 보여준다.
+    const lockReason = (name: keyof FormState) => lockedFields?.[name]
+    const isLocked = (name: keyof FormState) => Boolean(lockedFields?.[name])
 
     const handleChange = (
         e: ChangeEvent<
@@ -351,12 +366,14 @@ export default function PerformanceForm({
                 label="공연명"
                 required
                 error={shownError('title')}
+                lockReason={lockReason('title')}
             >
                 <input
                     name="title"
                     value={form.title}
                     {...common}
-                    className={inputClass('title')}
+                    disabled={isLocked('title')}
+                    className={inputClass('title') + ' disabled:bg-gray-100 disabled:text-gray-500'}
                 />
             </Field>
 
@@ -364,12 +381,13 @@ export default function PerformanceForm({
                 label="장르"
                 required
                 error={shownError('genreCode')}
+                lockReason={lockReason('genreCode')}
             >
                 <select
                     name="genreCode"
                     value={genreValid ? form.genreCode : ''}
                     {...common}
-                    disabled={genresLoading || Boolean(genresError)}
+                    disabled={genresLoading || Boolean(genresError) || isLocked('genreCode')}
                     className={
                         inputClass('genreCode') +
                         ' disabled:bg-gray-100'
@@ -420,24 +438,28 @@ export default function PerformanceForm({
                 label="공연장"
                 required
                 error={shownError('venueName')}
+                lockReason={lockReason('venueName')}
             >
                 <input
                     name="venueName"
                     value={form.venueName}
                     {...common}
-                    className={inputClass('venueName')}
+                    disabled={isLocked('venueName')}
+                    className={inputClass('venueName') + ' disabled:bg-gray-100 disabled:text-gray-500'}
                 />
             </Field>
 
             <Field
                 label="주최자"
                 error={shownError('organizerName')}
+                lockReason={lockReason('organizerName')}
             >
                 <input
                     name="organizerName"
                     value={form.organizerName}
                     {...common}
-                    className={inputClass('organizerName')}
+                    disabled={isLocked('organizerName')}
+                    className={inputClass('organizerName') + ' disabled:bg-gray-100 disabled:text-gray-500'}
                 />
             </Field>
 
@@ -486,13 +508,15 @@ export default function PerformanceForm({
                     label="시작일"
                     required
                     error={shownError('startDate')}
+                    lockReason={lockReason('startDate')}
                 >
                     <input
                         type="date"
                         name="startDate"
                         value={form.startDate}
                         {...common}
-                        className={inputClass('startDate')}
+                        disabled={isLocked('startDate')}
+                        className={inputClass('startDate') + ' disabled:bg-gray-100 disabled:text-gray-500'}
                     />
                 </Field>
 
@@ -500,13 +524,15 @@ export default function PerformanceForm({
                     label="종료일"
                     required
                     error={shownError('endDate')}
+                    lockReason={lockReason('endDate')}
                 >
                     <input
                         type="date"
                         name="endDate"
                         value={form.endDate}
                         {...common}
-                        className={inputClass('endDate')}
+                        disabled={isLocked('endDate')}
+                        className={inputClass('endDate') + ' disabled:bg-gray-100 disabled:text-gray-500'}
                     />
                 </Field>
             </div>
@@ -514,13 +540,15 @@ export default function PerformanceForm({
             <Field
                 label="1인당 예매 한도 (1~10)"
                 error={shownError('bookingLimitPerMember')}
+                lockReason={lockReason('bookingLimitPerMember')}
             >
                 <input
                     type="number"
                     name="bookingLimitPerMember"
                     value={form.bookingLimitPerMember}
                     {...common}
-                    className={inputClass('bookingLimitPerMember')}
+                    disabled={isLocked('bookingLimitPerMember')}
+                    className={inputClass('bookingLimitPerMember') + ' disabled:bg-gray-100 disabled:text-gray-500'}
                 />
             </Field>
 
