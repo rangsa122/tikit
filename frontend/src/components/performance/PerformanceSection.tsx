@@ -15,6 +15,7 @@ interface PerformanceSectionProps {
   isError?: boolean
   onRetry?: () => void
   moreLink?: string
+  showAll?: boolean
 }
 
 export default function PerformanceSection({
@@ -26,13 +27,14 @@ export default function PerformanceSection({
   isError = false,
   onRetry,
   moreLink,
+  showAll = false,
 }: PerformanceSectionProps) {
   const [expanded, setExpanded] = useState(false)
 
   const headingId = useId()
   const listId = useId()
 
-  const visiblePerformances = expanded
+  const visiblePerformances = showAll || expanded
     ? performances
     : performances.slice(0, 5)
 
@@ -58,7 +60,7 @@ export default function PerformanceSection({
             </Link>
         )}
 
-        {!moreLink && !isLoading && !isError && performances.length > 5 && (
+        {!showAll && !moreLink && !isLoading && !isError && performances.length > 5 && (
           <button
             type="button"
             aria-expanded={expanded}
