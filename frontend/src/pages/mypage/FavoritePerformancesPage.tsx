@@ -75,7 +75,12 @@ export default function FavoritePerformancesPage() {
   return (
     <div className="mx-auto w-full max-w-[1320px] px-5 py-10">
       <h1 className="border-b border-[#333] pb-5 text-[28px] font-semibold">
-        관심 공연
+        <Link
+            to="/mypage"
+            className="text-inherit"
+        >
+          마이페이지
+        </Link>
       </h1>
 
       <div className="mt-8">
