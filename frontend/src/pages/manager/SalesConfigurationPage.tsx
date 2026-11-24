@@ -31,8 +31,33 @@ interface SessionForm {
 let keyCounter = 0
 const nextKey = () => `s${keyCounter++}`
 
-function emptySession(): SessionForm {
-    return {
+// 시각 입력은 10분 단위로만 고를 수 있게 한다. datetime-local의 step은 초 단위라 600초.
+const TIME_STEP_SECONDS = 600
+
+// "2026-11-26" 에서 days 만큼 더하거나 뺀 날짜를 돌려준다.
+// 로컬 시간대에 따라 하루가 밀리지 않도록 UTC 기준으로 계산한다.
+function shiftDate(date: string, days: number): string {
+    const moved = new Date(`${date}T00:00:00Z`)
+    moved.setUTCDate(moved.getUTCDate() + days)
+    return moved.toISOString().slice(0, 10)
+}
+
+// 오늘 날짜를 "2026-11-23" 형태로 돌려준다(로컬 기준).
+function todayDate(): string {
+    const now = new Date()
+    const localMs = now.getTime() - now.getTimezoneOffset() * 60_000
+    return new Date(localMs).toISOString().slice(0, 10)
+}
+
+// 회차를 추가했을 때 미리 채워 둘 값.
+// 매니저가 아무것도 고치지 않아도 검증을 통과하도록 서로 어긋나지 않게 정한다.
+//   공연 시작  = 공연 시작일 00:00   (공연 기간 안이어야 하므로)
+//   판매 마감  = 공연 시작과 같은 시각 (판매 마감은 공연 시작보다 늦을 수 없음)
+//   취소 기한  = 공연 시작 하루 전 00:00
+//   판매 오픈  = 오늘 00:00. 단 공연이 이미 시작했다면 오늘이 판매 마감보다 늦어지므로
+//               공연 하루 전으로 내린다(판매 오픈 < 판매 마감 이어야 함).
+function defaultSession(performance: ManagerPerformance | null): SessionForm {
+    const base: SessionForm = {
         key: nextKey(),
         sessionId: null,
         startsAt: '',
@@ -41,6 +66,20 @@ function emptySession(): SessionForm {
         cancellationDeadline: '',
         seatTemplateId: null,
         prices: {},
+    }
+
+    if (!performance) return base
+
+    const startsAt = `${performance.startDate}T00:00`
+    const dayBefore = `${shiftDate(performance.startDate, -1)}T00:00`
+    const today = `${todayDate()}T00:00`
+
+    return {
+        ...base,
+        startsAt,
+        salesOpenAt: today < startsAt ? today : dayBefore,
+        salesCloseAt: startsAt,
+        cancellationDeadline: dayBefore,
     }
 }
 
@@ -194,7 +233,7 @@ export default function SalesConfigurationPage() {
     }
 
     function addSession() {
-        setSessions((prev) => [...prev, emptySession()])
+        setSessions((prev) => [...prev, defaultSession(performance)])
     }
 
     function removeSession(key: string) {
@@ -445,6 +484,7 @@ function TimeField({label, value, onChange}: {
             <input
                 type="datetime-local"
                 value={value}
+                step={TIME_STEP_SECONDS}
                 onChange={(e) => onChange(e.target.value)}
                 className="mt-2 w-full rounded border px-3 py-2"
             />
