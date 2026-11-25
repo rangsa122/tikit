@@ -4,6 +4,7 @@ import {useQuery} from '@tanstack/react-query'
 import {Link, useParams} from 'react-router'
 import {categories} from '../constants/categories'
 import {useInfinitePerformances, usePerformances} from '../hooks/usePerformances'
+import {useFavoriteWithOpeningAlarm} from '../hooks/useFavoriteWithOpeningAlarm.ts'
 import {
     getOpeningPerformances,
     toPerformance,
@@ -11,6 +12,7 @@ import {
 import PerformanceSection from '../components/performance/PerformanceSection'
 import PerformanceListState from '../components/performance/PerformanceListState'
 import OpeningHighlightSlider from '../components/performance/OpeningHighlightSlider'
+import OpeningNotificationModal from '../components/performance/OpeningNotificationModal'
 
 const PAGE_SIZE = 10
 
@@ -23,6 +25,9 @@ function CategoryContent({categoryId}: {categoryId: string}) {
     )
 
     const loadMoreRef = useRef<HTMLDivElement | null>(null)
+
+    // 카드 찜 하트 + 새로 찜하면 예매 시작 알림 모달
+    const favoriteAlarm = useFavoriteWithOpeningAlarm()
 
     const performanceQuery = useInfinitePerformances(
         {
@@ -117,6 +122,8 @@ function CategoryContent({categoryId}: {categoryId: string}) {
 
     return (
         <div className="pb-20">
+            <OpeningNotificationModal {...favoriteAlarm.modal} />
+
             <div className="mx-auto max-w-[1320px] px-5 pt-8">
                 <Link
                     to="/"
@@ -127,6 +134,23 @@ function CategoryContent({categoryId}: {categoryId: string}) {
                 <h1 className="pt-5 text-3xl font-bold">
                     {category.label} 공연
                 </h1>
+
+                {favoriteAlarm.notice && (
+                    <p
+                        role="status"
+                        className="mt-4 rounded-lg bg-[#f6f7f9] px-4 py-3 text-sm text-[#3a3f48]"
+                    >
+                        {favoriteAlarm.notice}
+                        {!favoriteAlarm.isLoggedIn && (
+                            <Link
+                                to="/login"
+                                className="ml-2 font-semibold text-[#4338CA] underline"
+                            >
+                                로그인하기
+                            </Link>
+                        )}
+                    </p>
+                )}
             </div>
 
             <div className="mx-auto max-w-[1320px] px-5 pt-8">
@@ -149,6 +173,7 @@ function CategoryContent({categoryId}: {categoryId: string}) {
                         title="오픈 예정"
                         performances={openingPerformances}
                         variant="opening"
+                        favorite={favoriteAlarm.favorite}
                     />
                 )}
 
@@ -170,7 +195,7 @@ function CategoryContent({categoryId}: {categoryId: string}) {
                         />
                     </section>
                 ) : (
-                    <PerformanceSection key={`${category.id}-list`} title="전체 공연" performances={performances} showAll/>
+                    <PerformanceSection key={`${category.id}-list`} title="전체 공연" performances={performances} showAll favorite={favoriteAlarm.favorite}/>
                 )}
 
                 {isFetchingNextPage && (
