@@ -74,3 +74,8 @@ tasks.register('runRagPublicHost', JavaExec) {
 	classpath = sourceSets.main.runtimeClasspath
 	mainClass = 'com.tikit.rag.host.RagPublicHostMain'
 }
+
+// 배포용 JAR에서 민감 정보 파일 제외
+tasks.named('bootJar') {
+    exclude '**/secrets.properties'
+}
