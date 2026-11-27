@@ -1,10 +1,27 @@
+import type {MouseEvent} from 'react'
 import {Link} from 'react-router'
 
-/** 찜·오픈 알림 안내 배너 */
-export default function OpeningAlarmBanner() {
+interface OpeningAlarmBannerProps {
+    isLoggedIn: boolean
+    onLoginRequired: () => void
+}
+
+/** 찜·오픈 알림 안내 배너 (로그인 안 했으면 이동 대신 로그인 안내) */
+export default function OpeningAlarmBanner({
+                                               isLoggedIn,
+                                               onLoginRequired,
+                                           }: OpeningAlarmBannerProps) {
+    function handleClick(event: MouseEvent<HTMLAnchorElement>) {
+        if (isLoggedIn) return
+
+        event.preventDefault()
+        onLoginRequired()
+    }
+
     return (
         <Link
             to="/mypage/favorites"
+            onClick={handleClick}
             className="flex items-center gap-4 rounded-xl border border-[#e4e6eb] bg-white px-6 py-4 hover:bg-[#fafafa]"
         >
             <svg
