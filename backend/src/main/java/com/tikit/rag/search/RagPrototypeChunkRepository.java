@@ -3,12 +3,14 @@ package com.tikit.rag.search;
 import com.tikit.rag.exception.RagSearchUnavailableException;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.StringJoiner;
 
 /** 운영 DB가 아닌 #146 검증용 문서만 읽는다. */
 @Component
@@ -33,7 +35,7 @@ public class RagPrototypeChunkRepository {
             for (var node : nodes) {
                 var chunk = new RagPrototypeChunk(node.get("chunkId").asString(),
                         node.get("documentId").asString(), node.get("documentTitle").asString(),
-                        node.get("chunkOrder").asInt(), node.get("content").asString());
+                        node.get("chunkOrder").asInt(), readContent(node.get("content")));
                 if (chunk.chunkId().isBlank() || chunk.documentId().isBlank()
                         || chunk.documentTitle().isBlank() || chunk.content().isBlank()
                         || !ids.add(chunk.chunkId())) {
@@ -45,5 +47,16 @@ public class RagPrototypeChunkRepository {
         } catch (IOException | RuntimeException exception) {
             throw new RagSearchUnavailableException();
         }
+    }
+
+    private String readContent(JsonNode content) {
+        if (!content.isArray()) {
+            return content.asString();
+        }
+        var text = new StringJoiner(" ");
+        for (var line : content) {
+            text.add(line.asString());
+        }
+        return text.toString();
     }
 }
