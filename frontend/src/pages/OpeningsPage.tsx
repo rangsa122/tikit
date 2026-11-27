@@ -15,6 +15,7 @@ import OpeningHighlightSlider from '../components/performance/OpeningHighlightSl
 import OpeningAlarmBanner from '../components/performance/OpeningAlarmBanner'
 import PerformanceListState from '../components/performance/PerformanceListState'
 import OpeningNotificationModal from '../components/performance/OpeningNotificationModal'
+import LoginRequiredModal from '../components/performance/LoginRequiredModal'
 import {subscribeOpeningSubscription} from '../api/notificationApi'
 
 const ALL_GENRES = 'all'
@@ -33,6 +34,8 @@ export default function OpeningsPage() {
     const [selectedGenre, setSelectedGenre] =
         useState<GenreFilter>(ALL_GENRES)
     const [favoriteNotice, setFavoriteNotice] = useState<string | null>(null)
+    // 로그인 안내 모달 문구 (null이면 모달 닫힘)
+    const [loginMessage, setLoginMessage] = useState<string | null>(null)
 
     // 찜 등록 직후 예매 시작 알림 신청을 물어볼 공연 ID (null이면 모달 닫힘)
     const [openingTargetId, setOpeningTargetId] = useState<string | null>(null)
@@ -70,7 +73,7 @@ export default function OpeningsPage() {
         setFavoriteNotice(null)
 
         if (!favorite.isLoggedIn) {
-            setFavoriteNotice('로그인 후 찜할 수 있습니다.')
+            setLoginMessage('로그인 후 관심 공연을 찜할 수 있습니다.')
             return
         }
 
@@ -122,6 +125,11 @@ export default function OpeningsPage() {
 
     return (
         <div className="mx-auto max-w-[1320px] px-5 pt-8 pb-20">
+            <LoginRequiredModal
+                isOpen={loginMessage !== null}
+                message={loginMessage ?? ''}
+                onClose={() => setLoginMessage(null)}
+            />
             <OpeningNotificationModal
                 isOpen={openingTargetId !== null}
                 isSubmitting={openingSubmitting}
@@ -145,21 +153,18 @@ export default function OpeningsPage() {
                     className="mb-4 rounded-lg bg-[#f6f7f9] px-4 py-3 text-sm text-[#3a3f48]"
                 >
                     {favoriteNotice}
-                    {!favorite.isLoggedIn && (
-                        <Link
-                            to="/login"
-                            className="ml-2 font-semibold text-[#4338CA] underline"
-                        >
-                            로그인하기
-                        </Link>
-                    )}
                 </p>
             )}
 
             <OpeningHighlightSlider performances={highlights} />
 
             <div className="pt-10 pb-12">
-                <OpeningAlarmBanner />
+                <OpeningAlarmBanner
+                    isLoggedIn={favorite.isLoggedIn}
+                    onLoginRequired={() =>
+                        setLoginMessage('로그인하고 관심 공연의 오픈 알림을 받아보세요.')
+                    }
+                />
             </div>
 
             <div
