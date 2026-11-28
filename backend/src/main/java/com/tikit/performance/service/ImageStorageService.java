@@ -90,14 +90,14 @@ public class ImageStorageService {
         }
 
         if (file.getSize() > MAX_BYTES) {
-            throw new PerformanceException(ErrorCode.VALIDATION_ERROR);
+            throw new PerformanceException(ErrorCode.IMAGE_TOO_LARGE);
         }
 
         String extension = extensionOf(file.getOriginalFilename());
         String expectedContentType = ALLOWED_TYPES.get(extension);
 
         if (expectedContentType == null) {
-            throw new PerformanceException(ErrorCode.VALIDATION_ERROR);
+            throw new PerformanceException(ErrorCode.IMAGE_TYPE_NOT_ALLOWED);
         }
 
         if (!expectedContentType.equalsIgnoreCase(file.getContentType())) {
