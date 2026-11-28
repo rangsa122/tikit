@@ -60,6 +60,14 @@ public enum ErrorCode {
             HttpStatus.CONFLICT,
             "동일한 멱등키로 다른 요청 내용을 전달할 수 없습니다."
     ),
+    IMAGE_TOO_LARGE(
+            HttpStatus.CONTENT_TOO_LARGE,
+            "이미지는 5MB 이하만 올릴 수 있습니다."
+    ),
+    IMAGE_TYPE_NOT_ALLOWED(
+            HttpStatus.BAD_REQUEST,
+            "jpg, png, webp 이미지만 올릴 수 있습니다."
+    ),
     INDEX_NOT_READY(
             HttpStatus.CONFLICT,
             "해당 문서 버전의 색인이 완료되지 않았습니다."

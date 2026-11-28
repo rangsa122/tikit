@@ -11,6 +11,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @Slf4j
 @RestControllerAdvice
@@ -69,5 +70,15 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(errorCode.getStatus())
                 .body(ResponseDTO.fail(errorCode, e.getHeaderName() + " 헤더가 필요합니다."));
+    }
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ResponseDTO<Void>> handleUploadTooLarge(MaxUploadSizeExceededException e) {
+        log.warn("upload too large: {}", e.getMessage());
+
+        ErrorCode errorCode = ErrorCode.IMAGE_TOO_LARGE;
+
+        return ResponseEntity
+                .status(errorCode.getStatus())
+                .body(ResponseDTO.fail(errorCode));
     }
 }
